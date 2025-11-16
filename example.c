@@ -1,7 +1,7 @@
 /**
  * Example program demonstrating enDgine usage
  * 
- * This creates a simple rotating cube demo
+ * This creates a simple rotating square demo
  */
 
 #include "endgine.h"

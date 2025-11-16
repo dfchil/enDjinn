@@ -7,6 +7,10 @@
 #include <kos.h>
 #include <stdbool.h>
 
+/* Constants */
+#define MICROSECONDS_PER_SECOND 1000000
+#define MILLISECONDS_PER_SECOND 1000
+
 /* Internal state */
 static struct {
     bool running;
@@ -37,7 +41,7 @@ static uint64_t get_time_us(void) {
  * Calculate delta time between frames
  */
 static float calculate_delta_time(uint64_t current_time) {
-    float delta = (current_time - endgine_state.last_frame_time) / 1000000.0f;
+    float delta = (current_time - endgine_state.last_frame_time) / (float)MICROSECONDS_PER_SECOND;
     endgine_state.last_frame_time = current_time;
     return delta;
 }
@@ -65,13 +69,13 @@ static void limit_frame_rate(uint32_t target_fps, uint64_t frame_start_time) {
         return; /* No frame limiting */
     }
     
-    uint64_t frame_time_us = 1000000 / target_fps;
+    uint64_t frame_time_us = MICROSECONDS_PER_SECOND / target_fps;
     uint64_t current_time = get_time_us();
     uint64_t elapsed = current_time - frame_start_time;
     
     if (elapsed < frame_time_us) {
         uint64_t sleep_time = frame_time_us - elapsed;
-        thd_sleep(sleep_time / 1000); /* Convert to milliseconds */
+        thd_sleep(sleep_time / MILLISECONDS_PER_SECOND); /* Convert to milliseconds */
     }
 }
 
@@ -155,5 +159,5 @@ float endgine_get_fps(void) {
 
 float endgine_get_time(void) {
     uint64_t current_time = get_time_us();
-    return (current_time - endgine_state.start_time) / 1000000.0f;
+    return (current_time - endgine_state.start_time) / (float)MICROSECONDS_PER_SECOND;
 }
