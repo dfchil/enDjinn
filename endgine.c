@@ -60,14 +60,14 @@ static void update_fps_counter(float delta_time) {
 /**
  * Frame rate limiting
  */
-static void limit_frame_rate(uint32_t target_fps) {
+static void limit_frame_rate(uint32_t target_fps, uint64_t frame_start_time) {
     if (target_fps == 0) {
         return; /* No frame limiting */
     }
     
     uint64_t frame_time_us = 1000000 / target_fps;
     uint64_t current_time = get_time_us();
-    uint64_t elapsed = current_time - endgine_state.last_frame_time;
+    uint64_t elapsed = current_time - frame_start_time;
     
     if (elapsed < frame_time_us) {
         uint64_t sleep_time = frame_time_us - elapsed;
@@ -101,8 +101,8 @@ int endgine_run(const endgine_config_t *config) {
     
     /* Main game loop */
     while (endgine_state.running) {
-        uint64_t current_time = get_time_us();
-        float delta_time = calculate_delta_time(current_time);
+        uint64_t frame_start = get_time_us();
+        float delta_time = calculate_delta_time(frame_start);
         
         /* Update FPS counter */
         update_fps_counter(delta_time);
@@ -131,7 +131,7 @@ int endgine_run(const endgine_config_t *config) {
         }
         
         /* Frame rate limiting */
-        limit_frame_rate(endgine_state.target_fps);
+        limit_frame_rate(endgine_state.target_fps, frame_start);
     }
     
     /* Call user cleanup */
