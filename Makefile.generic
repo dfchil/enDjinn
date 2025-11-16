@@ -2,11 +2,27 @@ include $(KOS_BASE)/Makefile.rules
 KOS_CSTD := -std=gnu23
 CC=kos-cc
 
-BUILDDIR=build
-TARGETNAME = $(notdir $(shell pwd))
-OBJS := $(shell find ./code/ -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(BUILDDIR)\1.o,g')
 
-DTTEXTURES:=$(shell find assets/textures -name '*.png'| sed -e 's,assets/textures/\(.*\)/\([a-z_A-Z0-9]*\).png,$(BUILDDIR)/pvrtex/\1/\2.dt,g')
+$(info $$TEXTUREDIR is [${TEXTUREDIR}])
+
+
+ROMDIR:=cdrom/${TARGETNAME}
+BUILDDIR=build
+TEXTUREDIR:=assets/texture
+TARGETNAME:= $(notdir $(shell pwd))
+
+ifneq (,$(wildcard ./Makefile.cfg))
+    include Makefile.cfg
+endif
+
+$(info $$TEXTUREDIR is [${TEXTUREDIR}])
+
+
+OBJS := $(shell find ./code/ -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(BUILDDIR)\1.o,g')
+DTTEXTURES:=$(shell find $(TEXTUREDIR) -name '*.png'| sed -e 's,$(TEXTUREDIR)/\(.*\)/\([a-z_A-Z0-9]*\).png,$(ROMDIR)/$(notdir $(TEXTUREDIR))/\1/\2.dt,g')
+
+$(info $$DTTEXTURES is [${DTTEXTURES}])
+
 
 .PRECIOUS: $(DTTEXTURES)
 
@@ -83,34 +99,33 @@ all: $(TARGETNAME).elf
 ${TARGETNAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
 	$(CC) $(KOS_CFLAGS) -o $@ $(OBJS) $(LDLIBS) 
 
-
-$(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES)
+$(BUILDDIR)/%.o: %.c Makefile
 	@mkdir -p $(shell dirname $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # notice the different settings for different texture formats based on directory names
-TEXDIR_PAL4=$(BUILDDIR)/pvrtex/pal4
-$(TEXDIR_PAL4)/%.dt: assets/textures/pal4/%.png
+TEXDIR_PAL4=$(ROMDIR)/texture/pal4
+$(TEXDIR_PAL4)/%.dt: $(TEXTUREDIR)/pal4/%.png
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f PAL4BPP -c --max-color 16 -i $< -o $@
 
-TEXDIR_PAL8=$(BUILDDIR)/pvrtex/pal8
-$(TEXDIR_PAL8)/%.dt: assets/textures/pal8/%.png
+TEXDIR_PAL8=$(ROMDIR)/texture/pal8
+$(TEXDIR_PAL8)/%.dt: $(TEXTUREDIR)/pal8/%.png
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f PAL8BPP -c --max-color 256 -i $< -o $@
 
-TEXDIR_RGB565_VQ_TW=$(BUILDDIR)/pvrtex/rgb565_vq_tw
-$(TEXDIR_RGB565_VQ_TW)/%.dt: assets/textures/rgb565_vq_tw/%.png 
+TEXDIR_RGB565_VQ_TW=$(ROMDIR)/texture/rgb565_vq_tw
+$(TEXDIR_RGB565_VQ_TW)/%.dt: $(TEXTUREDIR)/rgb565_vq_tw/%.png 
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f RGB565 -c -i $< -o $@
 
-TEXDIR_ARGB1555_VQ_TW=$(BUILDDIR)/pvrtex/argb1555_vq_tw
-$(TEXDIR_ARGB1555_VQ_TW)/%.dt: assets/textures/argb1555_vq_tw/%.png
+TEXDIR_ARGB1555_VQ_TW=$(ROMDIR)/texture/argb1555_vq_tw
+$(TEXDIR_ARGB1555_VQ_TW)/%.dt: $(TEXTUREDIR)/argb1555_vq_tw/%.png
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f ARGB1555 -c -i $< -o $@
 
-$(CDIS): %.cdi: %.elf
-	mkdcdisc -n $* -e $<  -N -o $*.cdi -v 3 -m
+${TARGETNAME}.cdi: ${TARGETNAME}.elf
+	mkdcdisc -n $(basename $<) -e ${TARGETNAME}.elf -d cdrom/ -N -o $(basename $<).cdi -v 3 -m
 
 clean:
 	-rm -rf *.elf *.cdi $(OBJS) 

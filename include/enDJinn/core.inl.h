@@ -1,17 +1,19 @@
-// #include <arch/arch.h>
-// #include <dc/pvr/pvr_mem.h>
+#include <arch/arch.h>
+#include <dc/pvr/pvr_mem.h>
+#include <malloc.h>
+#include <time.h>
+#include <enDJinn/controller/dreamcast.h>
+
 // #include <drxlax/audio/sfx.h>
-// #include <drxlax/compiledefs.h>
-// #include <drxlax/game/config/config.h>
-// #include <drxlax/game/controller/dreamcast.h>
-// #include <drxlax/game/controller/rumble.h>
-// #include <drxlax/game/core.h>
-// #include <drxlax/game/modes/game.h>
-// #include <drxlax/game/modes/mode.h>
-// #include <drxlax/game/modes/titlescreen.h>
-// #include <drxlax/game/stats/scoreboard.h>
-// #include <drxlax/game/transitions/startup_and_shutdown.h>
-// #include <drxlax/game/transitions/zoom.h>
+// #include <enDJinn/config/config.h>
+// #include <enDJinn/controller/rumble.h>
+// #include <enDJinn/core.h>
+// #include <enDJinn/mode/game.h>
+#include <enDJinn/mode/core.h>
+// #include <enDJinn/mode/titlescreen.h>
+// #include <enDJinn/stats/scoreboard.h>
+// #include <enDJinn/transitions/startup_and_shutdown.h>
+// #include <enDJinn/transitions/zoom.h>
 // #include <drxlax/render/core.h>
 // #include <drxlax/render/pvr/perspective.h>
 // #include <drxlax/render/pvr/pvr.h>
@@ -19,11 +21,6 @@
 // #include <drxlax/render/textures.h>
 // #include <drxlax/shared.h>
 // #include <drxlax/types.h>
-// #include <malloc.h>
-// #include <time.h>
-
-static g_state_t g_var __attribute__((aligned(32)));
-static replay_header replay __attribute__((aligned(32)));
 static uint32_t title_screen_stack_index = 0;
 
 static struct {
@@ -45,26 +42,21 @@ int detect_shutdown_combo(controller_state_t *cstate) {
 void core_flag_endofsequence(void) { flags.end_of_sequence = 1; }
 void core_flag_shutdown(void) { flags.shut_down = 1; }
 
-g_state_t *core_get_global(void) { return &g_var; }
-
 static int check_c1_exit(void) {
-  if (flags.shut_down) {
-    return 1;
-  }
-  return 0;
+  return flags.shut_down;
 }
 
 void cut_to_title_screen(void) {
   mode_goto_index(title_screen_stack_index);
-  get_title_screen_mode();
-  default_perspective();
-  grid_set_perspective();
-  transform_grid_verts(grid_get());
-  zoomtrans_reset_first_filler();
-  zoomtrans_reset_second_filler();
+  // get_title_screen_mode();
+  // default_perspective();
+  // grid_set_perspective();
+  // transform_grid_verts(grid_get());
+  // zoomtrans_reset_first_filler();
+  // zoomtrans_reset_second_filler();
 }
 
-void core_loop(void) {
+void enDJinn_loop(void) {
   while (1) {
     dc_ctrlrs_map_state();
     if (check_c1_exit()) {
@@ -77,18 +69,18 @@ void core_loop(void) {
         if (detect_shutdown_combo(cstates[i])) {
           cstates[i]->START = BUTTON_DOWN;
           cstates[i]->BTN_A = BUTTON_DOWN;
-          cut_to_title_screen();
+          // cut_to_title_screen();
         }
       }
     }
 
     if (flags.end_of_sequence) {
       mode_pop();
-      mode_push(get_zoom_transition_mode());
+      // mode_push(get_zoom_transition_mode());
 
       flags.end_of_sequence = 0;
     }
-    render_frame(mode_get());
+    // render_frame(mode_get());
   }
 }
 
@@ -97,62 +89,62 @@ int core_init(void) {
 #ifdef DEBUG
   heapUtilization();
 #endif
-  g_state_t *g_point = core_get_global();
-  g_point->air_d = AIR_DENSITY; // set air density (eg. resistance)
-  g_point->joy_response = JOYSTICK_SENSITIVITY;  // joy response factor
-  g_point->p_acceleration = PLAYER_ACCELERATION; // acceleration factor
-  g_point->number_of_players = 0;
-  g_point->first_player = 0;
-  g_point->first_offensive = 0;
-  g_point->first_mine = 0;
-  g_point->max_shot_strength = MAX_SHOT_STRENGTH;
-  g_point->shot_speed = SHOT_SPEED;
-  g_point->player_start_health = PLAYER_START_HEALTH;
-  g_point->assailant_earns = ASSAILANT_EARNS_HEALTH;
-  g_point->shot_health_modifier = SHOT_HEALTH_MODIFIER;
-  g_point->particle_size = PARTICLE_SIZE;
-  g_point->mine_strength = MINE_STRENGTH;
-  g_point->sfx_lastchan = 0;
-  g_point->mine_explode_push = 0.03f;
-  g_point->juize_increase = JUIZE_CHARGE_RATE;
-  g_point->mine_countdown = MINE_COUNTDOWN;
-  g_point->cost_shot = COST_SHOT;
-  g_point->cost_mine = COST_MINE;
-  g_point->shot_repeat_delay = SHOT_REPEAT_DELAY;
-  g_point->cost_juize = COST_JUIZE;
-  g_point->cost_health = COST_HEALTH;
-  g_point->shot_player_push = 0.001;
-  g_point->shot_mine_push = 0.002f;
+  // g_state_t *g_point = core_get_global();
+  // g_point->air_d = AIR_DENSITY; // set air density (eg. resistance)
+  // g_point->joy_response = JOYSTICK_SENSITIVITY;  // joy response factor
+  // g_point->p_acceleration = PLAYER_ACCELERATION; // acceleration factor
+  // g_point->number_of_players = 0;
+  // g_point->first_player = 0;
+  // g_point->first_offensive = 0;
+  // g_point->first_mine = 0;
+  // g_point->max_shot_strength = MAX_SHOT_STRENGTH;
+  // g_point->shot_speed = SHOT_SPEED;
+  // g_point->player_start_health = PLAYER_START_HEALTH;
+  // g_point->assailant_earns = ASSAILANT_EARNS_HEALTH;
+  // g_point->shot_health_modifier = SHOT_HEALTH_MODIFIER;
+  // g_point->particle_size = PARTICLE_SIZE;
+  // g_point->mine_strength = MINE_STRENGTH;
+  // g_point->sfx_lastchan = 0;
+  // g_point->mine_explode_push = 0.03f;
+  // g_point->juize_increase = JUIZE_CHARGE_RATE;
+  // g_point->mine_countdown = MINE_COUNTDOWN;
+  // g_point->cost_shot = COST_SHOT;
+  // g_point->cost_mine = COST_MINE;
+  // g_point->shot_repeat_delay = SHOT_REPEAT_DELAY;
+  // g_point->cost_juize = COST_JUIZE;
+  // g_point->cost_health = COST_HEALTH;
+  // g_point->shot_player_push = 0.001;
+  // g_point->shot_mine_push = 0.002f;
 
-  g_point->r_control_box.current_frame = 0;
+  // g_point->r_control_box.current_frame = 0;
 
-  rumble_queues_init();
-  game_mem_init();
+  // rumble_queues_init();
+  // game_mem_init();
   // config_reset();
-  srand(time(NULL));
-  if (!init_textures()){
-    DEBUG_PRINT("Failed to init textures\n");
-    return 0;
-  }
-  if (!load_plasma()) {
-    DEBUG_PRINT("Failed to load plasma\n");
-    return 0;
-  }
-  grid_init(56, 42, 64.0f, 48.0f, 5 * 4.0f / 3.0f, 5 * 3.0f / 4.0f, NULL);
+  // srand(time(NULL));
+  // if (!init_textures()){
+  //   DEBUG_PRINT("Failed to init textures\n");
+  //   return 0;
+  // }
+  // if (!load_plasma()) {
+  //   DEBUG_PRINT("Failed to load plasma\n");
+  //   return 0;
+  // }
+  // grid_init(56, 42, 64.0f, 48.0f, 5 * 4.0f / 3.0f, 5 * 3.0f / 4.0f, NULL);
 
-  scoreboard_reset();
-  game_mode_init();
-  sfx_init();
+  // scoreboard_reset();
+  // game_mode_init();
+  // sfx_init();
 
-  g_point->r_control_box.replay = &replay;
-  replay.data = (c_frame *)memalign(32, 128 << 10);
-  g_point->current_replay = 0;
+  // g_point->r_control_box.replay = &replay;
+  // replay.data = (c_frame *)memalign(32, 128 << 10);
+  // g_point->current_replay = 0;
 #ifdef SINGLEDEMO
-  g_point->current_replay = SINGLEDEMO;
+  // g_point->current_replay = SINGLEDEMO;
 #endif
-  mode_push(get_game_ender());
-  mode_push(get_shutdown_mode());
-  mode_push(get_title_screen_mode());
+  // mode_push(get_game_ender());
+  // mode_push(get_shutdown_mode());
+  // mode_push(get_title_screen_mode());
 
   // menu_state_t *mstate = get_menu_state();
   // mstate->cstates = get_ctrlr_states();
@@ -162,7 +154,7 @@ int core_init(void) {
   // mode_push(get_score_menu_mode());
 
   title_screen_stack_index = mode_get_index();
-  mode_push(get_startup_mode());
+  // mode_push(get_startup_mode());
 #ifdef DEBUG
   heapUtilization();
 #endif
