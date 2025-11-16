@@ -1,72 +1,43 @@
 # enDgine
-
-A lightweight gameplay loop driver for the Sega Dreamcast.
+A gameplay loop driver for the Dreamcast using KallistiOS
 
 ## Overview
-
-enDgine provides a clean, callback-based API for creating games and applications on the Sega Dreamcast using KallistiOS. It handles all the boilerplate of initializing the graphics system, managing the game loop, calculating frame times, and cleaning up resources.
+enDgine provides a simple main function that initializes the Dreamcast with the KallistiOS system, sets up the graphics (PowerVR) and controller subsystems, and provides a basic game loop structure.
 
 ## Features
+- KallistiOS initialization
+- PowerVR graphics system setup
+- Controller input handling
+- Basic game loop with rendering pipeline
+- Clean shutdown and cleanup
 
-- ✅ Simple callback-based architecture
-- ✅ Automatic frame timing and delta time calculation
-- ✅ Built-in FPS limiting and monitoring
-- ✅ PowerVR initialization and management
-- ✅ Input handling (START button for exit)
-- ✅ Minimal dependencies (just KallistiOS)
-
-## Quick Start
-
-```c
-#include "endgine.h"
-
-static int my_init(void) {
-    // Initialize your game
-    return 0;
-}
-
-static void my_update(float delta_time) {
-    // Update game state
-}
-
-static void my_render(void) {
-    // Render graphics
-}
-
-static void my_cleanup(void) {
-    // Clean up resources
-}
-
-int main(int argc, char **argv) {
-    endgine_config_t config = {
-        .init = my_init,
-        .update = my_update,
-        .render = my_render,
-        .cleanup = my_cleanup,
-        .target_fps = 60
-    };
-    
-    return endgine_run(&config);
-}
-```
+## Prerequisites
+- KallistiOS toolchain installed and configured
+- Set `KOS_BASE` environment variable to your KallistiOS installation directory
+- `kos-cc` compiler in your PATH
 
 ## Building
-
-Requires KallistiOS (KOS) to be installed and configured:
-
 ```bash
-export KOS_BASE=/path/to/kos
 make
 ```
 
-This builds:
-- `libendgine.a` - The enDgine library
-- `endgine-demo.elf` - Example rotating square demo
+This will produce `enDgine.elf` executable.
 
-## Documentation
+## Running
+To run in an emulator (requires lxdream):
+```bash
+make run
+```
 
-See [API.md](API.md) for complete API documentation and usage examples.
+Or use any Dreamcast emulator that supports ELF files.
+
+## Usage
+The main game loop is controlled via the controller:
+- **START button**: Exit the application
+
+## Code Structure
+- `main.c`: Main entry point with KallistiOS initialization and game loop
+- `Makefile`: Build configuration for KallistiOS toolchain
 
 ## License
-
-MIT License - See LICENSE file for details.
+See LICENSE file for details.
