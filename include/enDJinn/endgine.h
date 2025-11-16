@@ -1,12 +1,12 @@
 /**
- * enDgine - A gameplay loop driver for the Sega Dreamcast
+ * enDJinn - A gameplay loop driver for the Sega Dreamcast
  * 
  * Provides a simple, clean API for creating games on the Dreamcast
  * using KallistiOS.
  */
 
-#ifndef ENDGINE_H
-#define ENDGINE_H
+#ifndef ENDJINN_H
+#define ENDJINN_H
 
 #include <stdint.h>
 
@@ -53,4 +53,4 @@ float endgine_get_fps(void);
  */
 float endgine_get_time(void);
 
-#endif /* ENDGINE_H */
+#endif /* ENDJINN_H */

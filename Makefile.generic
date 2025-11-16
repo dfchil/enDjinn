@@ -1,0 +1,128 @@
+include $(KOS_BASE)/Makefile.rules
+KOS_CSTD := -std=gnu23
+CC=kos-cc
+
+BUILDDIR=build
+TARGETNAME = $(notdir $(shell pwd))
+OBJS := $(shell find ./code/ -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(BUILDDIR)\1.o,g')
+
+DTTEXTURES:=$(shell find assets/textures -name '*.png'| sed -e 's,assets/textures/\(.*\)/\([a-z_A-Z0-9]*\).png,$(BUILDDIR)/pvrtex/\1/\2.dt,g')
+
+.PRECIOUS: $(DTTEXTURES)
+
+LDLIBS 	:= -lm -lm -lkosutils -lsh4zam
+
+DEFINES=
+ifdef RELEASEBUILD
+	DEFINES += -s -DRELEASEBUILD
+else
+	DEFINES += -g
+endif
+
+ifdef OPTLEVEL
+	DEFINES += -O${OPTLEVEL}
+else
+	DEFINES += -O3
+endif
+
+ifdef DCTRACE
+DEFINES += -finstrument-functions -DDCTRACE
+OBJS += ./profilers/dcprofiler.o
+endif 
+
+ifdef SHOWFRAMETIMES
+	DEFINES += -DSHOWFRAMETIMES=${SHOWFRAMETIMES}
+endif
+
+ifdef BASEPATH
+	DEFINES += -DBASEPATH="${BASEPATH}/${TARGETNAME}/"
+endif
+	
+ifdef DEBUG
+	DEFINES += -DDEBUG
+endif
+
+ifdef DCPROF
+	OBJS += ./profilers/dcprof/profiler.o
+	DEFINES += -DDCPROF
+endif
+
+INCLUDES= -I$(KOS_BASE)/include \
+		-I$(KOS_BASE)/kernel/arch/dreamcast/include \
+		-I$(KOS_BASE)/addons/include \
+		-I$(KOS_BASE)/../kos-ports/include \
+		-I$(KOS_BASE)/utils \
+		-I$(shell pwd)/include \
+		-I$(shell pwd)/enDJinn/include \
+
+CFLAGS+=\
+		$(KOS_CSTD) \
+		$(INCLUDES) \
+		-D__DREAMCAST__  \
+		-D_arch_dreamcast -D_arch_sub_pristine \
+		-fstack-protector-all \
+		-flto=auto \
+		-DFRAME_POINTERS \
+		-Wall -Wextra  \
+		-fno-strict-aliasing \
+		-fomit-frame-pointer \
+		-fbuiltin -ffast-math -ffp-contract=fast \
+		-mfsrra \
+		-mfsca \
+		-ml \
+		-matomic-model=soft-imask \
+		-ffunction-sections -fdata-sections -ftls-model=local-exec \
+		-m4-single-only \
+		-fms-extensions \
+		-fipa-pta \
+		$(DEFINES) \
+
+all: $(TARGETNAME).elf
+.DEFAULT: all
+
+${TARGETNAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
+	$(CC) $(KOS_CFLAGS) -o $@ $(OBJS) $(LDLIBS) 
+
+
+$(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES)
+	@mkdir -p $(shell dirname $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# notice the different settings for different texture formats based on directory names
+TEXDIR_PAL4=$(BUILDDIR)/pvrtex/pal4
+$(TEXDIR_PAL4)/%.dt: assets/textures/pal4/%.png
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f PAL4BPP -c --max-color 16 -i $< -o $@
+
+TEXDIR_PAL8=$(BUILDDIR)/pvrtex/pal8
+$(TEXDIR_PAL8)/%.dt: assets/textures/pal8/%.png
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f PAL8BPP -c --max-color 256 -i $< -o $@
+
+TEXDIR_RGB565_VQ_TW=$(BUILDDIR)/pvrtex/rgb565_vq_tw
+$(TEXDIR_RGB565_VQ_TW)/%.dt: assets/textures/rgb565_vq_tw/%.png 
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f RGB565 -c -i $< -o $@
+
+TEXDIR_ARGB1555_VQ_TW=$(BUILDDIR)/pvrtex/argb1555_vq_tw
+$(TEXDIR_ARGB1555_VQ_TW)/%.dt: assets/textures/argb1555_vq_tw/%.png
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f ARGB1555 -c -i $< -o $@
+
+$(CDIS): %.cdi: %.elf
+	mkdcdisc -n $* -e $<  -N -o $*.cdi -v 3 -m
+
+clean:
+	-rm -rf *.elf *.cdi $(OBJS) 
+
+.PHONY: list help
+list:
+	@LC_ALL=C $(MAKE) -pRrq -f $(firstword $(MAKEFILE_LIST)) : 2>/dev/null | awk -v RS= -F: '/(^|\n)# Files(\n|$$)/,/(^|\n)# Finished Make data base/ {if ($$1 !~ "^[#.]") {print $$1}}' | sort | grep -E -v -e '^[^[:alnum:]]' -e '^$@$$'
+
+
+help:
+	@echo "make [TARGET] where TARGET is one of:"
+	@echo "  ${TARGETNAME}.elf        Build all part_*.elf files"
+	@echo "  clean        						Remove all built files"
+	@echo "  help         						Show this help message"
+	@echo "  list         						List all make targets"

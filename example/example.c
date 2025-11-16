@@ -1,5 +1,5 @@
 /**
- * Example program demonstrating enDgine usage
+ * Example program demonstrating enDJinn usage
  * 
  * This creates a simple rotating square demo
  */
@@ -19,7 +19,7 @@ static int demo_init(void) {
     demo_state.rotation = 0.0f;
     demo_state.texture = NULL;
     
-    printf("enDgine Demo Initialized\n");
+    printf("enDJinn Demo Initialized\n");
     printf("Press START to exit\n");
     
     return 0;
@@ -94,7 +94,7 @@ static void demo_render(void) {
 
 /* Cleanup the demo */
 static void demo_cleanup(void) {
-    printf("enDgine Demo Cleanup\n");
+    printf("enDJinn Demo Cleanup\n");
 }
 
 /* Main entry point */
