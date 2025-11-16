@@ -1,5 +1,5 @@
 /**
- * enDgine - A gameplay loop driver for the Sega Dreamcast
+ * enDJinn - A gameplay loop driver for the Sega Dreamcast
  * Implementation
  */
 
