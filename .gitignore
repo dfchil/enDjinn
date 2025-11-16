@@ -53,3 +53,4 @@ dkms.conf
 
 # debug information files
 *.dwo
+_codeql_detected_source_root
