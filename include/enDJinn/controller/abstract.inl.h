@@ -1,6 +1,4 @@
-#include <enDJinn/controller/abstract_ctrlr.h>
-#include <enDJinn/controller/aicontroller.h>
-#include <enDJinn/types.h>
+#include <enDJinn/controller/abstract.h>
 
 static ctrl_box_t ctrl_box = {
     .current_ctrl_frame = 0,
@@ -68,14 +66,6 @@ void cont_state_onto_ctrlstate(cont_state_t *c_state,
   ctrlr->rtrigger = c_state->rtrig;
 }
 
-static inline void read_replay_controller(__unused
-                                          replay_controller_t *unused,
-                                          controller_state_t *ctrlr) {
-  g_state_t *g_point = core_get_global();
-  cont_cond_t c_input = recal_controller(g_point);
-  cont_state_onto_ctrlstate(&c_input, ctrlr);
-}
-
 void control_next_frame(ctrl_box_t *_ctrl_box) {
   _ctrl_box->current_render_frame++;
 }
@@ -95,12 +85,6 @@ void read_controller(abstract_controller_t *ctrlref,
       DEBUG_PRINT("Controller unavailable on port %d\n", ctrlref->dc_ctrlr.offset);
     }
 
-    break;
-  case REPLAY_E:
-    read_replay_controller(&ctrlref->replay, buttons);
-    break;
-  case AIBOT_E:
-    read_aibot_controller(ctrlref, buttons);
     break;
   default:
     DEBUG_PRINT("Unknown controller type\n");

@@ -3,7 +3,6 @@
 #include <enDJinn/shared.h>
 // #include <enDJinn/entity/player.h>
 // #include <enDJinn/controller/aicontroller.h>
-#include <enDJinn/ai/core.h>
 #include <enDJinn/controller/core.h>
 
 /**
@@ -79,4 +78,7 @@ void read_controller(abstract_controller_t *ctrlref,
 
 void cont_state_onto_ctrlstate(cont_state_t *c_state,
                                controller_state_t *ctrlr);
+
+#include "abstract.inl.h"
+
 #endif // GAME_CONTROLLER_ABSTRACT_H  
