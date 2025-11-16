@@ -1,4 +1,4 @@
-#include <enDJinn/compiledefs.h>
+// #include <enDJinn/compiledefs.h>
 #include <enDJinn/controller/dreamcast.h>
 #include <enDJinn/controller/rumble.h>
 #include <kos/sem.h>
