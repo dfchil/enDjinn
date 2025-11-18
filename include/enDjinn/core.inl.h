@@ -56,7 +56,7 @@ void cut_to_title_screen(void) {
   // zoomtrans_reset_second_filler();
 }
 
-void enDjinn_loop(void) {
+void enj_run(void) {
   while (1) {
     dc_ctrlrs_map_state();
     if (check_c1_exit()) {

@@ -16,7 +16,6 @@ include enDjinn/Makefile.texture
 include enDjinn/Makefile.sfx
 include enDjinn/Makefile.defines
 
-.PRECIOUS: $(DTTEXTURES) $(SFXFILES) 
 all: $(BASENAME).elf
 .DEFAULT: all
 
@@ -28,10 +27,13 @@ ${BASENAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
 	@$(CC) $(INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(LDLIBS) 
 
 ${BASENAME}.cdi: ${BASENAME}.elf
-	mkdcdisc -n $(basename $<) -e ${BASENAME}.elf -d ${cfg_info}/ -N -o $(basename $<).cdi -v 3 -m
+	mkdcdisc -n $(basename $<) -e ${BASENAME}.elf -d ${ROMDIR}/ -N -o $(basename $<).cdi -v 3 -m
+
+${BASENAME}.bin: ${BASENAME}.elf
+	sh-elf-objcopy -O binary ${BASENAME}.elf ${BASENAME}.bin
 
 clean:
-	-rm -rf *.elf *.cdi $(OBJS) 
+	-rm -rf *.elf *.cdi *.bin $(OBJS) 
 
 .PRECIOUS: $(DTTEXTURES) $(SFXFILES) 
 .PHONY: list help info

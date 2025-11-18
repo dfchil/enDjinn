@@ -1,5 +1,7 @@
 #include <enDjinn/controller/abstract.h>
 
+#include <enDjinn/shared.h>
+
 static ctrl_box_t ctrl_box = {
     .current_ctrl_frame = 0,
     .current_render_frame = 0,
