@@ -2,18 +2,18 @@
 #include <dc/pvr/pvr_mem.h>
 #include <malloc.h>
 #include <time.h>
-#include <enDJinn/controller/dreamcast.h>
+#include <enDjinn/controller/dreamcast.h>
 
 // #include <drxlax/audio/sfx.h>
-// #include <enDJinn/config/config.h>
-// #include <enDJinn/controller/rumble.h>
-// #include <enDJinn/core.h>
-// #include <enDJinn/mode/game.h>
-#include <enDJinn/mode/core.h>
-// #include <enDJinn/mode/titlescreen.h>
-// #include <enDJinn/stats/scoreboard.h>
-// #include <enDJinn/transitions/startup_and_shutdown.h>
-// #include <enDJinn/transitions/zoom.h>
+// #include <enDjinn/config/config.h>
+// #include <enDjinn/controller/rumble.h>
+// #include <enDjinn/core.h>
+// #include <enDjinn/mode/game.h>
+#include <enDjinn/mode/core.h>
+// #include <enDjinn/mode/titlescreen.h>
+// #include <enDjinn/stats/scoreboard.h>
+// #include <enDjinn/transitions/startup_and_shutdown.h>
+// #include <enDjinn/transitions/zoom.h>
 // #include <drxlax/render/core.h>
 // #include <drxlax/render/pvr/perspective.h>
 // #include <drxlax/render/pvr/pvr.h>
@@ -56,7 +56,7 @@ void cut_to_title_screen(void) {
   // zoomtrans_reset_second_filler();
 }
 
-void enDJinn_loop(void) {
+void enDjinn_loop(void) {
   while (1) {
     dc_ctrlrs_map_state();
     if (check_c1_exit()) {

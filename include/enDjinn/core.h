@@ -2,14 +2,14 @@
 #define ENDJINN_CORE_H
 
 
-#include <enDJinn/controller/abstract.h>
+#include <enDjinn/controller/abstract.h>
 
 int detect_shutdown_combo(controller_state_t *cstate);
 
 void core_flag_endofsequence(void);
 void core_flag_shutdown(void);
 
-void enDJinn_loop(void);
+void enDjinn_loop(void);
 int core_init(void);
 void cut_to_title_screen(void);
 

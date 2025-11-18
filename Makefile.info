@@ -1,0 +1,57 @@
+list:
+	@LC_ALL=C $(MAKE) -pRrq -f $(firstword $(MAKEFILE_LIST)) : 2>/dev/null | awk -v RS= -F: '/(^|\n)# Files(\n|$$)/,/(^|\n)# Finished Make data base/ {if ($$1 !~ "^[#.]") {print $$1}}' | sort | grep -E -v -e '^[^[:alnum:]]' -e '^$@$$'
+
+
+cfg_info:
+	@echo "Makefile configurable variables (redefine in Makefile.cfg as necessary):"
+	@echo "BASENAME      = ${BASENAME}"
+	@echo "                  # Basename of the target that other names are built from,"
+	@echo "                  # defaults to the current directory name."
+	@echo "TEXTUREDIR    = ${TEXTUREDIR}"
+	@echo "                  # Directory containing texture assets"
+	@echo "SOUNDFXDIR    = ${SOUNDFXDIR}"
+	@echo "                  # Directory containing sound effect assets"
+	@echo "ROMDIR        = ${ROMDIR}"
+	@echo "                  # Base directory for the CD-ROM image contents" 
+	@echo "                  # or for access via dc-tool-ip -m option"
+	@echo "ROMDBASEPATH  = ${ROMDBASEPATH}"
+	@echo "                  # Base path inside the CD-ROM image for this project"
+	@echo "OPTLEVEL      = ${OPTLEVEL}"
+	@echo "                  # Optimization level (default: ${DEFAULT_OPTLEVEL})"
+	@echo ""
+	@echo "Other important make variables:"
+	@echo "INCLUDES      = ${INCLUDES}"
+	@echo ""
+
+	@echo "LDLIBS        = ${LDLIBS}"
+	@echo ""
+
+	@echo "CFLAGS        = ${CFLAGS}"
+	@echo ""
+
+auto_variables:
+	@echo "Make automatic variables for target ${BASENAME}.elf:"
+	@echo "\$$DTTEXTURES are:"
+	@echo "  [${DTTEXTURES}]"
+	@echo ""
+
+	@echo "\$$SNDFXFILES are:"
+	@echo "  [${SNDFXFILES}]"
+	@echo ""
+
+	@echo "\$$DEFINES are:"
+	@echo "  [${DEFINES}]"
+	@echo ""
+
+	@echo "\$$OBJS are:"
+	@echo "  [${OBJS}]"
+	@echo ""
+
+help:
+	@echo "make [TARGET] where TARGET is one of:"
+	@echo "  ${BASENAME}.elf        Build all part_*.elf files"
+	@echo "  clean        						Remove all built files"
+	@echo "  help         						Show this help message"
+	@echo "  list         						List all make targets"
+	@echo "  cfg_info         					Show redefineable makefile variables"
+	@echo "  cmdline_info          				Alias for ${BASENAME}.elf"

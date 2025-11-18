@@ -1,9 +1,9 @@
 #ifndef GAME_CONTROLLER_ABSTRACT_H
 #define GAME_CONTROLLER_ABSTRACT_H
-#include <enDJinn/shared.h>
-// #include <enDJinn/entity/player.h>
-// #include <enDJinn/controller/aicontroller.h>
-#include <enDJinn/controller/core.h>
+#include <enDjinn/shared.h>
+// #include <enDjinn/entity/player.h>
+// #include <enDjinn/controller/aicontroller.h>
+#include <enDjinn/controller/core.h>
 
 /**
  * button 4 states

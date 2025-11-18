@@ -1,6 +1,8 @@
 #ifndef SHARED_H
 #define SHARED_H
 
+#include <stdio.h>
+
 // #include <dc/maple.h>
 // #include <dc/maple/controller.h>
 // #include <dc/matrix.h>

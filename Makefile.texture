@@ -1,0 +1,28 @@
+
+ROMBASETEXTUREDIR:=$(notdir $(TEXTUREDIR))
+
+DTTEXTURES:=
+ifneq (,$(wildcard $(TEXTUREDIR)))
+	DTTEXTURES += $(shell find $(TEXTUREDIR)/ -name '*.png' | sed -e 's,'$(TEXTUREDIR)',$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR),g' -e 's,\.png,\.dt,g')
+endif
+
+# notice the different settings for different texture formats based on directory names
+TEXDIR_PAL4=$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal4
+$(TEXDIR_PAL4)/%.dt: $(TEXTUREDIR)/pal4/%.png
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f PAL4BPP -c --max-color 16 -i $< -o $@
+
+TEXDIR_PAL8=$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8
+$(TEXDIR_PAL8)/%.dt: $(TEXTUREDIR)/pal8/%.png
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f PAL8BPP -c --max-color 256 -i $< -o $@
+
+TEXDIR_RGB565_VQ_TW=$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/rgb565_vq_tw
+$(TEXDIR_RGB565_VQ_TW)/%.dt: $(TEXTUREDIR)/rgb565_vq_tw/%.png 
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f RGB565 -c -i $< -o $@
+
+TEXDIR_ARGB1555_VQ_TW=$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/argb1555_vq_tw
+$(TEXDIR_ARGB1555_VQ_TW)/%.dt: $(TEXTUREDIR)/argb1555_vq_tw/%.png
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f ARGB1555 -c -i $< -o $@

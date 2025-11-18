@@ -1,4 +1,4 @@
-#include <enDJinn/controller/abstract.h>
+#include <enDjinn/controller/abstract.h>
 
 static ctrl_box_t ctrl_box = {
     .current_ctrl_frame = 0,

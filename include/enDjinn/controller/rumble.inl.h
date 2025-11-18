@@ -1,6 +1,6 @@
-// #include <enDJinn/compiledefs.h>
-#include <enDJinn/controller/dreamcast.h>
-#include <enDJinn/controller/rumble.h>
+// #include <enDjinn/compiledefs.h>
+#include <enDjinn/controller/dreamcast.h>
+#include <enDjinn/controller/rumble.h>
 #include <kos/sem.h>
 #include <pthread.h>
 #include <stdio.h>

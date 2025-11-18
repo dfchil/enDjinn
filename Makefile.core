@@ -1,0 +1,39 @@
+include $(KOS_BASE)/Makefile.rules
+KOS_CSTD := -std=gnu23
+CC=kos-cc
+
+# redefine the following in Makefile.cfg as necessary
+include enDjinn/Makefile.cfg
+
+ifneq (,$(wildcard ./MMakefile.local.cfg))
+    include Makefile.local.cfg
+endif
+
+# its all automagic from here on out
+OBJS := $(shell find ./code/ -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(BUILDDIR)\1.o,g')
+
+include enDjinn/Makefile.texture
+include enDjinn/Makefile.sfx
+include enDjinn/Makefile.defines
+
+.PRECIOUS: $(DTTEXTURES) $(SFXFILES) 
+all: $(BASENAME).elf
+.DEFAULT: all
+
+$(BUILDDIR)/%.o: %.c Makefile
+	@mkdir -p $(shell dirname $@)
+	$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
+
+${BASENAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
+	@$(CC) $(INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(LDLIBS) 
+
+${BASENAME}.cdi: ${BASENAME}.elf
+	mkdcdisc -n $(basename $<) -e ${BASENAME}.elf -d ${cfg_info}/ -N -o $(basename $<).cdi -v 3 -m
+
+clean:
+	-rm -rf *.elf *.cdi $(OBJS) 
+
+.PRECIOUS: $(DTTEXTURES) $(SFXFILES) 
+.PHONY: list help info
+
+include enDjinn/Makefile.info
