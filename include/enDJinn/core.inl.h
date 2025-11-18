@@ -43,10 +43,7 @@ void core_flag_endofsequence(void) { flags.end_of_sequence = 1; }
 void core_flag_shutdown(void) { flags.shut_down = 1; }
 
 static int check_c1_exit(void) {
-  if (flags.shut_down) {
-    return 1;
-  }
-  return 0;
+  return flags.shut_down;
 }
 
 void cut_to_title_screen(void) {
