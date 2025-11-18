@@ -9,7 +9,7 @@ int detect_shutdown_combo(controller_state_t *cstate);
 void core_flag_endofsequence(void);
 void core_flag_shutdown(void);
 
-void enDjinn_loop(void);
+void enj_run(void);
 int core_init(void);
 void cut_to_title_screen(void);
 

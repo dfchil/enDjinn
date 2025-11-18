@@ -51,7 +51,7 @@ int main(__unused int argc, __unused char **argv) {
   profiler_start();
 #endif
 
-  enDjinn_loop();
+  enj_run();
 
 #ifdef DCPROF
   profiler_stop();
