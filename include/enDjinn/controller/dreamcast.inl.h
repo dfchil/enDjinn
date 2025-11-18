@@ -1,9 +1,9 @@
 #include <dc/maple.h>
 #include <dc/maple/controller.h>
 #include <dc/maple/vmu.h>
-#include <enDJinn/controller/abstract.h>
-#include <enDJinn/controller/dreamcast.h>
-// #include <enDJinn/compiledefs.h>
+#include <enDjinn/controller/abstract.h>
+#include <enDjinn/controller/dreamcast.h>
+// #include <enDjinn/compiledefs.h>
 #include <stddef.h>
 
 static cont_state_t state_backups[MAPLE_PORT_COUNT] = {0};

@@ -1,0 +1,37 @@
+DEFINES=
+ifdef RELEASEBUILD
+	DEFINES += -s -DRELEASEBUILD
+else
+	DEFINES += -g
+endif
+
+ifdef OPTLEVEL
+	DEFINES += -O${OPTLEVEL}
+else
+	DEFINES += -O${DEFAULT_OPTLEVEL}
+	OPTLEVEL=${DEFAULT_OPTLEVEL}
+endif
+
+ifdef DCTRACE
+DEFINES += -finstrument-functions -DDCTRACE
+OBJS += ./profilers/dcprofiler.o
+endif 
+
+ifdef SHOWFRAMETIMES
+	DEFINES += -DSHOWFRAMETIMES=${SHOWFRAMETIMES}
+endif
+
+ifdef CBASEPATH
+	DEFINES += -DCBASEPATH="${CBASEPATH}/${BASENAME}/"
+else
+	DEFINES += -DCBASEPATH=$(ROMDBASEPATH)
+endif
+	
+ifdef DEBUG
+	DEFINES += -DDEBUG
+endif
+
+ifdef DCPROF
+	OBJS += ./profilers/dcprof/profiler.o
+	DEFINES += -DDCPROF
+endif

@@ -1,0 +1,8 @@
+
+
+ROMBASESFXDIR:=$(notdir $(SOUNDFXDIR))
+
+SNDFXFILES:=
+ifneq (,$(wildcard $(SOUNDFXDIR)))
+	SNDFXFILES += $(shell find $(SOUNDFXDIR)/ -name '*.wav' | sed -e 's,'$(SOUNDFXDIR)',$(ROMDBASEPATH)/$(ROMBASESFXDIR),g')
+endif

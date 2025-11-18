@@ -1,4 +1,4 @@
-#include <enDJinn/mode/core.h>
+#include <enDjinn/mode/core.h>
 #include <stddef.h>
 
 #define MODE_STACK_SIZE 16
