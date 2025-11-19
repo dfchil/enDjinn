@@ -14,6 +14,14 @@ KOS_INIT_FLAGS(INIT_DEFAULT);
 #include <dc/perf_monitor.h>
 #endif
 
+static const alignas(32) uint8_t enDjinn_logo_raw[] = {
+#embed "../embeds/texture/pal4/enDjinn512.dt"
+};
+static const alignas(32) uint8_t enDjinn_logo_pal[] = {
+#embed "../embeds/texture/pal4/enDjinn512.dt.pal"
+};
+
+
 #include <dc/pvr.h>
 #include <enDjinn/core.h>
 

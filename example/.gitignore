@@ -1,4 +1,4 @@
 *.bin
 *.elf
 *.cdi
-cdrom/
+embeds/

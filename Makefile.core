@@ -2,10 +2,10 @@ include $(KOS_BASE)/Makefile.rules
 KOS_CSTD := -std=gnu23
 CC=kos-cc
 
-# redefine the following in Makefile.cfg as necessary
+# redefine the following in a file ./Makefile.local.cfg as necessary
 include enDjinn/Makefile.cfg
 
-ifneq (,$(wildcard ./MMakefile.local.cfg))
+ifneq (,$(wildcard ./Makefile.local.cfg))
     include Makefile.local.cfg
 endif
 
