@@ -6,6 +6,16 @@ ifneq (,$(wildcard $(TEXTUREDIR)))
 	DTTEXTURES += $(shell find $(TEXTUREDIR)/ -name '*.png' | sed -e 's,'$(TEXTUREDIR)',$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR),g' -e 's,\.png,\.dt,g')
 endif
 
+
+ifeq ($(ADD_ENDJINN_LOGO_TEXTURE),1)
+# special case: add the enDjinn logo texture
+DTTEXTURES += $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal4/enDjinn512.dt
+$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal4/enDjinn512.dt: enDjinn/assets/texture/pal4/enDjinn512.png
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f PAL4BPP -c --max-color 16 -i $< -o $@
+endif	
+
+
 # notice the different settings for different texture formats based on directory names
 TEXDIR_PAL4=$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal4
 $(TEXDIR_PAL4)/%.dt: $(TEXTUREDIR)/pal4/%.png
