@@ -19,7 +19,7 @@ include enDjinn/Makefile.defines
 all: $(BASENAME).elf
 .DEFAULT: all
 
-$(BUILDDIR)/%.o: %.c Makefile
+$(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES) $(SFXFILES)
 	@mkdir -p $(shell dirname $@)
 	$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
 

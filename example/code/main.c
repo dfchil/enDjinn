@@ -21,9 +21,8 @@ static const alignas(32) uint8_t enDjinn_logo_pal[] = {
 #embed "../embeds/texture/pal4/enDjinn512.dt.pal"
 };
 
-
 #include <dc/pvr.h>
-#include <enDjinn/core.h>
+#include <enDjinn/enj_enDjinn.h>
 
 static pvr_init_params_t pvr_params = {
     {PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16,
@@ -46,20 +45,20 @@ int main(__unused int argc, __unused char **argv) {
 #endif
 
   vid_set_mode(DM_640x480, PM_RGB888P);
-  pvr_set_bg_color(0.0, 0.0, 24.0f / 255.0f);
+  pvr_set_bg_color(1.0, 1.0, 1.0f);
   pvr_init(&pvr_params);
 
-  if (!core_init()) {
-    // DEBUG_PRINT("Core init failed, exiting\n");
-    return -1;
-  };
+  // if (!core_init()) {
+  //   // DEBUG_PRINT("Core init failed, exiting\n");
+  //   return -1;
+  // };
 
 #ifdef DCPROF
   profiler_init("/pc/gmon.out");
   profiler_start();
 #endif
 
-  enj_run();
+  // enj_run();
 
 #ifdef DCPROF
   profiler_stop();
