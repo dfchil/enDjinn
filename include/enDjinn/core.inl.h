@@ -6,7 +6,6 @@
 
 // #include <drxlax/audio/sfx.h>
 // #include <enDjinn/config/config.h>
-// #include <enDjinn/controller/rumble.h>
 // #include <enDjinn/core.h>
 // #include <enDjinn/mode/game.h>
 #include <enDjinn/mode/core.h>
