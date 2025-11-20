@@ -5,12 +5,12 @@
 
 KOS_INIT_FLAGS(INIT_DEFAULT);
 
-#ifdef DEBUG
+#ifdef ENJ_DEBUG
 #include <arch/gdb.h>
 #endif
 
 
-#ifdef DEBUG
+#ifdef ENJ_DEBUG
 #include <dc/perf_monitor.h>
 #endif
 
@@ -36,9 +36,9 @@ static pvr_init_params_t pvr_params = {
 };
 
 int main(__unused int argc, __unused char **argv) {
-#ifdef DEBUG
+#ifdef ENJ_DEBUG
   gdb_init();
-  DEBUG_PRINT("CBASEPATH %s\n", CBASEPATH);
+  ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
 
   perf_monitor_init(PMCR_OPERAND_CACHE_READ_MISS_MODE,
                     PMCR_INSTRUCTION_CACHE_MISS_MODE);
@@ -49,7 +49,7 @@ int main(__unused int argc, __unused char **argv) {
   pvr_init(&pvr_params);
 
   // if (!core_init()) {
-  //   // DEBUG_PRINT("Core init failed, exiting\n");
+  //   // ENJ_DEBUG_PRINT("Core init failed, exiting\n");
   //   return -1;
   // };
 
@@ -67,10 +67,10 @@ int main(__unused int argc, __unused char **argv) {
   // rumble_queues_shutdown();
   pvr_shutdown();
 
-#ifdef DEBUG
+#ifdef ENJ_DEBUG
   perf_monitor_print(stdout);
 
-  FILE *stats_out = fopen(CBASEPATH "/pstats.txt", "a");
+  FILE *stats_out = fopen(ENJ_CBASEPATH "/pstats.txt", "a");
   if (stats_out != NULL) {
     perf_monitor_print(stats_out);
     fclose(stats_out);
