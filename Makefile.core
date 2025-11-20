@@ -11,29 +11,39 @@ endif
 
 # its all automagic from here on out
 OBJS := $(shell find ./code/ -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(BUILDDIR)\1.o,g')
+OBJS += $(shell find ./enDjinn/src/ -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(BUILDDIR)\1.o,g')	
 
 include enDjinn/Makefile.texture
 include enDjinn/Makefile.sfx
 include enDjinn/Makefile.defines
 
-all: $(BASENAME).elf
+all: bin/$(BASENAME).elf
 .DEFAULT: all
 
 $(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES) $(SFXFILES)
 	@mkdir -p $(shell dirname $@)
 	$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
 
-${BASENAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
+bin/${BASENAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
+	@mkdir -p $(shell dirname $@)
 	@$(CC) $(INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(LDLIBS) 
 
-${BASENAME}.cdi: ${BASENAME}.elf
-	mkdcdisc -n $(basename $<) -e ${BASENAME}.elf -d ${ROMDIR}/ -N -o $(basename $<).cdi -v 3 -m
+bin/${BASENAME}.cdi: bin/${BASENAME}.elf
+	mkdcdisc \
+	--name $(basename $<) \
+	--elf $< \
+	--directory ${ROMDIR}/ \
+	--release $(shell date  +"%Y%m%d" ) \
+	--serial "ENJ01" \
+	--image enDjinn/assets/iplogo.mr \
+	--output $(basename $<).cdi -v 3 \
+	--no-padding
 
-${BASENAME}.bin: ${BASENAME}.elf
-	sh-elf-objcopy -O binary ${BASENAME}.elf ${BASENAME}.bin
+bin/${BASENAME}.bin: bin/${BASENAME}.elf
+	sh-elf-objcopy -O binary $< $@
 
 clean:
-	-rm -rf *.elf *.cdi *.bin $(OBJS) 
+	-rm -rf bin/* $(OBJS) 
 
 .PRECIOUS: $(DTTEXTURES) $(SFXFILES) 
 .PHONY: list help info
