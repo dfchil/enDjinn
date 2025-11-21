@@ -6,7 +6,7 @@ pwd=$(pwd)
 DCIP=10.0.0.248
 OUTDIR=${pwd}/profilers/profiles
 BINARY=bin/dRxLaX.elf
-CDROMDIR=${pwd}/cdrom/dRxLaX
+CDROMDIR=${pwd}/cdrom
 
 mkdir -p ${OUTDIR}
 
