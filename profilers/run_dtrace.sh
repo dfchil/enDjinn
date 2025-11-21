@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
+<<<<<<< HEAD
 # pwd=$(dirname $(realpath -s $BASH_SOURCE))
+=======
+scriptpwd=$(dirname $(realpath -s $BASH_SOURCE))
+>>>>>>> 4095600459df1ab56563d6dd7966c49075475b47
 pwd=$(pwd)
 
 DCIP=10.0.0.248
@@ -20,6 +24,7 @@ run_dtrace() {
 	SINGLEDEMO=11 DCTRACE=1 OPTLEVEL=${OPTLEVEL} ENJ_CBASEPATH=/pc/dRxLaX make -j 44 ${BINARY}
 	dc-tool-ip -t ${DCIP} -x ${BINARY} -m ${CDROMDIR}
 	mv ${CDROMDIR}/trace.bin ${OUTDIR}/${TRACENAME}_0${OPTLEVEL}.bin
+<<<<<<< HEAD
 	dctrace -t ${OUTDIR}/${TRACENAME}_0${OPTLEVEL}.bin ${BINARY}
 	sed 's,\.lto_priv\.,_lto_priv_,g' < graph.dot > ${TRACENAME}_O${OPTLEVEL}.dot
 
@@ -30,6 +35,10 @@ run_dtrace() {
 	# mv ${pwd}/cdrom/trace.bin ${pwd}/profilers/traces/${TRACENAME}_0${OPTLEVEL}.bin
 	# dctrace -t profilers/traces/${TRACENAME}_0${OPTLEVEL}.bin dRxLaX.elf
 	# sed 's,\.lto_priv\.,_lto_priv_,g' < graph.dot > ${TRACENAME}_O${OPTLEVEL}.dot
+=======
+	python3 ${scriptpwd}/dctrace.py -t ${OUTDIR}/${TRACENAME}_0${OPTLEVEL}.bin ${pwd}/${BINARY}
+	sed 's,\.lto_priv\.,_lto_priv_,g' < graph.dot > ${OUTDIR}/${TRACENAME}_O${OPTLEVEL}.dot
+>>>>>>> 4095600459df1ab56563d6dd7966c49075475b47
 }
 
 run_dtrace 3

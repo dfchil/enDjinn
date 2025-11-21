@@ -21,14 +21,6 @@ run_dcprof() {
 	SINGLEDEMO=11 DCPROF=1 OPTLEVEL=${OPTLEVEL} ENJ_CBASEPATH=/pc/dRxLaX make -j 44 ${BINARY}
 	dc-tool-ip -t ${DCIP} -x ${BINARY} -m ${CDROMDIR}
 	sh-elf-gprof ${pwd}/${BINARY}  ${CDROMDIR}/gmon.out > ${OUTDIR}/${TRACENAME}_0${OPTLEVEL}.txt
-
-
-	# TRACENAME=old
-	# DCPROF=1 DCTRACE=1 make clean
-	# SINGLEDEMO=11 OLDCODE=1 DCPROF=1 OPTLEVEL=${OPTLEVEL} ENJ_CBASEPATH=/pc/dRxLaX make -j 44
-	# sleep $SLEEPTIME
-	# dc-tool-ip -t ${DCIP} -x ${pwd}/dRxLaX.elf -m ${CDROMDIR}
-	# sh-elf-gprof dRxLaX.elf  ${CDROMDIR}/gmon.out > ${OUTDIR}/${TRACENAME}_0${OPTLEVEL}.txt
 }
 # run_dcprof g
 # sleep $SLEEPTIME
