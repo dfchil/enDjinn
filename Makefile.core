@@ -6,7 +6,10 @@ CC=kos-cc
 include enDjinn/Makefile.cfg
 
 ifneq (,$(wildcard ./Makefile.local.cfg))
-    include Makefile.local.cfg
+  include Makefile.local.cfg
+endif
+ifndef ROMDBASEPATH
+	ROMDBASEPATH:=$(ROMDIR)/${BASENAME}
 endif
 
 # its all automagic from here on out
