@@ -15,6 +15,7 @@
 #include <enDjinn/enj_run.h>
 #include <enDjinn/enj_state.h>
 #include <enDjinn/enj_ctrlr.h>
+#include <enDjinn/enj_texture.h>
 
 #define ENDJINN_ENJ_ENDJINN_H
 
