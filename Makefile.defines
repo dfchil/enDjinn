@@ -12,11 +12,6 @@ else
 	OPTLEVEL=${DEFAULT_OPTLEVEL}
 endif
 
-ifdef DCTRACE
-DEFINES += -finstrument-functions -DDCTRACE
-OBJS += ./profilers/dcprofiler.o
-endif 
-
 ifdef ENJ_SHOWFRAMETIMES
 	DEFINES += -DENJ_SHOWFRAMETIMES=${ENJ_SHOWFRAMETIMES}
 endif
@@ -31,7 +26,12 @@ ifdef ENJ_DEBUG
 	DEFINES += -DENJ_DEBUG
 endif
 
+ifdef DCTRACE
+DEFINES += -finstrument-functions -DDCTRACE
+OBJS += $(BUILDDIR)/enDjinn/profilers/dcprofiler.o
+endif 
+
 ifdef DCPROF
-	OBJS += ./profilers/dcprof/profiler.o
-	DEFINES += -DDCPROF
+DEFINES += -DDCPROF
+OBJS += $(BUILDDIR)/enDjinn/profilers/dcprof/profiler.o
 endif
