@@ -1,5 +1,5 @@
-#ifndef ENJ_TEXTURE.H
-#define ENJ_TEXTURE.H
+#ifndef ENJ_TEXTURE_H 
+#define ENJ_TEXTURE_H
 
 #include <dc/pvr.h>
 #include <pvrtex/file_dctex.h>
@@ -64,4 +64,4 @@ int enj_pvrtex_load(const char *filename, enj_dttex_info_t *texinfo);
  */
 int enj_pvrtex_unload(enj_dttex_info_t *texinfo);
 
-#endif // ENJ_TEXTURE.H
+#endif // ENJ_TEXTURE_H
