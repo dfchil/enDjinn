@@ -64,17 +64,17 @@ typedef struct {
       uint8_t RIGHT : 2;
     };
   };
-  int8_t joyx;
-  int8_t joyy;
-  uint8_t ltrigger;
-  uint8_t rtrigger;
   struct {
-    uint16_t START : 2;
+    uint16_t BTN_START : 2;
     uint16_t rumble : 1;
     uint16_t vmu : 1;
     uint16_t portnum : 4;
     uint16_t : 8;
   };
+  int8_t joyx;
+  int8_t joyy;
+  uint8_t ltrigger;
+  uint8_t rtrigger;
 
   cont_state_t *state;
 } enj_ctrlr_state_t;
@@ -89,7 +89,6 @@ typedef struct enj_abstract_controller_s {
   enj_ctrl_state_updater updatefun;
   void *state;
 } enj_abstract_ctrlr_t;
-
 
 int enj_dc_ctrlrs_map_state(void);
 maple_device_t *enj_maple_port_type(int p, uint32 func);
