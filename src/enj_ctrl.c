@@ -89,8 +89,8 @@ void enj_cont_state_onto_ctrlstate(cont_state_t *c_state,
   if (c_state->dpad_right != ctrlr->RIGHT) {
     ctrlr->RIGHT = enj_update_button_state(ctrlr->RIGHT, c_state->dpad_right);
   }
-  if (c_state->start != ctrlr->START) {
-    ctrlr->START = enj_update_button_state(ctrlr->START, c_state->start);
+  if (c_state->start != ctrlr->BTN_START) {
+    ctrlr->BTN_START = enj_update_button_state(ctrlr->BTN_START, c_state->start);
   }
   ctrlr->joyx = c_state->joyx;
   ctrlr->joyy = c_state->joyy;

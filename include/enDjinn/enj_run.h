@@ -8,16 +8,10 @@
     *  \copyright MIT License
  */
 
-#ifndef ENDJINN_ENJ_RUN_H
-#define ENDJINN_ENJ_RUN_H
-
-
-#include "enj_config.h"
-#include "enj_state.h"
+#ifndef ENDJINN_RUN_H
+#define ENDJINN_RUN_H
 
 // void enj_run(void);
 
-#include "enj_run.inl.h"
 
-
-#endif // ENDJINN_ENJ_RUN_H
+#endif // ENDJINN_RUN_H
