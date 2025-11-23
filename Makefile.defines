@@ -19,7 +19,7 @@ endif
 ifdef ENJ_CBASEPATH
 	DEFINES += -DENJ_CBASEPATH="\"${ENJ_CBASEPATH}\""
 else
-	DEFINES += -DENJ_CBASEPATH="\"/${ROMDIR}/${BASENAME}/\""
+	DEFINES += -DENJ_CBASEPATH="\"/cd/${BASENAME}/\""
 endif
 	
 ifdef ENJ_DEBUG

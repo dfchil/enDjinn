@@ -25,7 +25,8 @@ all: bin/$(BASENAME).elf
 
 $(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES) $(SFXFILES)
 	@mkdir -p $(shell dirname $@)
-	$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
+	@echo "Building $@ from $<..."
+	@$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
 
 bin/${BASENAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
 	@mkdir -p $(shell dirname $@)
@@ -33,20 +34,23 @@ bin/${BASENAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
 
 bin/${BASENAME}.cdi: bin/${BASENAME}.elf
 	mkdcdisc \
-	--name $(basename $<) \
+	--name ${BASENAME} \
 	--elf $< \
 	--directory ${ROMDIR}/ \
 	--release $(shell date  +"%Y%m%d" ) \
 	--serial "ENJ01" \
+	--output $@ \
+	-v 3 \
 	--image enDjinn/assets/iplogo.mr \
-	--output $(basename $<).cdi -v 3 \
 	--no-padding
+
+
 
 bin/${BASENAME}.bin: bin/${BASENAME}.elf
 	sh-elf-objcopy -O binary $< $@
 
 clean:
-	-rm -rf bin/* $(OBJS) 
+	@rm -rf bin/* $(OBJS)
 
 .PRECIOUS: $(DTTEXTURES) $(SFXFILES) 
 .PHONY: list help info
