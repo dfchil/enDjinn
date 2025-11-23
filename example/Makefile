@@ -1,1 +1,1 @@
-../Makefile.core
+../Makefile.primary
