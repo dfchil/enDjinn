@@ -15,6 +15,7 @@ static const uint32_t DPAL_chksm = (uint32_t)'D' << 0 | (uint32_t)'P' << 8 |
 int enj_pvrtex_load(const char* filename, enj_dttex_info_t* texinfo) {
     int success = 1;
     file_t fp = -1;
+    
     do {
         ENJ_DEBUG_PRINT("Loading texture from file: %s\n", filename);
         fp = fs_open(filename, O_RDONLY);
@@ -24,7 +25,6 @@ int enj_pvrtex_load(const char* filename, enj_dttex_info_t* texinfo) {
             success = 0;
             break;
         }
-
         size_t bread = fs_read(fp, texinfo, sizeof(dt_header_t));
         if (bread != sizeof(dt_header_t)) {
             ENJ_DEBUG_PRINT("Error: fread failed for %s\n", filename);
@@ -39,11 +39,13 @@ int enj_pvrtex_load(const char* filename, enj_dttex_info_t* texinfo) {
         }
         size_t tdatasize =
             texinfo->hdr.chunk_size - ((1 + texinfo->hdr.header_size) << 5);
+        
+        dt_header_t temp_hdr = texinfo->hdr;
 
-        texinfo->flags.compressed = fDtIsCompressed(&texinfo->hdr);
-        texinfo->flags.mipmapped = fDtIsMipmapped(&texinfo->hdr);
-        texinfo->flags.palettised = fDtIsPalettized(&texinfo->hdr);
-        texinfo->flags.num_palette_colors = fDtGetColorsUsed(&texinfo->hdr);
+        texinfo->flags.compressed = fDtIsCompressed(&temp_hdr);
+        texinfo->flags.mipmapped = fDtIsMipmapped(&temp_hdr);
+        texinfo->flags.palettised = fDtIsPalettized(&temp_hdr);
+        texinfo->flags.num_palette_colors = fDtGetColorsUsed(&temp_hdr);
 
         if (texinfo->flags.palettised) {
             texinfo->flags.palette_format =
@@ -53,10 +55,10 @@ int enj_pvrtex_load(const char* filename, enj_dttex_info_t* texinfo) {
             texinfo->flags.palette_format = 0;
         }
 
-        texinfo->flags.strided = fDtIsStrided(&texinfo->hdr);
-        texinfo->flags.twiddled = fDtIsTwiddled(&texinfo->hdr);
-        texinfo->width = fDtGetPvrWidth(&texinfo->hdr);
-        texinfo->height = fDtGetPvrHeight(&texinfo->hdr);
+        texinfo->flags.strided = fDtIsStrided(&temp_hdr);
+        texinfo->flags.twiddled = fDtIsTwiddled(&temp_hdr);
+        texinfo->width = fDtGetPvrWidth(&temp_hdr);
+        texinfo->height = fDtGetPvrHeight(&temp_hdr);
 
         texinfo->pvrformat = texinfo->hdr.pvr_type & 0xFFC00000;
 

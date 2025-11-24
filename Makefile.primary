@@ -12,7 +12,6 @@ ifndef ROMDBASEPATH
 	ROMDBASEPATH:=$(ROMDIR)/${BASENAME}
 endif
 
-# its all automagic from here on out
 OBJS := $(shell find ./code/ -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(BUILDDIR)\1.o,g')
 OBJS += $(shell find ./enDjinn/src/ -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(BUILDDIR)\1.o,g')	
 
