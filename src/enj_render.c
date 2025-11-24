@@ -20,7 +20,7 @@ alignas(32) static uint8_t num_allocations[NUM_RENDERLISTS] = {0};
 alignas(32) static enj_renderlist_t* first_renderlists[NUM_RENDERLISTS] = {0};
 alignas(32) static enj_renderlist_t* active_renderlists[NUM_RENDERLISTS] = {0};
 
-/** optionally set a clanup method after each rendeiring iteration */
+/** optionally set a callback method after each rendering iteration */
 static void* _render_post_data = NULL;
 static enj_render_post_call _render_post_call = NULL;
 
@@ -29,7 +29,7 @@ void enj_render_set_palette_mode(int mode) {
     enj_palette_mode_switch = mode;
 }
 
-void enj_render_set_post_call(enj_render_post_call post_call, void* data) {
+void enj_render_post_callback(enj_render_post_call post_call, void* data) {
     _render_post_call = post_call;
     _render_post_data = data;
 }
