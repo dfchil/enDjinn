@@ -1,5 +1,6 @@
 #include <enDjinn/enj_enDjinn.h>
 #include <malloc.h>
+#include <dc/video.h>
 
 #define RENDERLIST_SEGMENT_SIZE 64
 #define NUM_RENDERLISTS PVR_LIST_PT_POLY - PVR_LIST_OP_POLY + 1
