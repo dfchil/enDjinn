@@ -1,7 +1,7 @@
 #ifndef ENJ_STATE_H
 #define ENJ_STATE_H
 
-#include <endjinn/enj_ctrlr.h>
+#include <enDjinn/enj_ctrlr.h>
 
 typedef struct enj_state_s {
     struct {
