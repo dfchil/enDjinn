@@ -30,6 +30,7 @@ $(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES) $(SFXFILES)
 
 bin/${BASENAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
 	@mkdir -p $(shell dirname $@)
+	@echo "Linking $@..."
 	@$(CC) $(INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(LDLIBS) 
 
 bin/${BASENAME}.cdi: bin/${BASENAME}.elf
@@ -47,6 +48,7 @@ bin/${BASENAME}.cdi: bin/${BASENAME}.elf
 
 
 bin/${BASENAME}.bin: bin/${BASENAME}.elf
+	@echo "Creating binary $@ from $<..."
 	sh-elf-objcopy -O binary $< $@
 
 clean:
