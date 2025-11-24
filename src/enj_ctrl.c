@@ -5,7 +5,7 @@ static cont_state_t state_backups[MAPLE_PORT_COUNT] = {0};
 static enj_ctrlr_state_t ctrlr_states_storage[MAPLE_PORT_COUNT] = {0};
 static enj_ctrlr_state_t* ctrlr_states_refs[MAPLE_PORT_COUNT] = {0};
 
-int enj_dc_ctrlrs_map_state(void) {
+int enj_ctrlrs_dc_map_state(void) {
     int count = 0;
     for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
         maple_device_t* device = enj_maple_port_type(i, MAPLE_FUNC_CONTROLLER);
@@ -17,7 +17,7 @@ int enj_dc_ctrlrs_map_state(void) {
             ctrlr_states_refs[i]->state = state_backups + i;
             if (state) {
                 // Map the cont_state_t onto enj_ctrlr_state_t
-                enj_cont_state_onto_ctrlstate(state, ctrlr_states_refs[i]);
+                enj_kos_state2ctrlrstate(state, ctrlr_states_refs[i]);
                 ctrlr_states_refs[i]->portnum = i;
                 count++;
             }
@@ -63,7 +63,7 @@ static inline uint8_t enj_update_button_state(uint8_t prev_btnstate,
     }
 }
 
-void enj_cont_state_onto_ctrlstate(cont_state_t* c_state,
+void enj_kos_state2ctrlrstate(cont_state_t* c_state,
                                    enj_ctrlr_state_t* ctrlr) {
     if (c_state->a != ctrlr->buttons.A) {
         ctrlr->buttons.A =
@@ -115,15 +115,20 @@ void enj_read_controller(enj_abstract_ctrlr_t* ctrlref,
     }
 }
 
-int enj_ctrlr_button_combo(enj_ctrlr_state_t* cstate, uint32_t combo) {
+int enj_ctrlr_button_combo_raw(uint32_t raw_buttons, uint32_t combo) {
     // first part at least one button from combo pressed this frame
-    if (cstate->buttons.raw & combo == combo) {
-        if (cstate->buttons.raw & (combo << 1)) {
+    if ((raw_buttons & combo) == combo) {
+        if (raw_buttons & (combo << 1)) {
             // second part all buttons in combo are pressed
             return 1;
         }
     }
     return 0;
+}
+
+int enj_ctrlr_button_combo(enj_ctrlr_state_t* cstate, enj_ctrlr_state_t* combo) {
+    return enj_ctrlr_button_combo_raw(cstate->buttons.raw,
+                                     combo->buttons.raw);
 }
 
 void enj_read_dreamcast_controller(void* ctrlr, enj_ctrlr_state_t* cstate) {

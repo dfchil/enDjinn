@@ -83,7 +83,7 @@ typedef struct enj_abstract_controller_s {
     void* state;
 } enj_abstract_ctrlr_t;
 
-int enj_dc_ctrlrs_map_state(void);
+int enj_ctrlrs_dc_map_state(void);
 
 maple_device_t* enj_maple_port_type(int p, uint32 func);
 
@@ -94,9 +94,11 @@ void enj_read_dreamcast_controller(void* dc_ctrlr, enj_ctrlr_state_t* buttons);
 void enj_read_controller(enj_abstract_ctrlr_t* ctrlref,
                          enj_ctrlr_state_t* buttons);
 
-void enj_cont_state_onto_ctrlstate(cont_state_t* c_state,
-                                   enj_ctrlr_state_t* ctrlr);
+void enj_kos_state2ctrlrstate(cont_state_t* c_state,
+                                   enj_ctrlr_state_t* ctrlrstate);
 
-int enj_ctrlr_button_combo(enj_ctrlr_state_t* cstate, uint32_t combo);
+int enj_ctrlr_button_combo_raw(uint32_t raw_buttons, uint32_t combo);
+
+int enj_ctrlr_button_combo(enj_ctrlr_state_t* cstate, enj_ctrlr_state_t* combo);
 
 #endif  // ENJ_CTRLR_H
