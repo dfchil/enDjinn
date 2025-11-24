@@ -1,84 +1,18 @@
-#include <kos.h>
-#ifdef DCPROF
-#include "../profilers/dcprof/profiler.h"
-#endif
-
-KOS_INIT_FLAGS(INIT_DEFAULT);
-
-#ifdef ENJ_DEBUG
-#include <arch/gdb.h>
-#endif
-
-
-#ifdef ENJ_DEBUG
-#include <dc/perf_monitor.h>
-#endif
-
-static const alignas(32) uint8_t enDjinn_logo_raw[] = {
-#embed "../embeds/texture/pal4/enDjinn512.dt"
-};
-static const alignas(32) uint8_t enDjinn_logo_pal[] = {
-#embed "../embeds/texture/pal4/enDjinn512.dt.pal"
-};
-
-#include <dc/pvr.h>
 #include <enDjinn/enj_enDjinn.h>
 
-static pvr_init_params_t pvr_params = {
-    {PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16,
-     PVR_BINSIZE_0},
-    1024 * 1024,   // Vertex buffer size
-    0,             // No DMA
-    0, // Set horisontal FSAA
-    0,             // Translucent Autosort enabled.
-    3,             // Extra OPBs
-    0,             // No extra PTs
-};
-
 int main(__unused int argc, __unused char **argv) {
-#ifdef ENJ_DEBUG
-  gdb_init();
-  ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
 
-  perf_monitor_init(PMCR_OPERAND_CACHE_READ_MISS_MODE,
-                    PMCR_INSTRUCTION_CACHE_MISS_MODE);
-#endif
-
-  vid_set_mode(DM_640x480, PM_RGB888P);
-  pvr_set_bg_color(1.0, 1.0, 1.0f);
-  pvr_init(&pvr_params);
-
-  // if (!core_init()) {
-  //   // ENJ_DEBUG_PRINT("Core init failed, exiting\n");
-  //   return -1;
-  // };
-
-#ifdef DCPROF
-  profiler_init("/pc/gmon.out");
-  profiler_start();
-#endif
-
-  // enj_run();
-
-#ifdef DCPROF
-  profiler_stop();
-  profiler_clean_up();
-#endif
-  // rumble_queues_shutdown();
-  pvr_shutdown();
-
-#ifdef ENJ_DEBUG
-  perf_monitor_print(stdout);
-
-  FILE *stats_out = fopen(ENJ_CBASEPATH "/pstats.txt", "a");
-  if (stats_out != NULL) {
-    perf_monitor_print(stats_out);
-    fclose(stats_out);
+  enj_state_defaults();
+  enj_state_set_exit_pattern((enj_ctrlr_state_t){
+      .buttons =
+          {
+              .START = BUTTON_DOWN,
+              .A = BUTTON_DOWN,
+          },
+  }.buttons.raw);
+  if (enj_startup() != 0) {
+    ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
+    return -1;
   }
-#endif
-
-#ifdef RELEASEBUILD
-  arch_set_exit_path(ARCH_EXIT_REBOOT);
-#endif
-  arch_exit();
+  enj_run();
 }

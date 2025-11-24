@@ -7,7 +7,7 @@ typedef void (*enj_render_method)(void *data);
 
 typedef void (*enj_render_post_call)(void *data);
 
-void enj_render_set_post_call(enj_render_post_call cleanup, void *data);
+void enj_render_post_callback(enj_render_post_call cleanup, void *data);
 
 void enj_render_set_palette_mode(int mode);
 
