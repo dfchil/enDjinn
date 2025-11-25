@@ -164,5 +164,4 @@ void enj_run(void) {
 #ifdef RELEASEBUILD
     arch_set_exit_path(ARCH_EXIT_REBOOT);
 #endif
-    arch_exit();
 }
