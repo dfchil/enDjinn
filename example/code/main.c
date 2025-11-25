@@ -83,7 +83,7 @@ void main_mode_updater(void *data) {
 int main(__unused int argc, __unused char **argv) {
 
   // initialize enDjinn state with default values
-  // you could also work directly on
+  // you could also work directly on 
   // the enj_state_t* from enj_state_get()
   enj_state_defaults();
 
@@ -91,7 +91,7 @@ int main(__unused int argc, __unused char **argv) {
   // lets make it easier
   // the reason for using the enj_ctrlr_state_t interface
   // for making the bit-pattern is that each button is
-  // mapped to 2 bits, one  for tracking position and one
+  // mapped to 2 bits, one for tracking position and one 
   // tracking if there was a change between readings
   enj_state_set_exit_pattern((enj_ctrlr_state_t){
       .buttons =
