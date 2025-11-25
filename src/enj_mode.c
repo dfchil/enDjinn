@@ -2,15 +2,15 @@
 #include <stddef.h>
 
 static int current_mode_index = -1;
-alignas(32) static enj_game_mode_t* mode_stack[ENJ_MODE_STACK_SIZE] = {NULL};
+alignas(32) static enj_mode_t* mode_stack[ENJ_MODE_STACK_SIZE] = {NULL};
 
-void enj_mode_set(enj_game_mode_t* mode) {
+void enj_mode_set(enj_mode_t* mode) {
     mode_stack[current_mode_index] = mode;
 }
 
-enj_game_mode_t* enj_mode_get(void) { return mode_stack[current_mode_index]; }
+enj_mode_t* enj_mode_get(void) { return mode_stack[current_mode_index]; }
 
-int enj_mode_push(enj_game_mode_t* mode) {
+int enj_mode_push(enj_mode_t* mode) {
 #ifdef ENJ_DEBUG
     if (current_mode_index >= ENJ_MODE_STACK_SIZE) {
         ENJ_DEBUG_PRINT("Mode stack overflow\n");

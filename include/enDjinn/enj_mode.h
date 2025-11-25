@@ -7,16 +7,16 @@ typedef struct enj_game_mode_s {
 	char name[32];
 	enj_mode_update_fun mode_updater;
 	void *data;
-} enj_game_mode_t;
+} enj_mode_t;
 
-typedef void (*enj_mode_set_fun)(enj_game_mode_t *mode);
-typedef enj_game_mode_t *(*enj_mode_transition_getter)(void);
+typedef void (*enj_mode_set_fun)(enj_mode_t *mode);
+typedef enj_mode_t *(*enj_mode_transition_getter)(void);
 
-void enj_mode_set(enj_game_mode_t* mode);
+void enj_mode_set(enj_mode_t* mode);
 
-enj_game_mode_t* enj_mode_get(void);
+enj_mode_t* enj_mode_get(void);
 
-int enj_mode_push(enj_game_mode_t *mode);
+int enj_mode_push(enj_mode_t *mode);
 
 void enj_mode_pop(void);
 
