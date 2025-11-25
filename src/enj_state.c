@@ -131,11 +131,11 @@ void enj_run(void) {
                     enj_mode_cut_to_title_screen();
                 } else {
 #ifdef ENJ_DEBUG
-                    enj_game_mode_t* cur_mode = enj_mode_get();
+                    enj_mode_t* cur_mode = enj_mode_get();
 #endif
                     enj_mode_pop();
 #ifdef ENJ_DEBUG
-                    enj_game_mode_t* nxt_mode = enj_mode_get();
+                    enj_mode_t* nxt_mode = enj_mode_get();
                     ENJ_DEBUG_PRINT(
                         "Exiting from mode '%s':%d to mode '%s:%d'\n",
                         cur_mode->name, mode_index, nxt_mode->name,

@@ -29,13 +29,17 @@ void only_mode_updater(void *data) {
 
 int main(__unused int argc, __unused char **argv) {
 
+  // initialize enDjinn state with default values
+  // you could also work directly on 
+  // the enj_state_t* from enj_state_get()
   enj_state_defaults();
 
   // default pattern is START + A + B + X + Y held down
   // lets make it easier
   // the reason for using the enj_ctrlr_state_t interface
   // for making the bit-pattern is that each button is
-  // mapped to 2 bits for tracking position and if a change was this frame
+  // mapped to 2 bits, one  for tracking position and one 
+  // tracking if there was a change between readings
   enj_state_set_exit_pattern((enj_ctrlr_state_t){
       .buttons =
           {
@@ -49,19 +53,14 @@ int main(__unused int argc, __unused char **argv) {
     return -1;
   }
 
-
-  // load a single texture to use
+  // load a single paletised texture from memory blobs
   enj_texture_info_t texture_info;
   enj_texture_load_blob(texture32_raw, &texture_info);
   enj_texture_load_palette_blob(palette32_raw, PVR_PAL_ARGB8888, 0);
-  // at this point texture_info and palette_info
 
-
-  //* setup at least one mode */
-
+  /* setup at single enDjinn mode */
   uint32_t counter = 0;
-
-  enj_game_mode_t main_mode = {
+  enj_mode_t main_mode = {
       .name = "Main Mode",
       .mode_updater = only_mode_updater,
       .data = &counter,
@@ -70,4 +69,7 @@ int main(__unused int argc, __unused char **argv) {
   enj_mode_push(&main_mode);
 
   enj_run();
+
+  enj_texture_unload(&texture_info);
+  return 0;
 }
