@@ -7,7 +7,7 @@
 
 typedef fDtHeader dt_header_t;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
   dt_header_t hdr;
   uint32_t pvrformat;
   union flags {

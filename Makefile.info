@@ -3,7 +3,8 @@ list:
 
 
 cfg_info:
-	@echo "Makefile configurable variables (redefine in Makefile.cfg as necessary):"
+	@echo "Makefile configurable variables (redefine in $(shell pwd)/Makefile.cfg as necessary):"
+	@echo "enDjinn directory: $(ENJDIR)"
 	@echo "BASENAME      = ${BASENAME}"
 	@echo "                  # Basename of the target that other names are built from,"
 	@echo "                  # defaults to the current directory name."
