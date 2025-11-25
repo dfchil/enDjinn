@@ -20,7 +20,7 @@ int enj_mode_push(enj_game_mode_t *mode);
 
 void enj_mode_pop(void);
 
-unsigned int enj_mode_get_index(void);
+int enj_mode_get_index(void);
 
 void enj_mode_set_title_screen_ref(int index, enj_mode_set_fun trans_fun);
 

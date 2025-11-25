@@ -9,8 +9,9 @@ endif
 
 ifeq ($(ADD_ENDJINN_LOGO_TEXTURE),1)
 # special case: add the enDjinn logo texture
-DTTEXTURES += $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal4/enDjinn512.dt
-$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal4/enDjinn512.dt: enDjinn/assets/texture/pal4/enDjinn512.png
+DTTEXTURES += $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn512.dt
+DTTEXTURES += $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn256.dt
+$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/%.dt: ${ENJDIR}/assets/texture/pal8/%.png
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f PAL4BPP -c --max-color 16 -i $< -o $@
 endif	
