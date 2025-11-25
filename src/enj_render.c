@@ -73,7 +73,7 @@ void enj_renderlist_add(pvr_list_t renderlist, enj_render_method renderer,
     list->count++;
 }
 
-void enj_next_frame(enj_game_mode_t* current_updater) {
+void enj_next_frame(enj_mode_t* current_updater) {
     // post_call custom renderlists
     for (int i = PVR_LIST_OP_POLY; i <= PVR_LIST_PT_POLY; i++) {
         active_renderlists[i] = first_renderlists[i];

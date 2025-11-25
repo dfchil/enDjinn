@@ -11,7 +11,7 @@ void enj_render_post_callback(enj_render_post_call cleanup, void *data);
 
 void enj_render_set_palette_mode(int mode);
 
-void enj_next_frame(enj_game_mode_t* updater);
+void enj_next_frame(enj_mode_t* updater);
 
 void enj_print_renderlist_sizes(void);
 
