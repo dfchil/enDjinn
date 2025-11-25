@@ -22,12 +22,18 @@ include ${ENJDIR}Makefile.defines
 all: bin/$(BASENAME).elf
 .DEFAULT: all
 
+$(BUILDDIR)/enDjinn/%.o: ${ENJDIR}%.c Makefile
+	@mkdir -p $(shell dirname $@)
+	@echo "Building $@ from $<..."
+	@$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
+
 $(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES) $(SFXFILES)
 	@mkdir -p $(shell dirname $@)
 	@echo "Building $@ from $<..."
 	@$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
 
-bin/${BASENAME}.elf: $(OBJS) $(DTTEXTURES) $(SFXFILES)
+
+bin/${BASENAME}.elf: $(OBJS)
 	@mkdir -p $(shell dirname $@)
 	@echo "Linking $@..."
 	@$(CC) $(INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(LDLIBS) 

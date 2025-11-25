@@ -1,0 +1,24 @@
+{
+	// on linux enable chroot without root privileges: sudo setcap cap_sys_chroot+ep /opt/toolchains/dc/bin/dc-tool-ip
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "BBA_LAN",
+			"type": "cppdbg",
+			"request": "launch",
+			"preLaunchTask": "Build",
+			"postDebugTask": "Cleanup",
+			"cwd": "${workspaceFolder}",
+			"program": "${workspaceFolder}/example/bin/example.elf",
+			"MIMode": "gdb",
+			"miDebuggerPath": "/opt/toolchains/dc/sh-elf/bin/sh-elf-gdb",
+			"miDebuggerServerAddress": "localhost:2159", //common misconception: we connect to the gdb server offered by dc-tool-ip, NOT to the Dreamcast directly !
+			"debugServerPath": "/opt/toolchains/dc/bin/dc-tool-ip",
+			"debugServerArgs": "-g -t 10.0.0.248 -x ${workspaceFolder}/example/bin/example.elf",
+			"stopAtEntry": false,
+			"externalConsole": false,
+			"avoidWindowsConsoleRedirection": false,
+			"internalConsoleOptions": "openOnSessionStart",
+		}
+	]
+}

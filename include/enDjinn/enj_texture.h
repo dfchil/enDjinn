@@ -28,7 +28,34 @@ typedef struct {
   uint16_t width;
   uint16_t height;
   pvr_ptr_t ptr;
-} enj_dttex_info_t;
+} enj_texture_info_t;
+
+/**
+ * @brief Load a texture from a memory blob
+ *
+ * @param data Pointer to the raw texture data
+ * @param texinfo The texture texinfo struct
+ * @return int 1 on success, 0 on failure
+ */
+int enj_texture_load_blob(const void* data, enj_texture_info_t* texinfo);
+
+/**
+ * @brief Load a palette from a memory blob
+ * @param raw_data Pointer to the raw palette data
+ * @param fmt The format of the palette
+ * @param offset The offset to load the palette
+ * @return int 1 on success, 0 on failure
+ * @note Valid format defines are:
+
+ * - PVR_PAL_ARGB8888: 32-bit ARGB
+
+ * - PVR_PAL_ARGB4444: 16-bit ARGB
+
+ * - PVR_PAL_RGB565: 16-bit RGB
+
+ * - PVR_PAL_ARGB1555: 16-bit ARGB
+ */
+int enj_texture_load_palette_blob(const void* raw_data, int fmt, size_t offset);
 
 /**
  * @brief Load a palette from a file
@@ -46,7 +73,8 @@ typedef struct {
 
  * - PVR_PAL_ARGB1555: 16-bit ARGB
  */
-int enj_pvrtex_load_palette(const char *filename, int fmt, size_t offset);
+int enj_texture_load_palette_file(const char *filename, int fmt, size_t offset);
+
 
 /**
  * @brief Load a texture from a file
@@ -55,13 +83,14 @@ int enj_pvrtex_load_palette(const char *filename, int fmt, size_t offset);
  * @param texinfo The texture texinfo struct
  * @return int 1 on success, 0 on failure
  */
-int enj_pvrtex_load(const char *filename, enj_dttex_info_t *texinfo);
+int enj_texture_load_file(const char *filename, enj_texture_info_t *texinfo);
+
 
 /**
  * @brief Unload a texture from memory
  * @param texinfo The texture texinfo struct
  * @return int 1 on success, 0 on failure
  */
-int enj_pvrtex_unload(enj_dttex_info_t *texinfo);
+int enj_texture_unload(enj_texture_info_t *texinfo);
 
 #endif // ENJ_TEXTURE_H
