@@ -13,7 +13,7 @@ DTTEXTURES += $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn512.dt
 DTTEXTURES += $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn256.dt
 $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/%.dt: ${ENJDIR}/assets/texture/pal8/%.png
 	@mkdir -p $(shell dirname $@)
-	pvrtex -f PAL4BPP -c --max-color 16 -i $< -o $@
+	pvrtex -f PAL8BPP -c --max-color 256 -i $< -o $@
 endif	
 
 
