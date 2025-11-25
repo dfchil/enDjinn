@@ -12,7 +12,19 @@ static const alignas(32) uint8_t palette32_raw[] = {
 void only_mode_updater(void *data) {
   uint32_t *counter = (uint32_t *)data;
   (*counter)++;
-  printf("Main Mode Counter: %u\n", *counter);
+
+  pvr_dr_state_t dr_state;
+
+  pvr_dr_init(&dr_state);
+  pvr_sprite_cxt_t cxt;
+  pvr_sprite_cxt_col(&cxt, PVR_LIST_TR_POLY);
+  cxt.gen.culling = PVR_CULLING_CCW;
+
+  pvr_sprite_hdr_t *hdr = (pvr_sprite_hdr_t *)pvr_dr_target(dr_state);
+  pvr_sprite_compile(hdr, &cxt);
+  hdr->argb = 0xffffffff; // menu->color.border.raw;
+  pvr_dr_commit(hdr);
+
 }
 
 int main(__unused int argc, __unused char **argv) {
@@ -36,6 +48,14 @@ int main(__unused int argc, __unused char **argv) {
     ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
     return -1;
   }
+
+
+  // load a single texture to use
+  enj_texture_info_t texture_info;
+  enj_texture_load_blob(texture32_raw, &texture_info);
+  enj_texture_load_palette_blob(palette32_raw, PVR_PAL_ARGB8888, 0);
+  // at this point texture_info and palette_info
+
 
   //* setup at least one mode */
 

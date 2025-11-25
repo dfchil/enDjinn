@@ -12,11 +12,11 @@ static const uint32_t DcTx_chksm = (uint32_t)'D' << 0 | (uint32_t)'c' << 8 |
 static const uint32_t DPAL_chksm = (uint32_t)'D' << 0 | (uint32_t)'P' << 8 |
                                    (uint32_t)'A' << 16 | (uint32_t)'L' << 24;
 
-int enj_texture_load_blob(const void* data, enj_dttex_info_t* texinfo) {
+int enj_texture_load_blob(const void* data, enj_texture_info_t* texinfo) {
     memcpy(&texinfo->hdr, data, sizeof(dt_header_t));
 
     if (*((uint32_t*)&texinfo->hdr.fourcc) != DcTx_chksm) {
-        ENJ_DEBUG_PRINT("Error: blob is not a valid DcTx texture!\n", filename);
+        ENJ_DEBUG_PRINT("Error: blob is not a valid DcTx texture!\n");
         return 0;
     }
     size_t tdatasize =
@@ -51,7 +51,7 @@ int enj_texture_load_blob(const void* data, enj_dttex_info_t* texinfo) {
     return 1;
 }
 
-int enj_texture_load_file(const char* filename, enj_dttex_info_t* texinfo) {
+int enj_texture_load_file(const char* filename, enj_texture_info_t* texinfo) {
     int success = 1;
     void* buffer = NULL;
     FILE* file = NULL;
@@ -196,7 +196,7 @@ int enj_texture_load_palette_file(const char* filename, int fmt, size_t offset) 
     return success;
 }
 
-int pvrtex_unload(enj_dttex_info_t* texinfo) {
+int pvrtex_unload(enj_texture_info_t* texinfo) {
     if (texinfo->ptr != NULL) {
         pvr_mem_free(texinfo->ptr);
         texinfo->ptr = NULL;

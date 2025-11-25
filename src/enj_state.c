@@ -130,14 +130,17 @@ void enj_run(void) {
                 if (mode_index != state->title_screen_mode_stack_index) {
                     enj_mode_cut_to_title_screen();
                 } else {
+#ifdef ENJ_DEBUG
                     enj_game_mode_t* cur_mode = enj_mode_get();
-                    
+#endif
                     enj_mode_pop();
+#ifdef ENJ_DEBUG
                     enj_game_mode_t* nxt_mode = enj_mode_get();
                     ENJ_DEBUG_PRINT(
                         "Exiting from mode '%s':%d to mode '%s:%d'\n",
                         cur_mode->name, mode_index, nxt_mode->name,
-                        mode_index - 1);
+                        enj_mode_get_index());
+#endif
                 }
             }
         }
