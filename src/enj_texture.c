@@ -196,7 +196,7 @@ int enj_texture_load_palette_file(const char* filename, int fmt, size_t offset) 
     return success;
 }
 
-int pvrtex_unload(enj_texture_info_t* texinfo) {
+int enj_texture_unload(enj_texture_info_t* texinfo) {
     if (texinfo->ptr != NULL) {
         pvr_mem_free(texinfo->ptr);
         texinfo->ptr = NULL;
