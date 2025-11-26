@@ -6,13 +6,13 @@
 #define NUM_RENDERLISTS PVR_LIST_PT_POLY - PVR_LIST_OP_POLY + 1
 
 typedef struct enj_render_item_s {
-    enj_render_method renderer;
+    void (*renderer)(void *data);
     void* data;
 } enj_render_item_t;
 
 typedef struct enj_renderlist_s {
     int count;
-    void* next_list;
+    struct enj_renderlist_s* next_list;
     alignas(32) enj_render_item_t items[RENDERLIST_SEGMENT_SIZE];
 } enj_renderlist_t;
 
@@ -34,7 +34,7 @@ void enj_render_post_callback(enj_render_post_call post_call, void* data) {
     _render_post_data = data;
 }
 
-void enj_renderlist_add(pvr_list_t renderlist, enj_render_method renderer,
+void enj_renderlist_add(pvr_list_t renderlist, void (*renderer)(void *data),
                         void* data) {
 #ifdef ENJ_DEBUG
     if (renderlist > PVR_LIST_PT_POLY || renderlist < PVR_LIST_OP_POLY) {
