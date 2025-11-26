@@ -5,7 +5,7 @@ static cont_state_t state_backups[MAPLE_PORT_COUNT] = {0};
 static enj_ctrlr_state_t ctrlr_states_storage[MAPLE_PORT_COUNT] = {0};
 static enj_ctrlr_state_t *ctrlr_states_refs[MAPLE_PORT_COUNT] = {0};
 
-int enj_ctrlrs_dc_map_state(void) {
+int enj_ctrl_map_states(void) {
   int count = 0;
   for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
     maple_device_t *device = enj_maple_port_type(i, MAPLE_FUNC_CONTROLLER);
@@ -40,7 +40,7 @@ maple_device_t *enj_maple_port_type(int p, uint32 func) {
   return NULL;
 }
 
-enj_ctrlr_state_t **enj_get_ctrlr_states(void) { return ctrlr_states_refs; }
+enj_ctrlr_state_t **enj_ctrl_get_states(void) { return ctrlr_states_refs; }
 
 static inline uint8_t enj_update_button_state(uint8_t prev_btnstate,
                                               int input) {
@@ -102,7 +102,7 @@ void enj_kos_state2ctrlrstate(cont_state_t *c_state, enj_ctrlr_state_t *ctrlr) {
   ctrlr->rtrigger = c_state->rtrig;
 }
 
-enj_ctrlr_state_t **enj_get_ctrlr_states(void);
+enj_ctrlr_state_t **enj_ctrl_get_states(void);
 void enj_read_controller(enj_abstract_ctrlr_t *ctrlref,
                          enj_ctrlr_state_t *buttons) {
   if (ctrlref != NULL && ctrlref->updatefun != NULL) {

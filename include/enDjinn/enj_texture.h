@@ -84,6 +84,8 @@ int enj_texture_load_blob(const void* data, enj_texture_info_t* texinfo);
  */
 int enj_texture_load_palette_blob(const void* raw_data, int fmt, size_t offset);
 
+int enj_texture_bind_palette(enj_texture_info_t* texinfo, size_t offset);
+
 /**
  * @brief Load a palette from a file
  * @param filename The filename of the palette
