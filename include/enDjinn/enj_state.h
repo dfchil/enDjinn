@@ -19,8 +19,6 @@ typedef struct enj_state_s {
   } flags;
   uint32_t exit_pattern;
   int title_screen_mode_stack_index;
-  enj_mode_set_fun title_screen_jump_fun;
-  enj_mode_transition_getter mode_transition_getter;
   struct {
       vid_display_mode_generic_t display_mode;
       vid_pixel_mode_t pixel_mode;
