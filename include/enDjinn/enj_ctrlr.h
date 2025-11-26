@@ -72,14 +72,12 @@ typedef struct {
     cont_state_t* state;
 } enj_ctrlr_state_t;
 
-typedef void (*enj_ctrl_state_updater)(void* state, enj_ctrlr_state_t* dest);
-
 typedef struct enj_abstract_controller_s {
     struct {
         enj_controller_type_e type : 27;
         port_name_e port : 5;
     };
-    enj_ctrl_state_updater updatefun;
+    void (*updatefun)(void* state, enj_ctrlr_state_t* dest);
     void* state;
 } enj_abstract_ctrlr_t;
 
