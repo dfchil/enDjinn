@@ -1,4 +1,3 @@
-#include "main.h"
 #include <dc/fmath.h>
 #include <dc/video.h>
 #include <enDjinn/enj_enDjinn.h>
@@ -134,7 +133,7 @@ void info_renderer(void *data) {
   float min_x = (vid_mode->width - help_texture_info.width) * 0.5f * ENJ_XSCALE;
   float max_x = min_x + help_texture_info.width * ENJ_XSCALE;
   float min_y = (vid_mode->height - 440) * 0.5f;
-  float max_y = min_y + 440; 
+  float max_y = min_y + help_texture_info.height; 
 
   float corners[4][2] = {
       {min_x, max_y},
