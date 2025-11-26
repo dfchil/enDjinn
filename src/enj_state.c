@@ -27,8 +27,6 @@ void enj_state_defaults(void) {
     state.flags.raw = 0;
     state.flags.initialized = 1;
     state.title_screen_mode_stack_index = -1;
-    state.title_screen_jump_fun = NULL;
-    state.mode_transition_getter = NULL;
     state.exit_pattern = ((enj_ctrlr_state_t){.buttons = {.START = BUTTON_DOWN,
                                                           .A = BUTTON_DOWN,
                                                           .B = BUTTON_DOWN,
@@ -86,7 +84,7 @@ int enj_startup() {
 }
 
 void enj_run(void) {
-    if (enj_mode_get_index() < 0) {
+    if (enj_mode_get_current_index() < 0) {
         ENJ_DEBUG_PRINT(
             "No mode pushed! Call enj_mode_push() before enj_run().\n");
         return;
@@ -98,30 +96,27 @@ void enj_run(void) {
             "enDjinn not started! Call enj_startup() before enj_run().\n");
         return;
     }
-    enj_ctrlr_state_t** cstates = enj_get_ctrlr_states();
+    enj_ctrlr_state_t** cstates = enj_ctrl_get_states();
     while (1) {
-        enj_ctrlrs_dc_map_state();
-        enj_next_frame(enj_mode_get());
         if (state->flags.shut_down) {
             break;
         }
         if (state->flags.end_mode) {
             enj_mode_pop();
-            if (state->mode_transition_getter != NULL) {
-                enj_mode_push(state->mode_transition_getter());
-            }
             state->flags.end_mode = 0;
         }
+        enj_ctrl_map_states();
+        enj_next_frame(enj_mode_get());
         /* check for controller exit patterns */
         for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
             if (cstates[i] &&
                 enj_ctrlr_button_combo_raw(cstates[i]->buttons.raw,
                                            state->exit_pattern)) {
-                // set buttons to held down to prevent re-triggering
-                cstates[i]->buttons.START = BUTTON_DOWN;
-                cstates[i]->buttons.A = BUTTON_DOWN;
-                int mode_index = enj_mode_get_index();
 
+                // prevent re-triggering
+                cstates[i]->buttons.raw &= ~(state->exit_pattern<<1);
+                
+                int mode_index = enj_mode_get_current_index();
                 if (mode_index == 0) {
                     // we're at the base mode, just shut down
                     enj_shutdown_flag();
@@ -139,7 +134,7 @@ void enj_run(void) {
                     ENJ_DEBUG_PRINT(
                         "Exiting from mode '%s':%d to mode '%s:%d'\n",
                         cur_mode->name, mode_index, nxt_mode->name,
-                        enj_mode_get_index());
+                        enj_mode_get_current_index());
 #endif
                 }
             }
