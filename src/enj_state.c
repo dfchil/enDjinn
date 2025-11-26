@@ -36,8 +36,8 @@ void enj_state_defaults(void) {
                            .buttons.raw;
 
   state.video.pvr_params = (pvr_init_params_t){
-      {PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16,
-       PVR_BINSIZE_0},
+      {PVR_BINSIZE_16, PVR_BINSIZE_0, PVR_BINSIZE_16, PVR_BINSIZE_0,
+       PVR_BINSIZE_0},   // Bin sizes
       1024 * 1024,       // Vertex buffer size
       0,                 // No DMA
       ENJ_SUPERSAMPLING, // Set horisontal FSAA
