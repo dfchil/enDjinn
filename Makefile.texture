@@ -14,7 +14,7 @@ DTTEXTURES += $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn256.dt
 $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/%.dt: ${ENJDIR}/assets/texture/pal8/%.png
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f PAL8BPP -c --max-color 256 -i $< -o $@
-endif	
+endif
 
 
 # notice the different settings for different texture formats based on directory names

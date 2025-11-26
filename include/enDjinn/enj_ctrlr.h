@@ -72,22 +72,20 @@ typedef struct {
     cont_state_t* state;
 } enj_ctrlr_state_t;
 
-typedef void (*enj_ctrl_state_updater)(void* state, enj_ctrlr_state_t* dest);
-
 typedef struct enj_abstract_controller_s {
     struct {
         enj_controller_type_e type : 27;
         port_name_e port : 5;
     };
-    enj_ctrl_state_updater updatefun;
+    void (*updatefun)(void* state, enj_ctrlr_state_t* dest);
     void* state;
 } enj_abstract_ctrlr_t;
 
-int enj_ctrlrs_dc_map_state(void);
+int enj_ctrl_map_states(void);
 
 maple_device_t* enj_maple_port_type(int p, uint32 func);
 
-enj_ctrlr_state_t** enj_get_ctrlr_states(void);
+enj_ctrlr_state_t** enj_ctrl_get_states(void);
 
 void enj_read_dreamcast_controller(void* dc_ctrlr, enj_ctrlr_state_t* buttons);
 
