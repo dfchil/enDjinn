@@ -337,12 +337,10 @@ void setup_modes(enj_mode_t* main_mode,
 int main(__unused int argc, __unused char** argv) {
     // initialize enDjinn state with default values
     enj_state_defaults();
-    // disable opaque render list and enable PT list
-    enj_state_get()->video.pvr_params.opb_sizes[0] = PVR_BINSIZE_0;
-    enj_state_get()->video.pvr_params.opb_sizes[4] = PVR_BINSIZE_16;
 
     // default pattern is START + A + B + X + Y
-    // lets make it easier, A is offset 0 in bitfield and START is offset 8<<1 (two bits per button)
+    // lets make it easier, A is offset 0 in bitfield and START is 
+    // offset 8<<1 (two bits per button)
     enj_state_set_soft_reset(BUTTON_DOWN<<(8<<1) | BUTTON_DOWN);
 
     if (enj_startup() != 0) {
