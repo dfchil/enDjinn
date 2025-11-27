@@ -4,15 +4,15 @@
 #include <math.h>
 
 static const alignas(32) uint8_t enDjinn_txt_raw[] = {
-#embed "../embeds/example/texture/pal8/enDjinn512.dt"
+#embed "../embeds/mode_orchestration/texture/pal8/enDjinn512.dt"
 };
 static const alignas(32) uint8_t enDjinn_palette_raw[] = {
-#embed "../embeds/example/texture/pal8/enDjinn512.dt.pal"
+#embed "../embeds/mode_orchestration/texture/pal8/enDjinn512.dt.pal"
 };
 static enj_texture_info_t figure_texture_info;
 
 static const alignas(32) uint8_t help_txt_raw[] = {
-#embed "../embeds/example/texture/argb1555_vq_tw/info512.dt"
+#embed "../embeds/mode_orchestration/texture/argb1555_vq_tw/info512.dt"
 };
 static enj_texture_info_t help_texture_info;
 
@@ -71,36 +71,7 @@ static inline void rotate2d(float x, float y, float sin, float cos,
     *out_y = x * sin + y * cos;
 }
 
-void draw_txr_sprite(pvr_sprite_hdr_t* hdr, float corners[4][2], float z_value) {
-    pvr_dr_state_t dr_state;
-    pvr_dr_init(&dr_state);
-    pvr_sprite_hdr_t* mode_hdr = (pvr_sprite_hdr_t*)pvr_dr_target(dr_state);
-    *mode_hdr = *hdr;
-    pvr_dr_commit(mode_hdr);
-    pvr_sprite_txr_t* quad = (pvr_sprite_txr_t*)pvr_dr_target(dr_state);
-    quad->flags = PVR_CMD_VERTEX_EOL;
-    quad->ax = corners[0][0];
-    quad->ay = corners[0][1];
-    quad->az = z_value; 
-    quad->bx = corners[1][0];
-    quad->by = corners[1][1];
-    quad->bz = z_value;
-    quad->cx = corners[2][0];
-    pvr_dr_commit(quad);
-    quad = (pvr_sprite_txr_t*)pvr_dr_target(dr_state);
-    pvr_sprite_txr_t* quad2ndhalf = (pvr_sprite_txr_t*)((int)quad - 32);
-    quad2ndhalf->cy = corners[2][1];
-    quad2ndhalf->cz = z_value;
-    quad2ndhalf->dx = corners[3][0];
-    quad2ndhalf->dy = corners[3][1];
-    quad2ndhalf->auv = PVR_PACK_16BIT_UV(0.0f, 1.0f);
-    quad2ndhalf->buv = PVR_PACK_16BIT_UV(0.0f, 0.0f);
-    quad2ndhalf->cuv = PVR_PACK_16BIT_UV(1.0f, 0.0f);
-    pvr_dr_commit(quad);
-    pvr_dr_finish();
-}
-
-void shared_renderer(void* data) {
+void render(void* data) {
     main_data_t* mdata = (main_data_t*)data;
     float cur_radius = mdata->base_size - mdata->size_bump;
 
@@ -108,11 +79,11 @@ void shared_renderer(void* data) {
     float cos, sin;
     fsincosr(angle, &sin, &cos);
 
-    float corners[4][2] = {
-        {-cur_radius, cur_radius},
-        {-cur_radius, -cur_radius},
-        {cur_radius, -cur_radius},
-        {cur_radius, cur_radius},
+    float corners[4][3] = {
+        {-cur_radius, cur_radius, 1.0f},
+        {-cur_radius, -cur_radius, 1.0f},
+        {cur_radius, -cur_radius, 1.0f},
+        {cur_radius, cur_radius, 1.0f},
     };
     for (int i = 0; i < 4; i++) {
         float x = corners[i][0];
@@ -121,7 +92,7 @@ void shared_renderer(void* data) {
         corners[i][0] += mdata->center_x;
         corners[i][1] += mdata->center_y;
     }
-    draw_txr_sprite(&mdata->hdr, corners, 1.0f);
+    enj_draw_sprite(&mdata->hdr, corners, NULL);
 }
 
 void info_renderer(void* data) {
@@ -133,15 +104,15 @@ void info_renderer(void* data) {
     float min_y = (vid_mode->height - 440) * 0.5f;
     float max_y = min_y + help_texture_info.height;
 
-    float corners[4][2] = {
-        {min_x, max_y},
-        {min_x, min_y},
-        {max_x, min_y},
-        {max_x, max_y},
+    float corners[4][3] = {
+        {min_x, max_y, 2.0f},
+        {min_x, min_y, 2.0f},
+        {max_x, min_y, 2.0f},
+        {max_x, max_y, 2.0f},
     };
-    draw_txr_sprite(&mdata->hdr, corners, 2.0f);
+    enj_draw_sprite(&mdata->hdr, corners, NULL);
 }
-static inline void shared_animation(main_data_t* mdata) {
+static inline void animate(main_data_t* mdata) {
     mdata->size_bump = MAX(0, mdata->size_bump - 1);
     mdata->rotation++;
     mdata->spec_color.r = MAX(mdata->spec_color.r - 1, 0);
@@ -159,9 +130,9 @@ void info_updater(void* data) {
             }
         }
     }
-    shared_animation(startup_mode.data);
+    animate(startup_mode.data);
 
-    enj_renderlist_add(PVR_LIST_TR_POLY, shared_renderer, startup_mode.data);
+    enj_renderlist_add(PVR_LIST_TR_POLY, render, startup_mode.data);
     enj_renderlist_add(PVR_LIST_PT_POLY, info_renderer, data);
 }
 
@@ -187,18 +158,18 @@ void startup_mode_initializer(enj_mode_t* prev, enj_mode_t* next) {
 
 void startup_mode_updater(void* data) {
     main_data_t* mdata = (main_data_t*)data;
-    shared_animation(mdata);
+    animate(mdata);
     if (mdata->size_bump <= 0) {
         enj_mode_flag_end_current();
     } else {
         mdata->size_bump--;
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, shared_renderer, data);
+    enj_renderlist_add(PVR_LIST_TR_POLY, render, data);
 }
 
 void shutdown_mode_updater(void* data) {
     shutdown_data_t* smdata = (shutdown_data_t*)data;
-    shared_animation(smdata->mode_data);
+    animate(smdata->mode_data);
     smdata->mode_data->center_x += smdata->velocity_x;
     smdata->mode_data->center_y += smdata->velocity_y;
     if (smdata->mode_data->center_x <
@@ -210,12 +181,12 @@ void shutdown_mode_updater(void* data) {
             vid_mode->height + figure_texture_info.height * 0.5f) {
         enj_mode_flag_end_current();
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, shared_renderer, smdata->mode_data);
+    enj_renderlist_add(PVR_LIST_TR_POLY, render, smdata->mode_data);
 }
 
 void main_mode_updater(void* data) {
     main_data_t* mdata = (main_data_t*)data;
-    shared_animation(mdata);
+    animate(mdata);
 
     enj_ctrlr_state_t** ctrls = enj_ctrl_get_states();
     for (int i = 0; i < 4; i++) {
@@ -279,7 +250,7 @@ void main_mode_updater(void* data) {
             }
         }
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, shared_renderer, data);
+    enj_renderlist_add(PVR_LIST_TR_POLY, render, data);
 }
 
 void setup_textures() {
@@ -352,7 +323,7 @@ int main(__unused int argc, __unused char** argv) {
     /* setup at enDjinn modes */
     main_data_t main_mode_data = {
         .rotation = 0,
-        .spec_color = 0xff000000,
+        .spec_color.raw = 0xff000000,
         .size_bump = 0,
         .base_size = (figure_texture_info.width) * 0.42f,
     };
@@ -363,11 +334,8 @@ int main(__unused int argc, __unused char** argv) {
         .pop_fun = into_main_indicator,
     };
     shutdown_data_t shutdown_mode_data;
-
     setup_modes(&main_mode, &shutdown_mode_data);
-
     enj_run();
-
     enj_texture_unload(&figure_texture_info);
     enj_texture_unload(&help_texture_info);
     return 0;
