@@ -17,6 +17,7 @@
 #include <enDjinn/enj_texture.h>
 #include <enDjinn/enj_bitmap.h>
 #include <enDjinn/enj_render.h>
+#include <enDjinn/enj_draw.h>
 
 #define ENDJINN_ENDJINN_H
 

@@ -101,7 +101,8 @@
     "enj_endjinn.h": "c",
     "lcd.h": "c",
     "chrono": "c",
-    "variant": "c"
+    "variant": "c",
+    "video.h": "c"
   },
   "C_Cpp.dimInactiveRegions": false
 }
