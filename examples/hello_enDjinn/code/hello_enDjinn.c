@@ -17,6 +17,7 @@ typedef struct {
   float center_x;
   float center_y;
 } main_data_t;
+
 static inline void rotate2d(float x, float y, float sin, float cos,
                             float *out_x, float *out_y) {
   *out_x = (x * cos - y * sin) * ENJ_XSCALE;
@@ -39,7 +40,7 @@ void render(void *data) {
     corners[i][0] += mdata->center_x;
     corners[i][1] += mdata->center_y;
   }
-  enj_draw_sprite(&mdata->hdr, corners, NULL);
+  enj_draw_sprite(corners, NULL, &mdata->hdr, NULL);
 }
 void main_mode_updater(void *data) {
   main_data_t *mdata = (main_data_t *)data;
@@ -70,8 +71,8 @@ int main(__unused int argc, __unused char **argv) {
   enj_state_defaults();
   // default soft-reset pattern is START + A + B + X + Y.
   // Lets make it easier with just START + A.
-  // A is offset 0 in bitfield and START is
-  // offset 8<<1 (two bits per button)
+  // A is offset 0 in bitfield and START is offset 
+  // 8<<1 (two bits per button)
   enj_state_set_soft_reset(BUTTON_DOWN << (8 << 1) | BUTTON_DOWN);
   if (enj_startup() != 0) {
     ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");

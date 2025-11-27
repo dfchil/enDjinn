@@ -92,7 +92,7 @@ void render(void* data) {
         corners[i][0] += mdata->center_x;
         corners[i][1] += mdata->center_y;
     }
-    enj_draw_sprite(&mdata->hdr, corners, NULL);
+    enj_draw_sprite(corners, NULL, &mdata->hdr, NULL);
 }
 
 void info_renderer(void* data) {
@@ -110,7 +110,7 @@ void info_renderer(void* data) {
         {max_x, min_y, 2.0f},
         {max_x, max_y, 2.0f},
     };
-    enj_draw_sprite(&mdata->hdr, corners, NULL);
+    enj_draw_sprite(corners, NULL, &mdata->hdr, NULL);
 }
 static inline void animate(main_data_t* mdata) {
     mdata->size_bump = MAX(0, mdata->size_bump - 1);
