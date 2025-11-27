@@ -83,7 +83,7 @@ static mutex_t io_lock = MUTEX_INITIALIZER;
 /* TLS buffer management */
 static thread_local uint8_t *tls_ptr;
 static thread_local size_t   tls_buffer_idx;
-static thread_local uint8_t  tls_buffer[BUFFER_SIZE] __attribute__((aligned(32)));
+alignas(32) static thread_local uint8_t  tls_buffer[BUFFER_SIZE];
 
 /* TLS stats management */
 static thread_local bool     tls_inited;
