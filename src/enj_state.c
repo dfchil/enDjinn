@@ -89,7 +89,6 @@ void enj_run(void) {
     ENJ_DEBUG_PRINT("No mode pushed! Call enj_mode_push() before enj_run().\n");
     return;
   }
-
   enj_state_t *state = enj_state_get();
   if (!state->flags.started) {
     ENJ_DEBUG_PRINT(
@@ -97,6 +96,7 @@ void enj_run(void) {
     return;
   }
   enj_ctrlr_state_t **cstates = enj_ctrl_get_states();
+
   while (1) {
     if (state->flags.shut_down) {
       break;
@@ -109,7 +109,6 @@ void enj_run(void) {
       state->flags.end_mode = 0;
     }
     enj_ctrl_map_states();
-    enj_next_frame(enj_mode_get());
     if (state->flags.soft_reset_enabled) {
       /* check for controller exit patterns */
       for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
@@ -142,6 +141,7 @@ void enj_run(void) {
         }
       }
     }
+    enj_next_frame(enj_mode_get());
   }
 #ifdef DCPROF
   profiler_stop();
