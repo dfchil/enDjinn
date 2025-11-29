@@ -30,23 +30,12 @@ static enj_texture_info_t help_texture_info;
 
 typedef struct {
     uint32_t rotation;
+    int32_t size_bump;
     pvr_sprite_hdr_t hdr;
-    union {
-        uint32_t raw;  // 0xAABBGGRR
-        struct {
-            /* Intensity color */
-            uint8_t b; /**< Intensity color alpha */
-            uint8_t g; /**< Intensity color red */
-            uint8_t r; /**< Intensity color green */
-            uint8_t a; /**< Intensity color blue */
-        };
-    } spec_color;
     float base_size;
     float center_x;
     float center_y;
-    int32_t size_bump;
 } main_data_t;
-
 typedef struct {
     pvr_sprite_hdr_t hdr;
 } info_data_t;
@@ -55,11 +44,11 @@ typedef struct {
     main_data_t* mode_data;
     float velocity_x;
     float velocity_y;
-} shutdown_data_t;
+} slide_data_t;
 
-alignas(32) static enj_mode_t startup_mode = {.name = "Startup Mode"};
-alignas(32) static enj_mode_t shutdown_mode = {
-    .name = "Shutdown Mode",
+alignas(32) static enj_mode_t zoom_mode = {.name = "Zoom into"};
+alignas(32) static enj_mode_t slide_mode = {
+    .name = "Slide out",
 };
 alignas(32) static info_data_t info_mode_data;
 alignas(32) static enj_mode_t info_mode = {.data = &info_mode_data,
@@ -70,20 +59,16 @@ static inline void rotate2d(float x, float y, float sin, float cos,
     *out_x = (x * cos - y * sin) * ENJ_XSCALE;
     *out_y = x * sin + y * cos;
 }
-
-void render(void* data) {
+void enDjinn_render(void* data) {
     main_data_t* mdata = (main_data_t*)data;
-    float cur_radius = mdata->base_size - mdata->size_bump;
-
-    float angle = -((mdata->rotation % 360) * (F_PI / 180.0f));
     float cos, sin;
-    fsincosr(angle, &sin, &cos);
-
-    float corners[4][3] = {
-        {-cur_radius, cur_radius, 1.0f},
+    fsincosr(-((mdata->rotation % 360) * (F_PI / 180.0f)), &sin, &cos);
+    float cur_radius = mdata->base_size - mdata->size_bump;
+    alignas(32) float corners[4][3] = {
+        {-cur_radius, +cur_radius, 1.0f},
         {-cur_radius, -cur_radius, 1.0f},
-        {cur_radius, -cur_radius, 1.0f},
-        {cur_radius, cur_radius, 1.0f},
+        {+cur_radius, -cur_radius, 1.0f},
+        {+cur_radius, +cur_radius, 1.0f},
     };
     for (int i = 0; i < 4; i++) {
         float x = corners[i][0];
@@ -115,10 +100,6 @@ void info_renderer(void* data) {
 static inline void animate(main_data_t* mdata) {
     mdata->size_bump = MAX(0, mdata->size_bump - 1);
     mdata->rotation++;
-    mdata->spec_color.r = MAX(mdata->spec_color.r - 1, 0);
-    mdata->spec_color.g = MAX(mdata->spec_color.g - 1, 0);
-    mdata->spec_color.b = MAX(mdata->spec_color.b - 1, 0);
-    mdata->hdr.oargb = mdata->spec_color.raw;
 }
 
 void info_updater(void* data) {
@@ -130,14 +111,14 @@ void info_updater(void* data) {
             }
         }
     }
-    animate(startup_mode.data);
+    animate(zoom_mode.data);
 
-    enj_renderlist_add(PVR_LIST_TR_POLY, render, startup_mode.data);
+    enj_renderlist_add(PVR_LIST_TR_POLY, enDjinn_render, zoom_mode.data);
     enj_renderlist_add(PVR_LIST_PT_POLY, info_renderer, data);
 }
 
-void shutdown_default_direction(enj_mode_t* prev, enj_mode_t* next) {
-    shutdown_data_t* smdata = (shutdown_data_t*)next->data;
+void slide_default_direction(enj_mode_t* prev, enj_mode_t* next) {
+    slide_data_t* smdata = (slide_data_t*)next->data;
     smdata->velocity_x = 0.0f;
     smdata->velocity_y = +9.5f;
 }
@@ -145,18 +126,17 @@ void shutdown_default_direction(enj_mode_t* prev, enj_mode_t* next) {
 void into_main_indicator(enj_mode_t* prev, enj_mode_t* next) {
     main_data_t* mdata = (main_data_t*)next->data;
     mdata->size_bump = 5;
-    mdata->spec_color.raw = 0xff2f2f2f;
     mdata->center_x = vid_mode->width * ENJ_XSCALE * 0.5f;
     mdata->center_y = vid_mode->height * 0.5f;
 }
 
-void startup_mode_initializer(enj_mode_t* prev, enj_mode_t* next) {
+void zoom_mode_initializer(enj_mode_t* prev, enj_mode_t* next) {
     main_data_t* mdata = (main_data_t*)next->data;
     into_main_indicator(prev, next);
     mdata->size_bump = mdata->base_size;
 }
 
-void startup_mode_updater(void* data) {
+void zoom_mode_updater(void* data) {
     main_data_t* mdata = (main_data_t*)data;
     animate(mdata);
     if (mdata->size_bump <= 0) {
@@ -164,11 +144,11 @@ void startup_mode_updater(void* data) {
     } else {
         mdata->size_bump--;
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, render, data);
+    enj_renderlist_add(PVR_LIST_TR_POLY, enDjinn_render, data);
 }
 
-void shutdown_mode_updater(void* data) {
-    shutdown_data_t* smdata = (shutdown_data_t*)data;
+void slide_mode_updater(void* data) {
+    slide_data_t* smdata = (slide_data_t*)data;
     animate(smdata->mode_data);
     smdata->mode_data->center_x += smdata->velocity_x;
     smdata->mode_data->center_y += smdata->velocity_y;
@@ -181,7 +161,7 @@ void shutdown_mode_updater(void* data) {
             vid_mode->height + figure_texture_info.height * 0.5f) {
         enj_mode_flag_end_current();
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, render, smdata->mode_data);
+    enj_renderlist_add(PVR_LIST_TR_POLY, enDjinn_render, smdata->mode_data);
 }
 
 void main_mode_updater(void* data) {
@@ -191,23 +171,6 @@ void main_mode_updater(void* data) {
     enj_ctrlr_state_t** ctrls = enj_ctrl_get_states();
     for (int i = 0; i < 4; i++) {
         if (ctrls[i] != NULL) {
-            if (ctrls[i]->buttons.A == BUTTON_DOWN_THIS_FRAME) {
-                mdata->spec_color.r = MIN(mdata->spec_color.r + 0x3f, 0xff);
-                mdata->size_bump += 15;
-            }
-            if (ctrls[i]->buttons.X == BUTTON_DOWN_THIS_FRAME) {
-                mdata->spec_color.r = MIN(mdata->spec_color.r + 0x1f, 0xff);
-                mdata->spec_color.g = MIN(mdata->spec_color.g + 0x1f, 0xff);
-                mdata->size_bump += 15;
-            }
-            if (ctrls[i]->buttons.Y == BUTTON_DOWN_THIS_FRAME) {
-                mdata->spec_color.g = MIN(mdata->spec_color.g + 0x3f, 0xff);
-                mdata->size_bump += 15;
-            }
-            if (ctrls[i]->buttons.B == BUTTON_DOWN_THIS_FRAME) {
-                mdata->spec_color.raw = 0xff000000;
-                mdata->size_bump += 15;
-            }
             if (ctrls[i]->buttons.START == BUTTON_DOWN_THIS_FRAME) {
                 enj_mode_push(&info_mode);
             }
@@ -223,10 +186,9 @@ void main_mode_updater(void* data) {
             for (int d = 0; d < 4; d++) {
                 if ((ctrls[i]->buttons.raw & dpad) == dpad) {
                     enj_mode_push(
-                        &startup_mode);  // this will run after shutdown mode
-                    enj_mode_push(&shutdown_mode);
-                    shutdown_data_t* sd =
-                        (shutdown_data_t*)shutdown_mode.data;
+                        &zoom_mode);  // this will run after slide mode finishes
+                    enj_mode_push(&slide_mode);
+                    slide_data_t* sd = (slide_data_t*)slide_mode.data;
                     sd->velocity_x = sd->velocity_y = 0.0f;
                     switch (d) {
                         case 0:  // UP
@@ -250,7 +212,7 @@ void main_mode_updater(void* data) {
             }
         }
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, render, data);
+    enj_renderlist_add(PVR_LIST_TR_POLY, enDjinn_render, data);
 }
 
 void setup_textures() {
@@ -264,8 +226,7 @@ void setup_textures() {
     enj_texture_load_blob(help_txt_raw, &help_texture_info);
 }
 
-void setup_modes(enj_mode_t* main_mode,
-                 shutdown_data_t* shutdown_mode_data) {
+void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
     // setup info mode
     pvr_sprite_cxt_t i_cxt;
     pvr_sprite_cxt_txr(&i_cxt, PVR_LIST_PT_POLY, help_texture_info.pvrformat,
@@ -288,21 +249,21 @@ void setup_modes(enj_mode_t* main_mode,
     pvr_sprite_compile(&main_mode_data->hdr, &f_cxt);
     main_mode_data->hdr.argb = 0xffffffff;
 
-    startup_mode.data = main_mode->data;
-    startup_mode.mode_updater = startup_mode_updater;
-    startup_mode.pop_fun = startup_mode_initializer;
+    zoom_mode.data = main_mode->data;
+    zoom_mode.mode_updater = zoom_mode_updater;
+    zoom_mode.pop_fun = zoom_mode_initializer;
 
-    shutdown_mode_data->mode_data = main_mode_data;
-    shutdown_mode.data = shutdown_mode_data;
-    shutdown_mode.mode_updater = shutdown_mode_updater;
-    shutdown_mode.pop_fun = shutdown_default_direction;
+    slide_mode_data->mode_data = main_mode_data;
+    slide_mode.data = slide_mode_data;
+    slide_mode.mode_updater = slide_mode_updater;
+    slide_mode.pop_fun = slide_default_direction;
 
-    enj_mode_push(&shutdown_mode);
+    enj_mode_push(&slide_mode);
     enj_mode_push(main_mode);
     enj_mode_set_soft_reset_target(enj_mode_get_current_index());
-    enj_mode_push(&startup_mode);
+    enj_mode_push(&zoom_mode);
     // pushing doesnt trigger pop function, so call it manually
-    startup_mode.pop_fun(NULL, &startup_mode);
+    zoom_mode.pop_fun(NULL, &zoom_mode);
 }
 
 int main(__unused int argc, __unused char** argv) {
@@ -310,9 +271,9 @@ int main(__unused int argc, __unused char** argv) {
     enj_state_defaults();
 
     // default pattern is START + A + B + X + Y
-    // lets make it easier, A is offset 0 in bitfield and START is 
+    // lets make it easier, A is offset 0 in bitfield and START is
     // offset 8<<1 (two bits per button)
-    enj_state_set_soft_reset(BUTTON_DOWN<<(8<<1) | BUTTON_DOWN);
+    enj_state_set_soft_reset(BUTTON_DOWN << (8 << 1) | BUTTON_DOWN);
 
     if (enj_startup() != 0) {
         ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
@@ -323,7 +284,6 @@ int main(__unused int argc, __unused char** argv) {
     /* setup at enDjinn modes */
     main_data_t main_mode_data = {
         .rotation = 0,
-        .spec_color.raw = 0xff000000,
         .size_bump = 0,
         .base_size = (figure_texture_info.width) * 0.42f,
     };
@@ -333,8 +293,8 @@ int main(__unused int argc, __unused char** argv) {
         .data = &main_mode_data,
         .pop_fun = into_main_indicator,
     };
-    shutdown_data_t shutdown_mode_data;
-    setup_modes(&main_mode, &shutdown_mode_data);
+    slide_data_t slide_mode_data;
+    setup_modes(&main_mode, &slide_mode_data);
     enj_run();
     enj_texture_unload(&figure_texture_info);
     enj_texture_unload(&help_texture_info);
