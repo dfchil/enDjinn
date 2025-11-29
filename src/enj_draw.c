@@ -35,9 +35,9 @@ void enj_draw_sprite(float corners[4][3], pvr_dr_state_t *state_ptr,
     quad2ndhalf->buv = UVs[1];
     quad2ndhalf->cuv = UVs[2];
   } else {
-    quad2ndhalf->auv = PVR_PACK_16BIT_UV(0.0f, 0.0f);
-    quad2ndhalf->buv = PVR_PACK_16BIT_UV(1.0f, 0.0f);
-    quad2ndhalf->cuv = PVR_PACK_16BIT_UV(1.0f, 1.0f);
+    quad2ndhalf->auv = PVR_PACK_16BIT_UV(0.0f, 1.0f);
+    quad2ndhalf->buv = PVR_PACK_16BIT_UV(0.0f, 0.0f);
+    quad2ndhalf->cuv = PVR_PACK_16BIT_UV(1.0f, 0.0f);
   }
   pvr_dr_commit(quad);
   pvr_dr_finish();
