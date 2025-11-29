@@ -50,8 +50,6 @@ bin/${BASENAME}.cdi: bin/${BASENAME}.elf
 	--image ${ENJDIR}assets/iplogo.mr \
 	--no-padding
 
-
-
 bin/${BASENAME}.bin: bin/${BASENAME}.elf
 	@echo "Creating binary $@ from $<..."
 	sh-elf-objcopy -O binary $< $@
