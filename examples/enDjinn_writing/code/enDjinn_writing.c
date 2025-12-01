@@ -4,10 +4,10 @@
 #include <math.h>
 
 static const alignas(32) uint8_t enDjinn_txt_raw[] = {
-#embed "../embeds/hello_enDjinn/texture/pal8/enDjinn512.dt"
+#embed "../embeds/enDjinn_writing/texture/pal8/enDjinn512.dt"
 };
 static const alignas(32) uint8_t enDjinn_palette_raw[] = {
-#embed "../embeds/hello_enDjinn/texture/pal8/enDjinn512.dt.pal"
+#embed "../embeds/enDjinn_writing/texture/pal8/enDjinn512.dt.pal"
 };
 static enj_texture_info_t figure_texture_info;
 typedef struct {
