@@ -17,6 +17,8 @@ OBJS += $(shell find ${LOCALCODEDIR} -name '*.c' -not -path "./.git/*" |sed -e '
 
 include ${ENJDIR}Makefile.texture
 include ${ENJDIR}Makefile.sfx
+include ${ENJDIR}Makefile.fonts
+
 include ${ENJDIR}Makefile.defines
 
 all: bin/$(BASENAME).elf

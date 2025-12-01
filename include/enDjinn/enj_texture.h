@@ -1,33 +1,42 @@
-#ifndef ENJ_TEXTURE_H 
+#ifndef ENJ_TEXTURE_H
 #define ENJ_TEXTURE_H
 
 #include <dc/pvr.h>
-#include <pvrtex/file_dctex.h>
 #include <stdint.h>
 
-typedef fDtHeader dt_header_t;
+/**
+ * mirror of fDtHeader from pvrtex, sans last 3 padding words */
+typedef struct {
+    char fourcc[4];
+    uint32_t chunk_size;
+    uint8_t version;
+    uint8_t header_size;
+    uint8_t codebook_size;
+    uint8_t colors_used;
+    uint16_t width_pixels;
+    uint16_t height_pixels;
+    uint32_t pvr_type;
+} dt_header_t;
 
 typedef struct {
-  dt_header_t hdr;
-  uint32_t pvrformat;
-  union flags {
-    uint32_t raw;
-    struct {
-      uint32_t palettised : 1;
-      uint32_t twiddled : 1;
-      uint32_t compressed : 1;
-      uint32_t strided : 1;
-      uint32_t mipmapped : 1;
-      uint32_t loaded : 1;
-      uint32_t palette_position : 10;
-      uint32_t palette_format : 2;
-      uint32_t num_palette_colors : 9;
-      uint32_t : 5;
-    };
-  } flags;
-  uint16_t width;
-  uint16_t height;
-  pvr_ptr_t ptr;
+    dt_header_t hdr;
+    uint32_t pvrformat;
+    union flags {
+        uint32_t raw;
+        struct {
+            uint32_t palettised : 1;
+            uint32_t twiddled : 1;
+            uint32_t compressed : 1;
+            uint32_t strided : 1;
+            uint32_t mipmapped : 1;
+            uint32_t loaded : 1;
+            uint32_t palette_position : 10;
+            uint32_t palette_format : 2;
+            uint32_t num_palette_colors : 9;
+            uint32_t : 5;
+        };
+    } flags;
+    pvr_ptr_t ptr;
 } enj_texture_info_t;
 
 /**
@@ -102,8 +111,7 @@ int enj_texture_bind_palette(enj_texture_info_t* texinfo, size_t offset);
 
  * - PVR_PAL_ARGB1555: 16-bit ARGB
  */
-int enj_texture_load_palette_file(const char *filename, int fmt, size_t offset);
-
+int enj_texture_load_palette_file(const char* filename, int fmt, size_t offset);
 
 /**
  * @brief Load a texture from a file
@@ -112,14 +120,13 @@ int enj_texture_load_palette_file(const char *filename, int fmt, size_t offset);
  * @param texinfo The texture texinfo struct
  * @return int 1 on success, 0 on failure
  */
-int enj_texture_load_file(const char *filename, enj_texture_info_t *texinfo);
-
+int enj_texture_load_file(const char* filename, enj_texture_info_t* texinfo);
 
 /**
  * @brief Unload a texture from memory
  * @param texinfo The texture texinfo struct
  * @return int 1 on success, 0 on failure
  */
-int enj_texture_unload(enj_texture_info_t *texinfo);
+int enj_texture_unload(enj_texture_info_t* texinfo);
 
-#endif // ENJ_TEXTURE_H
+#endif  // ENJ_TEXTURE_H
