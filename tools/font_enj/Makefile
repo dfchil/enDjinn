@@ -1,0 +1,4 @@
+
+
+font_enj: font_enj.c ../stb/stb_image_write.h ../stb/stb_truetype.h
+	gcc -std=gnu23 $< -o $@ -lm

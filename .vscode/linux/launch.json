@@ -9,17 +9,16 @@
 			"preLaunchTask": "Build",
 			"postDebugTask": "Cleanup",
 			"cwd": "${workspaceFolder}",
-			// "program": "${workspaceFolder}/examples/enDjinn_modes/bin/enDjinn_modes.elf",
-			"program": "${workspaceFolder}/examples/hello_enDjinn/bin/hello_enDjinn.elf",
+			"program": "${workspaceFolder}/examples/enDjinn_modes/bin/enDjinn_modes.elf",
 			"MIMode": "gdb",
 			"miDebuggerPath": "/opt/toolchains/dc/sh-elf/bin/sh-elf-gdb",
 			"miDebuggerServerAddress": "localhost:2159", //common misconception: we connect to the gdb server offered by dc-tool-ip, NOT to the Dreamcast directly !
 			"debugServerPath": "/opt/toolchains/dc/bin/dc-tool-ip",
-			"debugServerArgs": "-g -t 10.0.0.248 -x ${workspaceFolder}/examples/hello_enDjinn/bin/hello_enDjinn.elf",
+			"debugServerArgs": "-g -t 10.0.0.248 -x ${workspaceFolder}/examples/enDjinn_modes/bin/enDjinn_modes.elf",
 			"stopAtEntry": false,
 			"externalConsole": false,
 			"avoidWindowsConsoleRedirection": false,
-			"internalConsoleOptions": "openOnSessionStart",
+			"internalConsoleOptions": "openOnSessionStart"
 		}
 	]
 }

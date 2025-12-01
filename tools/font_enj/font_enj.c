@@ -2,15 +2,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h" /* http://nothings.org/stb/stb_image_write.h */
+#include "../stb/stb_image_write.h" /* http://nothings.org/stb/stb_image_write.h */
 
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "../stb/stb_truetype.h" /* http://nothings.org/stb/stb_truetype.h */
 
 typedef struct {
-    uint16_t dimensions;
-    uint16_t line_height;
-    uint16_t glyph_starts[127 - 33];
-    uint8_t bitmap[]; /* 4bpp alpha */
-} enj_font_t;
+    uint16_t line : 4;
+    uint16_t offset : 11;
+    uint16_t available : 1;
+} enj_glyph_offset_t;
+
+typedef struct {
+    struct {
+        uint16_t log2width : 4;
+        uint16_t log2height : 4;
+        uint16_t line_height : 7;
+        uint16_t flags: 5;
+    };
+    enj_glyph_offset_t glyph_starts[-33 + 127 + 1];
+} enj_font_header_t;
 
 static int intsort(const void* p1, const void* p2) {
     uint32_t v1 = *(uint32_t*)p1;
@@ -23,91 +34,15 @@ static int intsort(const void* p1, const void* p2) {
         return 0;
 }
 
-void kmeans256to16colors(const uint8_t* input, uint8_t* output,
-                         uint8_t* palette, int width, int height) {
-    int iteration_num = 0;
-    // Simple uniform quantization for demonstration purposes
-    // A real k-means implementation would be more complex
-    int converged = 0;
-
-    uint32_t old_palette[16] = {0};
-    for (int i = 0; i < 16; ++i) {
-        old_palette[i] = (i * 17);  // Simple grayscale palette
-    }
-    while (!converged) {
-        // for (int i = 0; i < 16; ++i) {
-        //     printf("palette %d: %d\n", i, old_palette[i]);
-        // }
-        converged = 1;
-        uint32_t new_sums[16] = {0};
-        int counts[16] = {0};
-        for (int i = 0; i < width * height; ++i) {
-            uint8_t v = input[i];
-            if (v == 0) {
-                output[i] = 0;
-                counts[0]++;
-                continue;  // transparent
-            }
-            if (v == 255) {
-                counts[15]++;
-                output[i] = 15;
-                continue;  // opaque
-            }
-            uint8_t best_index = 0;
-            uint8_t best_distance = 255;
-            for (int j = 1; j < 15; ++j) {
-                uint8_t distance = abs(v - old_palette[j]);
-                if (distance < best_distance) {
-                    best_distance = distance;
-                    best_index = j;
-                }
-            }
-            if (output[i] != best_index) {
-                converged = 0;
-                output[i] = best_index;
-            }
-            new_sums[best_index] += v;
-            counts[best_index]++;
-        }
-        uint32_t new_palette[16] = {0};
-        new_palette[15] = 255;
-        for (int j = 0; j < 16; ++j) {
-            printf("color %d: value %d count %d\n", j, new_sums[j] / counts[j],
-                   counts[j]);
-            if (j == 0 || j == 15) {
-                continue;  // transparent or opaque
-            }
-            if (counts[j] > 0) {
-                int mean = new_sums[j] /= counts[j];
-                if (mean != old_palette[j]) {
-                    converged = 0;
-                }
-                new_palette[j] = mean;
-            } else {
-                new_palette[j] = 0;
-            }
-        }
-        for (int j = 0; j < 16; ++j) {
-            old_palette[j] = new_palette[j];
-        }
-        iteration_num++;
-        if (iteration_num > 100) {
-            break;  // prevent infinite loops
-        }
-        printf("kmeans iteration %d\n", iteration_num);
-    }
-    // qsort(old_palette, 16, sizeof(uint32_t), intsort);
-    for (int i = 0; i < width * height; ++i) {
-        output[i] = old_palette[output[i]];
-    }
-}
-
 int main(int argc, const char* argv[]) {
+
+    printf("sizeof enj_font_header_t: %zu\n", sizeof(enj_font_header_t));
     /* load font file */
     long size;
     uint8_t* fontBuffer;
-    // FILE* fontFile = fopen("font/DejaVuSans.ttf", "rb");
-    FILE* fontFile = fopen("font/cmunrm.ttf", "rb");
+    FILE* fontFile = fopen("font/DejaVuSans.ttf", "rb");
+    // FILE* fontFile = fopen("font/cmunrm.ttf", "rb");
+    // FILE* fontFile = fopen("font/DinaRemaster-Regular-01.ttf", "rb");
 
     fseek(fontFile, 0, SEEK_END);
     size = ftell(fontFile);       /* how long is the file ? */
@@ -124,7 +59,7 @@ int main(int argc, const char* argv[]) {
         printf("failed\n");
     }
 
-    int l_h = 64; /* line height */
+    int l_h = 32; /* line height */
 
     int ascent, descent, lineGap;
     stbtt_GetFontVMetrics(&info, &ascent, &descent, &lineGap);
@@ -139,8 +74,12 @@ int main(int argc, const char* argv[]) {
     int x = 0;
     int line = 0;
 
-    uint16_t glyph_starts[127 - 33] = {0};
-
+    enj_font_header_t header = {0};
+    
+    int width = 64;
+    int height = 64;
+    while (b_d == -1) {
+    }
     for (int width = 64; width <= 1024; width <<= 1) {
         x = 0;
         line = 0;
@@ -224,55 +163,40 @@ int main(int argc, const char* argv[]) {
         /* add kerning */
         // x += roundf(kern * scale);
         // int kern = stbtt_GetCodepointKernAdvance(&info, glyph, glyph + 1);
-        glyph_starts[glyph - 33] = x + line * b_d;
+        header.glyph_starts[glyph - 33] = (enj_glyph_offset_t){
+            .available = 1,
+            .line = (uint16_t)line,
+            .offset = (uint16_t)(x)
+        };
     }
-
-    uint8_t* quantized_bitmap = malloc(b_d * b_d * sizeof(uint8_t));
-    uint8_t* palette_indices[16] = {0};
-    kmeans256to16colors(bitmap, quantized_bitmap, (uint8_t*)palette_indices,
-                        b_d, b_d);
-    stbi_write_png("out_q.png", b_d, b_d, 1, quantized_bitmap, b_d);
 
     // make it 16 colors with alpha
     uint8_t* output = calloc(b_d * b_d, sizeof(uint8_t));
+    uint8_t* pvrout = calloc((b_d * b_d)>>1, sizeof(uint8_t));
+
     uint32_t new_palette[16] = {0};
     uint32_t new_count[16] = {0};
     uint32_t other_count[16] = {0};
     uint8_t colors_found = 1;
     for (int i = 0; i < b_d * b_d; i += 1) {
         uint8_t v1 = bitmap[i];
-        uint8_t v2 = bitmap[i + 1];
 
         uint8_t curcol = ((v1 * 15 + 135) >> 4) & 0xF0;
         uint8_t other_index =
-            (v1 >> 4) + ((v1 & 0xf0) < 240 && ((v1 & 0x0f) > 7) ? 1 : 0);
+            (v1 >> 4) + ((v1 & 0xf0) < 240 && ((v1 & 0x0f) > 8) ? 1 : 0);
         other_count[other_index]++;
         // other_index = v2 >> 4 + ((((v2 & 0xf0) < 240) && (v2 & 0x0f) > 7) ? 1
         // : 0);
-        if (curcol == 255) {
-            printf("found opaque pixel at %d\n", i);
-        }
-        if (curcol != 0 && colors_found < 16) {
-            for (int j = 1; j < 16; ++j) {
-                if (new_palette[j] == curcol) {
-                    break;
-                }
-                if (new_palette[j] == 0) {
-                    new_palette[j] = curcol;
-                    colors_found++;
-                    break;
-                }
-            }
-        }
         // output[i * 4 + 0] = 255;
         // output[i * 4 + 1] = 255;
         // output[i * 4 + 2] = 255;
-        output[i] = other_index << 4;
+        output[i] = curcol;
+        pvrout[i] |= i & 1 ? (curcol >> 4) : (curcol & 0xF0);
         new_count[curcol >> 4]++;
     }
     // qsort(new_palette, 16, sizeof(uint32_t), intsort);
     for (int i = 0; i < 16; ++i) {
-        printf("final palette %d: %d, count: %lu, alt_count %lu\n", i,
+        printf("final palette %d: %d, count: %u, alt_count %u\n", i,
                new_palette[i], new_count[i], other_count[i]);
     }
 
@@ -286,10 +210,21 @@ int main(int argc, const char* argv[]) {
      the target image. See the stb_truetype.h header for more info.
     */
 
+    /* write out enj font file */
+    
+    header.log2width = 2;
+    while ((1 << header.log2width) < b_d)
+        header.log2width++;
+    header.line_height = l_h;
+    FILE* outFile = fopen("out.enjfont", "wb");
+    fwrite(&header, 1, sizeof(enj_font_header_t), outFile);
+    // fwrite(pvrout, 1, (b_d * b_d )>>1,outFile);
+    fclose(outFile);
+
     free(fontBuffer);
     free(bitmap);
     free(output);
-    free(quantized_bitmap);
+    free(pvrout);
 
     return 0;
 }
