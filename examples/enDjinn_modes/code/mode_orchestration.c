@@ -84,10 +84,10 @@ void info_renderer(void* data) {
     info_data_t* mdata = (info_data_t*)data;
 
     float min_x =
-        (vid_mode->width - help_texture_info.width) * 0.5f * ENJ_XSCALE;
-    float max_x = min_x + help_texture_info.width * ENJ_XSCALE;
+        (vid_mode->width - help_texture_info.hdr.width_pixels) * 0.5f * ENJ_XSCALE;
+    float max_x = min_x + help_texture_info.hdr.width_pixels * ENJ_XSCALE;
     float min_y = (vid_mode->height - 440) * 0.5f;
-    float max_y = min_y + help_texture_info.height;
+    float max_y = min_y + help_texture_info.hdr.height_pixels;
 
     float corners[4][3] = {
         {min_x, max_y, 2.0f},
@@ -153,12 +153,12 @@ void slide_mode_updater(void* data) {
     smdata->mode_data->center_x += smdata->velocity_x;
     smdata->mode_data->center_y += smdata->velocity_y;
     if (smdata->mode_data->center_x <
-            -figure_texture_info.width * ENJ_XSCALE * 0.5f ||
+            -figure_texture_info.hdr.width_pixels * ENJ_XSCALE * 0.5f ||
         smdata->mode_data->center_x >
-            (vid_mode->width + figure_texture_info.width) * ENJ_XSCALE ||
-        smdata->mode_data->center_y < -figure_texture_info.height * 0.5f ||
+            (vid_mode->width + figure_texture_info.hdr.width_pixels) * ENJ_XSCALE ||
+        smdata->mode_data->center_y < -figure_texture_info.hdr.height_pixels * 0.5f ||
         smdata->mode_data->center_y >
-            vid_mode->height + figure_texture_info.height * 0.5f) {
+            vid_mode->height + figure_texture_info.hdr.height_pixels * 0.5f) {
         enj_mode_flag_end_current();
     }
     enj_renderlist_add(PVR_LIST_TR_POLY, enDjinn_render, smdata->mode_data);
@@ -230,7 +230,7 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
     // setup info mode
     pvr_sprite_cxt_t i_cxt;
     pvr_sprite_cxt_txr(&i_cxt, PVR_LIST_PT_POLY, help_texture_info.pvrformat,
-                       help_texture_info.width, help_texture_info.height,
+                       help_texture_info.hdr.width_pixels, help_texture_info.hdr.height_pixels,
                        help_texture_info.ptr, PVR_FILTER_NEAREST);
     i_cxt.gen.culling = PVR_CULLING_NONE;
     pvr_sprite_compile(&info_mode_data.hdr, &i_cxt);
@@ -242,7 +242,7 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
     main_data_t* main_mode_data = (main_data_t*)main_mode->data;
     pvr_sprite_cxt_t f_cxt;
     pvr_sprite_cxt_txr(&f_cxt, PVR_LIST_TR_POLY, figure_texture_info.pvrformat,
-                       figure_texture_info.width, figure_texture_info.height,
+                       figure_texture_info.hdr.width_pixels, figure_texture_info.hdr.height_pixels,
                        figure_texture_info.ptr, PVR_FILTER_BILINEAR);
     f_cxt.gen.culling = PVR_CULLING_NONE;
     f_cxt.gen.specular = PVR_SPECULAR_ENABLE;
@@ -285,7 +285,7 @@ int main(__unused int argc, __unused char** argv) {
     main_data_t main_mode_data = {
         .rotation = 0,
         .size_bump = 0,
-        .base_size = (figure_texture_info.width) * 0.42f,
+        .base_size = (figure_texture_info.hdr.width_pixels) * 0.42f,
     };
     enj_mode_t main_mode = {
         .name = "Main Mode",

@@ -60,7 +60,7 @@ void setup_modes(enj_mode_t *main_mode) {
   main_data_t *main_mode_data = (main_data_t *)main_mode->data;
   pvr_sprite_cxt_t f_cxt;
   pvr_sprite_cxt_txr(&f_cxt, PVR_LIST_TR_POLY, figure_texture_info.pvrformat,
-                     figure_texture_info.width, figure_texture_info.height,
+                     figure_texture_info.hdr.width_pixels, figure_texture_info.hdr.height_pixels,
                      figure_texture_info.ptr, PVR_FILTER_BILINEAR);
   pvr_sprite_compile(&main_mode_data->hdr, &f_cxt);
   main_mode_data->hdr.argb = 0xffffffff;
@@ -82,7 +82,7 @@ int main(__unused int argc, __unused char **argv) {
   /* setup at enDjinn modes */
   main_data_t main_mode_data = {
       .rotation = 0,
-      .base_size = (figure_texture_info.width) * 0.42f,
+      .base_size = (figure_texture_info.hdr.width_pixels) * 0.42f,
       .center_x = vid_mode->width * ENJ_XSCALE * 0.5f,
       .center_y = vid_mode->height * 0.5f,
   };

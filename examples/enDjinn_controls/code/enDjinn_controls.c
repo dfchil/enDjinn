@@ -127,7 +127,7 @@ void setup_modes(enj_mode_t* main_mode) {
     main_data_t* main_mode_data = (main_data_t*)main_mode->data;
     pvr_sprite_cxt_t f_cxt;
     pvr_sprite_cxt_txr(&f_cxt, PVR_LIST_TR_POLY, figure_texture_info.pvrformat,
-                       figure_texture_info.width, figure_texture_info.height,
+                       figure_texture_info.hdr.width_pixels, figure_texture_info.hdr.height_pixels,
                        figure_texture_info.ptr, PVR_FILTER_BILINEAR);
     f_cxt.gen.culling = PVR_CULLING_NONE;
     f_cxt.gen.specular = PVR_SPECULAR_ENABLE;
@@ -155,7 +155,7 @@ int main(__unused int argc, __unused char** argv) {
         .rotation = 0,
         .spec_color.raw = 0xff000000,
         .size_bump = 0,
-        .base_size = (figure_texture_info.width) * 0.42f,
+        .base_size = (figure_texture_info.hdr.width_pixels) * 0.42f,
         .center_x = vid_mode->width * ENJ_XSCALE * 0.5f,
         .center_y = vid_mode->height * 0.5f,
     };
