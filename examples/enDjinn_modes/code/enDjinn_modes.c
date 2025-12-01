@@ -4,15 +4,15 @@
 #include <math.h>
 
 static const alignas(32) uint8_t enDjinn_txt_raw[] = {
-#embed "../embeds/mode_orchestration/texture/pal8/enDjinn512.dt"
+#embed "../embeds/enDjinn_modes/texture/pal8/enDjinn512.dt"
 };
 static const alignas(32) uint8_t enDjinn_palette_raw[] = {
-#embed "../embeds/mode_orchestration/texture/pal8/enDjinn512.dt.pal"
+#embed "../embeds/enDjinn_modes/texture/pal8/enDjinn512.dt.pal"
 };
 static enj_texture_info_t figure_texture_info;
 
 static const alignas(32) uint8_t help_txt_raw[] = {
-#embed "../embeds/mode_orchestration/texture/argb1555_vq_tw/info512.dt"
+#embed "../embeds/enDjinn_modes/texture/argb1555_vq_tw/info512.dt"
 };
 static enj_texture_info_t help_texture_info;
 

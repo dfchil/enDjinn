@@ -2,7 +2,7 @@
 
 #set the KOS environtment variables
 source /opt/toolchains/dc/kos/environ.sh
-cd examples/mode_orchestration/
+cd examples/enDjinn_modes/
 # cd examples/hello_enDjinn/
 DCTRACE=1 ENJ_DEBUG=1 make clean
 # SINGLEDEMO=0 DCPROF=1 SINGLEDEMO=7 
