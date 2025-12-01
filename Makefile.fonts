@@ -1,10 +1,10 @@
 ROMBASESFXDIR:=$(notdir $(FONTSDIR))
 
-SNDFXFILES:=
+EFONTFILES:=
 ifneq (,$(wildcard $(FONTSDIR)))
-	SNDFXFILES += $(shell find $(FONTSDIR)/ -name '*.wav' | sed -e 's,'$(FONTSDIR)',$(ROMDBASEPATH)/$(ROMBASESFXDIR),g')
+	EFONTFILES += $(shell find $(FONTSDIR)/ -name '*.ttf' | sed -e 's,'$(FONTSDIR)',$(ROMDBASEPATH)/$(ROMBASESFXDIR),g')
 
-$(ROMDBASEPATH)/$(ROMBASESFXDIR)/%.wav: assets/sfx/%.wav
+$(ROMDBASEPATH)/$(ROMBASESFXDIR)/%.efont: assets/fonts/%.wav
 	@mkdir -p $(shell dirname $@)
 	cp $< $@
 endif

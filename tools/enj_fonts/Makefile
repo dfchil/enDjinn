@@ -1,2 +1,4 @@
-stb-example: main.c stb_image_write.h stb_truetype.h
-	gcc main.c -o $@ -lm
+
+
+enj_font: enj_font.c ../stb/stb_image_write.h ../stb/stb_truetype.h
+	gcc -std=gnu23 $< -o $@ -lm

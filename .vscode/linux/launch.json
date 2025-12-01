@@ -9,7 +9,7 @@
 			"preLaunchTask": "Build",
 			"postDebugTask": "Cleanup",
 			"cwd": "${workspaceFolder}",
-			// "program": "${workspaceFolder}/examples/mode_orchestration/bin/mode_orchestration.elf",
+			// "program": "${workspaceFolder}/examples/enDjinn_modes/bin/enDjinn_modes.elf",
 			"program": "${workspaceFolder}/examples/hello_enDjinn/bin/hello_enDjinn.elf",
 			"MIMode": "gdb",
 			"miDebuggerPath": "/opt/toolchains/dc/sh-elf/bin/sh-elf-gdb",

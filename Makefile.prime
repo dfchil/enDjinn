@@ -1,6 +1,6 @@
 ENDDJINNPRIMARY =  $(realpath abspath $(lastword $(MAKEFILE_LIST)))
-ENJDIR:= $(dir $(ENDDJINNPRIMARY))
 
+ENJDIR:= $(dir $(ENDDJINNPRIMARY))
 include $(KOS_BASE)/Makefile.rules
 
 # redefine the following in a file ./Makefile.local.cfg as necessary
@@ -17,9 +17,11 @@ OBJS += $(shell find ${LOCALCODEDIR} -name '*.c' -not -path "./.git/*" |sed -e '
 
 include ${ENJDIR}Makefile.texture
 include ${ENJDIR}Makefile.sfx
+include ${ENJDIR}Makefile.fonts
+
 include ${ENJDIR}Makefile.defines
 
-all: bin/$(BASENAME).elf
+all: $(BINDIR)/$(BASENAME).elf
 .DEFAULT: all
 
 $(BUILDDIR)/enDjinn/%.o: ${ENJDIR}%.c Makefile
@@ -33,12 +35,12 @@ $(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES) $(SFXFILES)
 	@$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
 
 
-bin/${BASENAME}.elf: $(OBJS)
+$(BINDIR)/${BASENAME}.elf: $(OBJS)
 	@mkdir -p $(shell dirname $@)
 	@echo "Linking $@..."
 	@$(CC) $(INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(LDLIBS) 
 
-bin/${BASENAME}.cdi: bin/${BASENAME}.elf
+$(BINDIR)/${BASENAME}.cdi: $(BINDIR)/${BASENAME}.elf
 	mkdcdisc \
 	--name ${BASENAME} \
 	--elf $< \
@@ -50,14 +52,20 @@ bin/${BASENAME}.cdi: bin/${BASENAME}.elf
 	--image ${ENJDIR}assets/iplogo.mr \
 	--no-padding
 
-bin/${BASENAME}.bin: bin/${BASENAME}.elf
+$(BINDIR)/${BASENAME}.bin: $(BINDIR)/${BASENAME}.elf
 	@echo "Creating binary $@ from $<..."
 	sh-elf-objcopy -O binary $< $@
 
 clean:
-	@rm -rf bin/* $(OBJS)
+	@rm -rf $(BINDIR)/* $(OBJS)
 
-.PRECIOUS: $(DTTEXTURES) $(SFXFILES) 
+mrproper: clean
+	rm -rf $(BUILDDIR) $(BINDIR)
+	rm -rf $(DTTEXTURES) $(SFXFILES) $(FONTFILES) $(addsuffix .pal,$(DTTEXTURES))
+	find . -type d -empty -delete
+
+
+.PRECIOUS: $(DTTEXTURES) $(SFXFILES) $(FONTFILES)
 .PHONY: list help info
 
 include ${ENJDIR}Makefile.info

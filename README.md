@@ -13,7 +13,7 @@ Have a look at the [hello_enDjinn](./examples/hello_enDjinn/code/hello_enDjinn.c
 
 And don't worry about being strong armed into a rigoristic and very specific way to do things, because while one part of the design philosphy is "powerfull zero config features out of the gate", another part is "as much a as possible should be reconfigurable by the user". I'll have more on how to wrangle the make system to your tastes and needs later. 
 
-The other half of enDjinn is the runtime that delivers a gameplay loop driver, a powerful sate machine as demonstrated in the [mode_orchestration example](./examples/mode_orchestration/code/mode_orchestration.c), that tries to alleviate some of quirks of the Dreamcast system while amplifying its strengths. 
+The other half of enDjinn is the runtime that delivers a gameplay loop driver, a powerful sate machine as demonstrated in the [enDjinn_modes example](./examples/enDjinn_modes/code/enDjinn_modes.c), that tries to alleviate some of quirks of the Dreamcast system while amplifying its strengths. 
 
 I'll add more documentation to all of the above and some features I haven't mentioned it in due time.
 
