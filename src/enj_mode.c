@@ -11,7 +11,7 @@ int enj_mode_push(enj_mode_t* mode) {
 #ifdef ENJ_DEBUG
 if (current_mode_index >= ENJ_MODE_STACK_SIZE) {
         ENJ_DEBUG_PRINT("Mode stack overflow\n");
-        return -1;
+        return 0;
     }
     #endif
     if (current_mode_index < 0) {
@@ -20,7 +20,7 @@ if (current_mode_index >= ENJ_MODE_STACK_SIZE) {
         current_mode_index++;
     }
     mode_stack[current_mode_index] = mode;
-    return 0;
+    return 1;
 }
 enj_mode_t* enj_mode_get(void) { return mode_stack[current_mode_index]; }
 
