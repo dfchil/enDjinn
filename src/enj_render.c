@@ -24,8 +24,8 @@ alignas(32) static enj_renderlist_t* active_renderlists[NUM_RENDERLISTS] = {0};
 static void* _render_post_data = NULL;
 static enj_render_post_call _render_post_call = NULL;
 
-static int enj_palette_mode_switch = -1;
-void enj_render_set_palette_mode(int mode) {
+static pvr_palfmt_t enj_palette_mode_switch = -1;
+void enj_render_set_palette_mode(pvr_palfmt_t mode) {
     enj_palette_mode_switch = mode;
 }
 

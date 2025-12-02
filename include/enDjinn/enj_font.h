@@ -3,22 +3,7 @@
 
 #include <dc/pvr.h>
 #include <enDjinn/enj_types.h>
-
-typedef struct {
-  uint16_t line : 4;
-  uint16_t offset : 11;
-  uint16_t available : 1;
-} enj_glyph_offset_t;
-
-typedef struct {
-  struct {
-    uint8_t log2width : 4;
-    uint8_t log2height : 4;
-  };
-  uint8_t line_height;
-  /* from '!' to '~', last +1 is padding */
-  enj_glyph_offset_t glyph_starts[-33 + 126 + 1 + 1];
-} enj_font_header_t;
+#include <enDjinn/enj_font_types.h>
 
 int enj_font_glyph_uv_coords(enj_font_header_t *font, char glyph, float *u0,
                              float *v0, float *u1, float *v1);
