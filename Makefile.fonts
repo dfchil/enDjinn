@@ -7,3 +7,12 @@ $(ROMDBASEPATH)/$(ROMBASEFONTSDIR)/%.efont: assets/fonts/%.wav
 	@mkdir -p $(shell dirname $@)
 	cp $< $@
 endif
+
+FONTMACHINE=${ENJDIR}/tools/font_enj/bin/font_enj
+
+${FONTMACHINE}: 
+	@$(MAKE) -C ${ENJDIR}/tools/font_enj
+
+$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal4/%.dt: $(TEXTUREDIR)/pal4/%.png ${FONTMACHINE}
+	@mkdir -p $(shell dirname $@)
+	pvrtex -f PAL4BPP -c --max-color 16 -i $< -o $@
