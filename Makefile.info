@@ -40,6 +40,11 @@ auto_variables:
 	@echo "  [${SNDFXFILES}]"
 	@echo ""
 
+	@echo "\$$ENJFONTFILES are:"
+	@echo "  [${ENJFONTFILES}]"
+	@echo ""
+
+
 	@echo "\$$DEFINES are:"
 	@echo "  [${DEFINES}]"
 	@echo ""

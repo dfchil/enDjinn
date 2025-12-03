@@ -9,8 +9,8 @@ It implicitly also shows of the power of the underlying enDjinn make system, tha
 by sym-linking the [enDjinn/Makefile.primary](../Makefile.primary) file to a **Makefile** in your project directory.
 
 
-## enDjinn_controls
-The [enDjinn_controls](./enDjinn_controls/) example demonstrates the controller input reading system while adding a bit of interactivity.
+## enj_controls
+The [enj_controls](./enj_controls/) example demonstrates the controller input reading system while adding a bit of interactivity.
 
-## enDjinn_modes
-The [enDjinn_modes](./enDjinn_modes/) example demonstrates the built in state handling in the enj_mod_% subsystem. 
+## enj_modes
+The [enj_modes](./enj_modes/) example demonstrates the built in state handling in the enj_mod_% subsystem. 

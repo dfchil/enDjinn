@@ -1,11 +1,8 @@
 ROMBASEFONTSDIR:=$(notdir $(FONTSDIR))
 
-EFONTFILES:=
+ENJFONTFILES:=
 ifneq (,$(wildcard $(FONTSDIR)))
-	EFONTFILES += $(shell find $(FONTSDIR)/ -name '*.ttf' | sed -e 's,'$(FONTSDIR)',$(ROMDBASEPATH)/$(ROMBASEFONTSDIR),g')
-$(ROMDBASEPATH)/$(ROMBASEFONTSDIR)/%.efont: assets/fonts/%.wav
-	@mkdir -p $(shell dirname $@)
-	cp $< $@
+	ENJFONTFILES += $(shell find $(FONTSDIR)/ -name '*.ttf' | sed -e 's,'$(FONTSDIR)',$(ROMDBASEPATH)/$(ROMBASEFONTSDIR),g' -e 's,\.ttf,\.enjfont,g')
 endif
 
 FONTMACHINE=${ENJDIR}/tools/font_enj/bin/font_enj
@@ -13,6 +10,7 @@ FONTMACHINE=${ENJDIR}/tools/font_enj/bin/font_enj
 ${FONTMACHINE}: 
 	@$(MAKE) -C ${ENJDIR}/tools/font_enj
 
-$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal4/%.dt: $(TEXTUREDIR)/pal4/%.png ${FONTMACHINE}
-	@mkdir -p $(shell dirname $@)
-	pvrtex -f PAL4BPP -c --max-color 16 -i $< -o $@
+$(ROMDBASEPATH)/$(ROMBASEFONTSDIR)/%.enjfont: $(FONTSDIR)/%.ttf ${FONTMACHINE}
+	DIRNAME=$(shell dirname $@);
+	@mkdir -p $$DIRNAME
+	${FONTMACHINE} -i $< -o $@ -l 23

@@ -29,7 +29,7 @@ $(BUILDDIR)/enDjinn/%.o: ${ENJDIR}%.c Makefile
 	@echo "Building $@ from $<..."
 	@$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
 
-$(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES) $(SNDFXFILES) $(FONTFILES)
+$(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES) $(SNDFXFILES) $(FONTFILES) $(ENJFONTFILES)
 	@mkdir -p $(shell dirname $@)
 	@echo "Building $@ from $<..."
 	@$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
@@ -64,7 +64,7 @@ mrproper: clean
 	find . -type d -empty -delete
 
 
-.PRECIOUS: $(DTTEXTURES) $(SNDFXFILES) $(FONTFILES)
+.PRECIOUS: $(DTTEXTURES) $(SNDFXFILES) $(ENJFONTFILES)
 .PHONY: list help info
 
 include ${ENJDIR}Makefile.info

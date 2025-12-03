@@ -5,7 +5,7 @@
 
 typedef struct __attribute__((packed)) {
   uint16_t line : 4;
-  uint16_t offset : 11;
+  uint16_t offset_end : 11;
   uint16_t available : 1;
 } enj_glyph_offset_t;
 
