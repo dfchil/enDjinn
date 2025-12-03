@@ -3,13 +3,20 @@
 #include <enDjinn/enj_enDjinn.h>
 #include <math.h>
 
-static const alignas(32) uint8_t enDjinn_txt_raw[] = {
-#embed "../embeds/enDjinn_writing/texture/pal8/enDjinn512.dt"
+static const alignas(32) uint8_t enj_txr_blob[] = {
+#embed "../embeds/enj_writing/texture/pal8/enDjinn512.dt"
 };
-static const alignas(32) uint8_t enDjinn_palette_raw[] = {
-#embed "../embeds/enDjinn_writing/texture/pal8/enDjinn512.dt.pal"
+static const alignas(32) uint8_t enj_palette_blob[] = {
+#embed "../embeds/enj_writing/texture/pal8/enDjinn512.dt.pal"
 };
 static enj_texture_info_t figure_texture_info;
+
+static const alignas(32) uint8_t enj_font_blob[] = {
+#embed "../embeds/enj_writing/fonts/23/DejaVuSans.enjfont"
+};
+alignas(32) static enj_font_header_t font;
+alignas(32) static pvr_sprite_hdr_t font_hdr;
+
 typedef struct {
   uint32_t rotation;
   pvr_sprite_hdr_t hdr;
@@ -23,6 +30,7 @@ static inline void rotate2d(float x, float y, float sin, float cos,
   *out_x = (x * cos - y * sin) * ENJ_XSCALE;
   *out_y = x * sin + y * cos;
 }
+
 void render(void *data) {
   main_data_t *mdata = (main_data_t *)data;
   float cos, sin;
@@ -40,7 +48,16 @@ void render(void *data) {
     corners[i][0] += mdata->center_x;
     corners[i][1] += mdata->center_y;
   }
-  enj_draw_sprite(corners, NULL, &mdata->hdr, NULL);
+  static pvr_dr_state_t static_dr_state;
+  pvr_dr_init(&static_dr_state);
+
+  // enj_draw_sprite(corners, &static_dr_state, &mdata->hdr, NULL);
+
+  pvr_sprite_hdr_t* font_hdr_copy = (pvr_sprite_hdr_t*)pvr_dr_target(static_dr_state);
+  *font_hdr_copy = font_hdr;
+  pvr_dr_commit(font_hdr_copy);
+  enj_font_render_glyph('A', &font, 20, 20, 1.0f, &static_dr_state);
+  pvr_dr_finish();
 }
 void main_mode_updater(void *data) {
   main_data_t *mdata = (main_data_t *)data;
@@ -49,9 +66,9 @@ void main_mode_updater(void *data) {
 }
 void setup_textures() {
   // load palettised texture from memory blobs
-  enj_texture_load_blob(enDjinn_txt_raw, &figure_texture_info);
+  enj_texture_load_blob(enj_txr_blob, &figure_texture_info);
   enj_texture_bind_palette(&figure_texture_info, 0);
-  enj_texture_load_palette_blob(enDjinn_palette_raw,
+  enj_texture_load_palette_blob(enj_palette_blob,
                                 figure_texture_info.flags.palette_format,
                                 figure_texture_info.flags.palette_position);
 }
@@ -64,6 +81,19 @@ void setup_modes(enj_mode_t *main_mode) {
                      figure_texture_info.ptr, PVR_FILTER_BILINEAR);
   pvr_sprite_compile(&main_mode_data->hdr, &f_cxt);
   main_mode_data->hdr.argb = 0xffffffff;
+}
+
+void setup_font() {
+  if (!enj_font_from_blob(enj_font_blob, &font)) {
+    ENJ_DEBUG_PRINT("Failed to load font from blob\n");
+    return;
+  }
+  if (!enj_font_TR_header(&font, &font_hdr, 1, (enj_color_t){.raw = 0xffffffff}, PVR_PAL_ARGB8888)) {
+    ENJ_DEBUG_PRINT("Failed to setup font header\n");
+    return;
+  }
+  font_hdr.m1.culling = PVR_CULLING_NONE;
+  // Now font_hdr can be used to render text with enj_font_render_text_in_box()
 }
 
 int main(__unused int argc, __unused char **argv) {
@@ -91,8 +121,9 @@ int main(__unused int argc, __unused char **argv) {
       .mode_updater = main_mode_updater,
       .data = &main_mode_data,
   };
+  setup_font();
   setup_modes(&main_mode);
-  enj_mode_push(&main_mode);
+  enj_mode_push(&main_mode);  
   enj_run();
   enj_texture_unload(&figure_texture_info);
   return 0;

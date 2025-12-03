@@ -177,7 +177,7 @@ int font_gen(int line_height, char* font_path, char* output_path,
         header.glyph_starts[glyph - 33] =
             (enj_glyph_offset_t){.available = 1,
                                  .line = (uint16_t)cur_line,
-                                 .offset = (uint16_t)(cur_pos_x)};
+                                 .offset_end = (uint16_t)(cur_pos_x)};
     }
 
     // 4 bits per pixel to PVR4bpp
