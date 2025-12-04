@@ -2,12 +2,12 @@
 
 void enj_draw_sprite(float corners[4][3], pvr_dr_state_t *state_ptr,
                      pvr_sprite_hdr_t *hdr, uint32_t UVs[3]) {
+  static pvr_dr_state_t static_dr_state;
   if (state_ptr == NULL) {
-    static pvr_dr_state_t static_dr_state;
     pvr_dr_init(&static_dr_state);
     state_ptr = &static_dr_state;
   }
-  // skipping the header is valid if header was sent previously
+  // skipping the header is ok if header was committed beforehand
   if (hdr != NULL) {
     pvr_sprite_hdr_t *mode_hdr =
         (pvr_sprite_hdr_t *)pvr_dr_target(*state_ptr);
@@ -40,5 +40,8 @@ void enj_draw_sprite(float corners[4][3], pvr_dr_state_t *state_ptr,
     quad2ndhalf->cuv = PVR_PACK_16BIT_UV(1.0f, 0.0f);
   }
   pvr_dr_commit(quad);
-  pvr_dr_finish();
+
+  if (state_ptr == &static_dr_state) {
+    pvr_dr_finish();
+  }
 }

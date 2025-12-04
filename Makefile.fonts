@@ -11,6 +11,5 @@ ${FONTMACHINE}:
 	@$(MAKE) -C ${ENJDIR}/tools/font_enj
 
 $(ROMDBASEPATH)/$(ROMBASEFONTSDIR)/%.enjfont: $(FONTSDIR)/%.ttf ${FONTMACHINE}
-	DIRNAME=$(shell dirname $@);
-	@mkdir -p $$DIRNAME
-	${FONTMACHINE} -i $< -o $@ -l 23
+	@mkdir -p $(shell dirname $@)
+	${FONTMACHINE} -i $< -o $@ -l 23 -p $(shell dirname $@)/$(basename $(notdir $@)).png

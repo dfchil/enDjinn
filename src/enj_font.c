@@ -1,3 +1,4 @@
+#include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_draw.h>
 #include <enDjinn/enj_font.h>
 #include <errno.h>
@@ -8,7 +9,7 @@
 
 int enj_font_from_blob(const uint8_t* blob, enj_font_header_t* out_font) {
     memcpy(out_font, blob, sizeof(enj_font_header_t));
-    uint8_t* pvr_data = pvr_mem_malloc(
+    pvr_ptr_t* pvr_data = pvr_mem_malloc(
         ((1 << (out_font->log2width) * (1 << out_font->log2height))) >> 1);
     if (!pvr_data) {
         printf("Error allocating memory for font PVR data\n");
@@ -67,9 +68,11 @@ int enj_font_load(const char* path, enj_font_header_t* out_font) {
 }
 
 int enj_font_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
-                       uint8_t palette_entry, enj_color_t front_color, pvr_palfmt_t pal_fmt) {
+                       uint8_t palette_entry, enj_color_t front_color,
+                       pvr_palfmt_t pal_fmt) {
     // generate transparent palette
-    uint32_t palette_offset = palette_entry << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4);
+    uint32_t palette_offset = palette_entry
+                              << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4);
 
     enj_color_t color = {.a = 0, .r = 255, .g = 255, .b = 255};
     for (int i = 0; i < 16; i++) {
@@ -80,7 +83,9 @@ int enj_font_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
     // setup header
     pvr_sprite_cxt_t cxt;
     pvr_sprite_cxt_txr(
-        &cxt, PVR_LIST_TR_POLY, PVR_TXRFMT_PAL4BPP | (palette_entry << (pal_fmt == PVR_PAL_ARGB8888 ? 25 : 21)),
+        &cxt, PVR_LIST_TR_POLY,
+        PVR_TXRFMT_PAL4BPP |
+            (palette_entry << (pal_fmt == PVR_PAL_ARGB8888 ? 25 : 21)),
         1 << font->log2width, 1 << font->log2height,
         (pvr_ptr_t)(uintptr_t)font->pvr_data, PVR_FILTER_NEAREST);
     pvr_sprite_compile(hdr, &cxt);
@@ -92,13 +97,13 @@ int enj_font_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
 static inline void palette_color_mixer(enj_color_t front_color,
                                        enj_color_t back_color,
                                        uint8_t palette_entry,
-                                       pvr_palfmt_t pal_fmt
-                                    ) {
+                                       pvr_palfmt_t pal_fmt) {
     enj_color_t diff_color = {.a = 0,
                               .r = (back_color.r - front_color.r) / 15,
                               .g = (back_color.g - front_color.g) / 15,
                               .b = (back_color.b - front_color.b) / 15};
-    uint32_t palette_offset = palette_entry << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4);
+    uint32_t palette_offset = palette_entry
+                              << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4);
     for (int i = 0; i < 16; i++) {
         enj_color_t color = {.a = 255,
                              .r = front_color.r + diff_color.r * i,
@@ -152,27 +157,35 @@ int enj_font_glyph_uv_coords(enj_font_header_t* font, char glyph, uint32_t* auv,
     }
 
     int glyph_index = (uint32_t)glyph - 33;
-    if (glyph_index >= (126 - 33 || glyph_index < 0)) {
+    if (glyph_index >= (126 - 33) || glyph_index < 0) {
         // out of range
+        printf("Glyph '%c' out of range for font\n", glyph);
         return 0;
     }
     enj_glyph_offset_t glyph_end = font->glyph_starts[glyph_index];
 
     uint32_t glyph_start =
-        glyph_index > 0 ? font->glyph_starts[glyph_index - 1].offset_end : 0;
+        glyph_index > 0 ? font->glyph_starts[glyph_index - 1].offset_end : -1;
+
+    if (glyph_start >= glyph_end.offset_end) {
+        glyph_start = -1;
+    }
+    glyph_start++;
+
     // uint32_t glyph_width = glyph_end.offset_end - glyph_start;
     uint32_t tex_width = 1 << font->log2width;
     uint32_t tex_height = 1 << font->log2height;
 
     *auv = PVR_PACK_16BIT_UV(
         (float)(glyph_start) / (float)tex_width,
-        (float)(font->line_height * glyph_end.line) / (float)tex_height);
+        (float)(font->line_height * (glyph_end.line + 1)) / (float)tex_height);
+
     *buv = PVR_PACK_16BIT_UV(
-        (float)(glyph_end.offset_end) / (float)tex_width,
+        (float)(glyph_start) / (float)tex_width,
         (float)(font->line_height * glyph_end.line) / (float)tex_height);
     *cuv = PVR_PACK_16BIT_UV(
         (float)(glyph_end.offset_end) / (float)tex_width,
-        (float)(font->line_height * (glyph_end.line + 1)) / (float)tex_height);
+        (float)(font->line_height * glyph_end.line) / (float)tex_height);
 
     return 1;
 }
@@ -182,28 +195,34 @@ int enj_font_render_glyph(char glyph, enj_font_header_t* font, uint16_t x,
     if (glyph == ' ') {
         return font->line_height >> 1;
     }
-    uint32_t glyph_index = (uint32_t)glyph - 33;
-    if (glyph_index >= (126 - 33) || glyph_index < 32) {
+    int glyph_index = (uint32_t)glyph - 33;
+    if (glyph_index >= (126 - 33) || glyph_index < 0) {
         // out of range
-        return 0;
+        return -1;
     }
 
     enj_glyph_offset_t glyph_end = font->glyph_starts[glyph_index];
-    uint32_t glyph_start =
-        glyph_index > 0 ? font->glyph_starts[glyph_index - 1].offset_end : 0;
+    int glyph_start =
+        glyph_index > 0 ? font->glyph_starts[glyph_index - 1].offset_end
+                        : -1;
+    if (glyph_start >= glyph_end.offset_end) {
+        glyph_start = -1;
+    }
+    glyph_start++;
 
-    float corners[4][3] = {
-        {(float)x, (float)(y + font->line_height), zvalue},
-        {(float)x, (float)y, zvalue},
-        {(float)(x + (glyph_end.offset_end - glyph_start)), (float)y, zvalue},
-        {(float)(x + (glyph_end.offset_end - glyph_start)),
-         (float)(y + font->line_height), zvalue},
-    };
+    float min_x = x * ENJ_XSCALE;
+    float max_x = (x + (glyph_end.offset_end - glyph_start)) * ENJ_XSCALE;
+    float max_y = y + font->line_height;
+
+    float corners[4][3] = {{min_x, max_y, zvalue},
+                           {min_x, (float)y, zvalue},
+                           {max_x, (float)y, zvalue},
+                           {max_x, max_y, zvalue}};
     uint32_t texcoords[3];
     enj_font_glyph_uv_coords(font, glyph, &texcoords[0], &texcoords[1],
                              &texcoords[2]);
     enj_draw_sprite(corners, state_ptr, NULL, texcoords);
-    return 1;
+    return (glyph_end.offset_end - glyph_start);
 }
 
 int enj_font_render_text(const char* text, enj_font_header_t* font, uint16_t x,
