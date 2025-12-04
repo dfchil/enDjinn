@@ -5,7 +5,7 @@
       "type": "shell",
             "label": "C gcc build active file",
       "command": "/usr/bin/gcc",
-      "args": ["-std=gnu23", "-Og", "-g", "${file}", "-o", "${fileDirname}/${fileBasenameNoExtension}", "-lm"],
+      "args": ["-std=gnu23", "-Og", "-g", "${file}", "-o", "${fileDirname}/bin/${fileBasenameNoExtension}", "-lm"],
       "options": {
         "cwd": "${fileDirname}"
       },

@@ -88,6 +88,7 @@ int enj_font_glyph_uv_coords(enj_font_header_t* font, char glyph, uint32_t* auv,
  * @param font Pointer to font header
  * @param x X position to draw at in pixels
  * @param y Y position to draw at in pixels
+ * @param zvalue Z value to use for the glyph
  * @param state_ptr Optional pointer to PVR draw state
  *
  * @return width of rendered glyph in pixels
