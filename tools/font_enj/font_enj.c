@@ -188,7 +188,7 @@ int font_gen(int line_height, char* font_path, char* output_path,
         uint8_t v1 = bitmap[i];
         uint8_t curcol = ((v1 * 15 + 135) >> 4) & 0xF0;
         bitmap[i] = curcol;
-        pvrout[i >> 1] |= i & 1 ? (curcol >> 4) : (curcol & 0xF0);
+        pvrout[i >> 1] |= i & 1 ? (curcol & 0xF0) : (curcol >> 4);
     }
 
     /* save out a 1 channel image */
