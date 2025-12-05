@@ -88,7 +88,7 @@ int enj_font_TR_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
       PVR_TXRFMT_PAL4BPP |
           (palette_entry << (pal_fmt == PVR_PAL_ARGB8888 ? 25 : 21)),
       1 << font->log2width, 1 << font->log2height, (pvr_ptr_t)font->pvr_data,
-      PVR_FILTER_NEAREST);
+      PVR_FILTER_BILINEAR);
   pvr_sprite_compile(hdr, &cxt);
   hdr->argb = front_color.raw;
 
