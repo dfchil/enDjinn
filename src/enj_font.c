@@ -150,7 +150,7 @@ int enj_font_PT_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
 
 int enj_font_glyph_uv_coords(enj_font_header_t *font, char glyph, uint32_t *auv,
                              uint32_t *buv, uint32_t *cuv) {
-  if (glyph > '~' || glyph < ' ') {
+  if (glyph > '~' || glyph < '!') {
     // out of range
     printf("Glyph '%c' out of range for font\n", glyph);
     return 0;
@@ -163,53 +163,45 @@ int enj_font_glyph_uv_coords(enj_font_header_t *font, char glyph, uint32_t *auv,
   }
 
   int glyph_index = (uint32_t)glyph - '!';
-  enj_glyph_offset_t glyph_end = font->glyph_starts[glyph_index];
+  enj_glyph_offset_t glyph_start = font->glyph_endings[glyph_index];
+  enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index +1];
 
-  uint32_t glyph_start =
-      glyph_index > 0 ? font->glyph_starts[glyph_index - 1].offset_end : 1;
+  // uint32_t glyph_width = glyph_end.x_min - glyph_start;
+  uint32_t txr_width = 1 << font->log2width;
+  uint32_t txr_height = 1 << font->log2height;
 
-  if (glyph_start >= glyph_end.offset_end) {
-    glyph_start = 0;
-  }
-
-  // uint32_t glyph_width = glyph_end.offset_end - glyph_start;
-  uint32_t tex_width = 1 << font->log2width;
-  uint32_t tex_height = 1 << font->log2height;
-
-  *auv = PVR_PACK_16BIT_UV((float)(glyph_start) / (float)tex_width,
+  *auv = PVR_PACK_16BIT_UV((float)(glyph_start.x_min) / (float)txr_width,
                            (float)(font->line_height * (glyph_end.line + 1)) /
-                               (float)tex_height);
+                               (float)txr_height);
 
-  *buv = PVR_PACK_16BIT_UV((float)(glyph_start) / (float)tex_width,
+  *buv = PVR_PACK_16BIT_UV((float)(glyph_start.x_min) / (float)txr_width,
                            (float)(font->line_height * glyph_end.line) /
-                               (float)tex_height);
-  *cuv = PVR_PACK_16BIT_UV((float)(glyph_end.offset_end) / (float)tex_width,
+                               (float)txr_height);
+  *cuv = PVR_PACK_16BIT_UV((float)(glyph_end.x_min) / (float)txr_width,
                            (float)(font->line_height * glyph_end.line) /
-                               (float)tex_height);
+                               (float)txr_height);
 
   return 1;
 }
 
 int enj_font_render_glyph(char glyph, enj_font_header_t *font, uint16_t x,
                           uint16_t y, float zvalue, pvr_dr_state_t *state_ptr) {
-  if (glyph > '~' || glyph < ' ') {
-    // out of range
+  if ( glyph < ' ' || glyph > '~' ) {
+    ENJ_DEBUG_PRINT("Glyph '%c' out of range for font\n", glyph);
     return -1;
   }
   if (glyph == ' ') {
     return font->line_height >> 1;
   }
   int glyph_index = (uint32_t)glyph - '!';
-
-  enj_glyph_offset_t glyph_end = font->glyph_starts[glyph_index];
-  int glyph_start =
-      glyph_index > 0 ? font->glyph_starts[glyph_index - 1].offset_end : -1;
-  if (glyph_start >= glyph_end.offset_end) {
-    glyph_start = 0;
-  }
+  
+  enj_glyph_offset_t glyph_start = font->glyph_endings[glyph_index];
+  enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index +1];
+  int startx = glyph_start.line != glyph_end.line ? 0 : glyph_start.x_min;
+  int width = glyph_end.x_min - startx;
 
   float min_x = x * ENJ_XSCALE;
-  float max_x = (x + (glyph_end.offset_end - glyph_start)) * ENJ_XSCALE;
+  float max_x = (x + width) * ENJ_XSCALE;
   float max_y = y + font->line_height;
 
   float corners[4][3] = {{min_x, max_y, zvalue},
@@ -220,7 +212,7 @@ int enj_font_render_glyph(char glyph, enj_font_header_t *font, uint16_t x,
   enj_font_glyph_uv_coords(font, glyph, &texcoords[0], &texcoords[1],
                            &texcoords[2]);
   enj_draw_sprite(corners, state_ptr, NULL, texcoords);
-  return (glyph_end.offset_end - glyph_start);
+  return width;
 }
 
 int enj_font_render_text(const char *text, enj_font_header_t *font, uint16_t x,
