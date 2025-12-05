@@ -12,4 +12,4 @@ ${FONTMACHINE}:
 
 $(ROMDBASEPATH)/$(ROMBASEFONTSDIR)/%.enjfont: $(FONTSDIR)/%.ttf ${FONTMACHINE}
 	@mkdir -p $(shell dirname $@)
-	${FONTMACHINE} -i $< -o $@ -l 	 -p $(shell dirname $@)/$(basename $(notdir $@)).png --verbose
+	${FONTMACHINE} -i $< -o $@ -l $(notdir $(shell dirname $@)) -p $(shell dirname $@)/$(basename $(notdir $@)).png
