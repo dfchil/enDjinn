@@ -89,7 +89,7 @@ int calculate_sheet_sizes(glyph_rendering_t renderings[NUM_GLYPHS],
                 } else {
                     sheet_height <<= 1;
                 }
-                system("clear");
+                // system("clear");
                 printf("***************************************\n");
                 printf("  -> too small, increasing size to %d * %d\n",
                        sheet_width, sheet_height);
