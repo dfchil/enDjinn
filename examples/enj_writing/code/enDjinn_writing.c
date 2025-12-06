@@ -31,7 +31,9 @@ static const alignas(32) uint8_t dina_font_blob[] = {
 #embed "../embeds/enj_writing/fonts/16/Dina-Regular.enjfont"
 };
 alignas(32) static enj_font_header_t dina_font_hdr;
-alignas(32) static pvr_sprite_hdr_t dina_font_pvr_hdr;
+alignas(32) static pvr_sprite_hdr_t dina_font_pvr_hdr_TR;
+alignas(32) static pvr_sprite_hdr_t dina_font_pvr_hdr_PT;
+
 
 const char *lorum_ipsum =
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod "
@@ -57,6 +59,26 @@ static inline void rotate2d(float x, float y, float sin, float cos,
 }
 
 void render_PT(void *data) {
+    static pvr_dr_state_t static_dr_state;
+    pvr_dr_init(&static_dr_state);
+
+    pvr_sprite_hdr_t *font_hdr_sq =
+        (pvr_sprite_hdr_t *)pvr_dr_target((pvr_dr_state_t){0});
+    *font_hdr_sq = dina_font_pvr_hdr_PT;
+    pvr_dr_commit(font_hdr_sq);
+    int fontstartx = 20 * ENJ_XSCALE;
+    int fontstarty = vid_mode->height / 2 +100;
+    
+    for (char c = ' '; c <= '~'; c++) {
+      fontstartx +=
+          3 + enj_font_render_glyph(c, &dina_font_hdr, fontstartx, fontstarty,
+                                    2.0f, &static_dr_state);
+      if (fontstartx > vid_mode->width - 40) {
+        fontstartx = 20 * ENJ_XSCALE;
+        fontstarty += dina_font_hdr.line_height;
+      }
+    }
+    pvr_dr_finish();
 }
 
 
@@ -90,7 +112,7 @@ void render_TR(void *data) {
   struct font_hdrs_s font_hdrs[] = {
       {&cmunrm_font_pvr_hdr, &cmunrm_font_hdr},
       {&deja_font_pvr_hdr, &deja_font_hdr},
-      {&dina_font_pvr_hdr, &dina_font_hdr},
+      {&dina_font_pvr_hdr_TR, &dina_font_hdr},
   };
 
   int fontstartx = 20 * ENJ_XSCALE;
@@ -177,8 +199,14 @@ void setup_fonts() {
     ENJ_DEBUG_PRINT("Failed to load dina_font_hdr from blob\n");
     return;
   }
-  if (!enj_font_TR_header(&dina_font_hdr, &dina_font_pvr_hdr, 1,
+  if (!enj_font_TR_header(&dina_font_hdr, &dina_font_pvr_hdr_TR, 1,
                           (enj_color_t){.raw = 0xffffffff}, PVR_PAL_ARGB8888)) {
+    ENJ_DEBUG_PRINT("Failed to setup dina_font_hdr header\n");
+    return;
+  }
+  if (!enj_font_PT_header(&dina_font_hdr, &dina_font_pvr_hdr_PT, 2,
+                          (enj_color_t){.raw = 0xffffffff},
+                          (enj_color_t){.raw = 0xff000000}, PVR_PAL_ARGB8888)) {
     ENJ_DEBUG_PRINT("Failed to setup dina_font_hdr header\n");
     return;
   }
