@@ -11,7 +11,7 @@ int enj_font_from_blob(const uint8_t *blob, enj_font_header_t *out_font) {
   memcpy(out_font, blob, sizeof(enj_font_header_t));
   int height = 1 << out_font->log2height;
   int width = 1 << out_font->log2width;
-  size_t pvr_mem_size = ((width * height) >> 1) ;
+  size_t pvr_mem_size = ((width * height) >> 1);
   pvr_ptr_t *pvr_data = pvr_mem_malloc(pvr_mem_size);
   if (!pvr_data) {
     printf("Error allocating memory for font PVR data\n");
@@ -100,16 +100,16 @@ static inline void palette_color_mixer(enj_color_t front_color,
                                        uint8_t palette_entry,
                                        pvr_palfmt_t pal_fmt) {
   enj_color_t diff_color = {.a = 0,
-                            .r = (back_color.r - front_color.r) / 15,
-                            .g = (back_color.g - front_color.g) / 15,
-                            .b = (back_color.b - front_color.b) / 15};
+                            .r = (front_color.r - back_color.r) / 15,
+                            .g = (front_color.g - back_color.g) / 15,
+                            .b = (front_color.b - back_color.b) / 15};
   uint32_t palette_offset = palette_entry
                             << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4);
   for (int i = 0; i < 16; i++) {
     enj_color_t color = {.a = 255,
-                         .r = front_color.r + diff_color.r * i,
-                         .g = front_color.g + diff_color.g * i,
-                         .b = front_color.b + diff_color.b * i};
+                         .r = back_color.r + diff_color.r * i,
+                         .g = back_color.g + diff_color.g * i,
+                         .b = back_color.b + diff_color.b * i};
     pvr_set_pal_entry(palette_offset + i, color.raw);
   }
 }
@@ -164,7 +164,7 @@ int enj_font_glyph_uv_coords(enj_font_header_t *font, char glyph, uint32_t *auv,
 
   int glyph_index = (uint32_t)glyph - '!';
   enj_glyph_offset_t glyph_start = font->glyph_endings[glyph_index];
-  enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index +1];
+  enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index + 1];
 
   float startx = glyph_start.x_min > glyph_end.x_min ? 0 : glyph_start.x_min;
 
@@ -172,15 +172,15 @@ int enj_font_glyph_uv_coords(enj_font_header_t *font, char glyph, uint32_t *auv,
   float inv_txr_width = 1.0f / (1 << font->log2width);
   float inv_txr_height = 1.0f / (1 << font->log2height);
 
-  *auv = PVR_PACK_16BIT_UV(startx / inv_txr_width,
-                           (float)(font->line_height * (glyph_end.line + 1)) /
+  *auv = PVR_PACK_16BIT_UV(startx * inv_txr_width,
+                           (float)(font->line_height * (glyph_start.line + 1)) *
                                inv_txr_height);
 
-  *buv = PVR_PACK_16BIT_UV(startx / inv_txr_width,
-                           (float)(font->line_height * glyph_end.line) /
+  *buv = PVR_PACK_16BIT_UV(startx * inv_txr_width,
+                           (float)(font->line_height * glyph_start.line) *
                                inv_txr_height);
-  *cuv = PVR_PACK_16BIT_UV((float)(glyph_end.x_min) / inv_txr_width,
-                           (float)(font->line_height * glyph_end.line) /
+  *cuv = PVR_PACK_16BIT_UV((float)(glyph_end.x_min) * inv_txr_width,
+                           (float)(font->line_height * glyph_start.line) *
                                inv_txr_height);
 
   return 1;
@@ -188,7 +188,7 @@ int enj_font_glyph_uv_coords(enj_font_header_t *font, char glyph, uint32_t *auv,
 
 int enj_font_render_glyph(char glyph, enj_font_header_t *font, uint16_t x,
                           uint16_t y, float zvalue, pvr_dr_state_t *state_ptr) {
-  if ( glyph < ' ' || glyph > '~' ) {
+  if (glyph < ' ' || glyph > '~') {
     ENJ_DEBUG_PRINT("Glyph '%c' out of range for font\n", glyph);
     return -1;
   }
@@ -196,9 +196,9 @@ int enj_font_render_glyph(char glyph, enj_font_header_t *font, uint16_t x,
     return font->line_height >> 1;
   }
   int glyph_index = (uint32_t)glyph - '!';
-  
+
   enj_glyph_offset_t glyph_start = font->glyph_endings[glyph_index];
-  enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index +1];
+  enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index + 1];
   int startx = glyph_start.x_min > glyph_end.x_min ? 0 : glyph_start.x_min;
   int width = glyph_end.x_min - startx;
 

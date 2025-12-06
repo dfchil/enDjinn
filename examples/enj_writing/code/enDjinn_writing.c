@@ -69,7 +69,7 @@ void render_PT(void *data) {
     int fontstartx = 20 * ENJ_XSCALE;
     int fontstarty = vid_mode->height / 2 +100;
     
-    for (char c = 'a'; c <= 'k'; c++) {
+    for (char c = ' '; c <= '~'; c++) {
       fontstartx +=
           3 + enj_font_render_glyph(c, &dina_font_hdr, fontstartx, fontstarty,
                                     2.0f, &static_dr_state);
@@ -153,7 +153,7 @@ void render_TR(void *data) {
 void main_mode_updater(void *data) {
   main_data_t *mdata = (main_data_t *)data;
   mdata->rotation++;
-  // enj_renderlist_add(PVR_LIST_TR_POLY, render_TR, data);
+  enj_renderlist_add(PVR_LIST_TR_POLY, render_TR, data);
   enj_renderlist_add(PVR_LIST_PT_POLY, render_PT, data);
 }
 void setup_textures() {
