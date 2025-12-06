@@ -22,7 +22,7 @@ typedef struct {
   } trim;
   int width;
   uint8_t *data;
-  enj_glyph_offset_t *offset_info;
+  // enj_glyph_offset_t *offset_info;
 } glyph_rendering_t;
 
 int read_font_file(const char *path, uint8_t **out_buffer) {
@@ -55,7 +55,7 @@ int read_font_file(const char *path, uint8_t **out_buffer) {
   return 1;
 }
 
-int calculate_sheet_sizes(glyph_rendering_t renderings[NUM_GLYPHS],
+int calculate_sheet_sizes(glyph_rendering_t renderings[NUM_GLYPHS], enj_glyph_offset_t goffs[NUM_GLYPHS]
                           int line_height, int *out_width, int *out_height) {
   int sheet_width = 64;
   int sheet_height = 64;
@@ -69,23 +69,36 @@ int calculate_sheet_sizes(glyph_rendering_t renderings[NUM_GLYPHS],
 
     int x_progression = 0;
     int line = 0;
+
+int calculate_sheet_sizes(glyph_rendering_t renderings[NUM_GLYPHS], enj_font_header_t* enj_font, 
+                          int line_height, int *out_width, int *out_height) {
+  int sheet_width = 64;
+  int sheet_height = 64;
+  int found_sizes = 0;
+
     // calculate bitmap size
     char glyph = '!';
+
+    // set first glyph
+    renderings[0].offset_info->line = (uint16_t)line;
+    renderings[0].offset_info->x_min = (uint16_t)(x_progression);
     for (int glyph_index = 0; glyph <= '~'; ++glyph, ++glyph_index) {
-      if (x_progression + renderings[glyph_index].width > sheet_width) {
+      x_progression += renderings[glyph_index].width;
+      renderings[glyph_index].offset_info->x_min = (uint16_t)(x_progression);
+      if (x_progression > sheet_width) {
         x_progression = 0;
         ++line;
       }
+      renderings[glyph_index].offset_info->line = (uint16_t)line;
       if ((line + 1) * line_height > sheet_height) {
-        if (sheet_height > sheet_width)
+        if (sheet_height > sheet_width) {
           sheet_width <<= 1;
-        else
+        }
+        else {
           sheet_height <<= 1;
+        }
         break;
       }
-      renderings[glyph_index].offset_info->line = (uint16_t)line;
-      renderings[glyph_index].offset_info->x_min = (uint16_t)(x_progression);
-      x_progression += renderings[glyph_index].width;
     }
     if (glyph >= '~') {
       if (verbose_flag) {
@@ -94,8 +107,8 @@ int calculate_sheet_sizes(glyph_rendering_t renderings[NUM_GLYPHS],
       }
       found_sizes = 1;
 
-      renderings[NUM_GLYPHS].offset_info->line = (uint16_t)line;
-      renderings[NUM_GLYPHS].offset_info->x_min = (uint16_t)(x_progression);
+      // renderings[NUM_GLYPHS].offset_info->line = (uint16_t)line;
+      // renderings[NUM_GLYPHS].offset_info->x_min = (uint16_t)(x_progression);
       break;
     }
   }
@@ -205,12 +218,7 @@ int font_genenerator(int line_height, char *font_path, char *output_path,
   if (!stbtt_InitFont(&info, fontBuffer, 0)) {
     printf("failed\n");
   }
-  // int ascent, descent, lineGap;
-  // stbtt_GetFontVMetrics(&info, &ascent, &descent, &lineGap);
-  // /* calculate font scaling */
   float scale = stbtt_ScaleForPixelHeight(&info, line_height);
-  // ascent = roundf(ascent * scale);
-  // descent = roundf(descent * scale);
   glyph_rendering_t renderings[NUM_GLYPHS + 1];
   uint8_t *render_buffer =
       calloc(NUM_GLYPHS + 1, line_height * line_height * 2);
@@ -271,11 +279,27 @@ int font_genenerator(int line_height, char *font_path, char *output_path,
   };
   header.line_height = line_height;
 
+  if (verbose_flag) {
+    printf("font header info:\n");
+    printf(" log2width: %d\n", header.log2width);
+    printf(" log2height: %d\n", header.log2height);
+    printf(" line_height: %d\n", header.line_height);
+
+    for (char glyph = '!'; glyph <= '~'; ++glyph) {
+      int glyph_index = (uint32_t)glyph - '!';
+      enj_glyph_offset_t glyph_start = header.glyph_endings[glyph_index];
+      enj_glyph_offset_t glyph_end = header.glyph_endings[glyph_index + 1];
+      printf(" Glyph '%c': line %d, x_min %d to line %d, x_min+1 %d\n", glyph,
+             glyph_start.line, glyph_start.x_min, glyph_end.line,
+             glyph_end.x_min);
+    }
+  }
+
   FILE *outFile = fopen(output_path, "wb");
   fwrite(&header, 1, sizeof(enj_font_header_t), outFile);
   fwrite(pvrout, 1, (sheet_height * sheet_width) / 2, outFile);
   fclose(outFile);
-
+    // set first glyph
   free(render_buffer);
   free(fontBuffer);
   free(bitmap);
@@ -292,7 +316,7 @@ int main(int argc, char *argv[]) {
 
   const char *usage =
       "Usage:\n\t%s --lineheight <line height> --input <font file> "
-      "--output <output file> [--png_control] [--verbose]\n\n";
+      "--output <output file> [--png_control <ctrl image  >] [--verbose]\n\n";
 
   static struct option long_options[] = {
       /* These options set a flag. */
