@@ -69,7 +69,7 @@ void render_PT(void *data) {
     int fontstartx = 20 * ENJ_XSCALE;
     int fontstarty = vid_mode->height / 2 +100;
     
-    for (char c = ' '; c <= '~'; c++) {
+    for (char c = 'a'; c <= 'k'; c++) {
       fontstartx +=
           3 + enj_font_render_glyph(c, &dina_font_hdr, fontstartx, fontstarty,
                                     2.0f, &static_dr_state);
@@ -83,26 +83,26 @@ void render_PT(void *data) {
 
 
 void render_TR(void *data) {
-//   main_data_t *mdata = (main_data_t *)data;
-//   float cos, sin;
-//   fsincosr(-((mdata->rotation % 360) * (F_PI / 180.0f)), &sin, &cos);
-//   alignas(32) float corners[4][3] = {
-//       {-mdata->base_size, +mdata->base_size, 1.0f},
-//       {-mdata->base_size, -mdata->base_size, 1.0f},
-//       {+mdata->base_size, -mdata->base_size, 1.0f},
-//       {+mdata->base_size, +mdata->base_size, 1.0f},
-//   };
-//   for (int i = 0; i < 4; i++) {
-//     float x = corners[i][0];
-//     float y = corners[i][1];
-//     rotate2d(x, y, sin, cos, &corners[i][0], &corners[i][1]);
-//     corners[i][0] += mdata->center_x;
-//     corners[i][1] += mdata->center_y;
-//   }
+  main_data_t *mdata = (main_data_t *)data;
+  float cos, sin;
+  fsincosr(-((mdata->rotation % 360) * (F_PI / 180.0f)), &sin, &cos);
+  alignas(32) float corners[4][3] = {
+      {-mdata->base_size, +mdata->base_size, 1.0f},
+      {-mdata->base_size, -mdata->base_size, 1.0f},
+      {+mdata->base_size, -mdata->base_size, 1.0f},
+      {+mdata->base_size, +mdata->base_size, 1.0f},
+  };
+  for (int i = 0; i < 4; i++) {
+    float x = corners[i][0];
+    float y = corners[i][1];
+    rotate2d(x, y, sin, cos, &corners[i][0], &corners[i][1]);
+    corners[i][0] += mdata->center_x;
+    corners[i][1] += mdata->center_y;
+  }
 
   static pvr_dr_state_t static_dr_state;
   pvr_dr_init(&static_dr_state);
-//   enj_draw_sprite(corners, &static_dr_state, &mdata->hdr, NULL);
+  enj_draw_sprite(corners, &static_dr_state, &mdata->hdr, NULL);
 
   struct font_hdrs_s {
     pvr_sprite_hdr_t *hdr;
@@ -153,7 +153,7 @@ void render_TR(void *data) {
 void main_mode_updater(void *data) {
   main_data_t *mdata = (main_data_t *)data;
   mdata->rotation++;
-  enj_renderlist_add(PVR_LIST_TR_POLY, render_TR, data);
+  // enj_renderlist_add(PVR_LIST_TR_POLY, render_TR, data);
   enj_renderlist_add(PVR_LIST_PT_POLY, render_PT, data);
 }
 void setup_textures() {

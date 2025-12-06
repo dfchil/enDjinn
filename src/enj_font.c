@@ -166,20 +166,22 @@ int enj_font_glyph_uv_coords(enj_font_header_t *font, char glyph, uint32_t *auv,
   enj_glyph_offset_t glyph_start = font->glyph_endings[glyph_index];
   enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index +1];
 
+  float startx = glyph_start.line != glyph_end.line ? 0 : glyph_start.x_min;
+
   // uint32_t glyph_width = glyph_end.x_min - glyph_start;
-  uint32_t txr_width = 1 << font->log2width;
-  uint32_t txr_height = 1 << font->log2height;
+  float txr_width = 1 << font->log2width;
+  float txr_height = 1 << font->log2height;
 
-  *auv = PVR_PACK_16BIT_UV((float)(glyph_start.x_min) / (float)txr_width,
+  *auv = PVR_PACK_16BIT_UV(startx / txr_width,
                            (float)(font->line_height * (glyph_end.line + 1)) /
-                               (float)txr_height);
+                               txr_height);
 
-  *buv = PVR_PACK_16BIT_UV((float)(glyph_start.x_min) / (float)txr_width,
+  *buv = PVR_PACK_16BIT_UV(startx / txr_width,
                            (float)(font->line_height * glyph_end.line) /
-                               (float)txr_height);
-  *cuv = PVR_PACK_16BIT_UV((float)(glyph_end.x_min) / (float)txr_width,
+                               txr_height);
+  *cuv = PVR_PACK_16BIT_UV((float)(glyph_end.x_min) / txr_width,
                            (float)(font->line_height * glyph_end.line) /
-                               (float)txr_height);
+                               txr_height);
 
   return 1;
 }
