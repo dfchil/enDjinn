@@ -13,14 +13,14 @@ static enj_texture_info_t figure_texture_info;
 
 // font src: https://dejavu-fonts.github.io/
 static const alignas(32) uint8_t deja_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/23/DejaVuSans.enjfont"
+#embed "../embeds/enj_writing/fonts/pal4/23/DejaVuSans.enjfont"
 };
 alignas(32) static enj_font_header_t deja_font_hdr;
 alignas(32) static pvr_sprite_hdr_t deja_font_pvr_hdr;
 
 // font src: https://www.fonttr.com/cmunbi-font
 static const alignas(32) uint8_t cmunrm_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/36/cmunrm.enjfont"
+#embed "../embeds/enj_writing/fonts/pal4/36/cmunrm.enjfont"
 };
 alignas(32) static enj_font_header_t cmunrm_font_hdr;
 alignas(32) static pvr_sprite_hdr_t cmunrm_font_pvr_hdr;
@@ -28,11 +28,11 @@ alignas(32) static pvr_sprite_hdr_t cmunrm_font_pvr_hdr;
 // font src:
 // https://github.com/zshoals/Dina-Font-TTF-Remastered?tab=readme-ov-file
 static const alignas(32) uint8_t dina_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/16/Dina-Regular.enjfont"
+#embed "../embeds/enj_writing/fonts/pal4/16/Dina-Regular.enjfont"
 };
 alignas(32) static enj_font_header_t dina_font_hdr;
 alignas(32) static pvr_sprite_hdr_t dina_font_pvr_hdr_TR;
-alignas(32) static pvr_sprite_hdr_t dina_font_pvr_hdr_PT;
+alignas(32) static pvr_sprite_hdr_t dina_font_pvr_hdr_OP;
 
 
 const char *lorum_ipsum =
@@ -58,13 +58,13 @@ static inline void rotate2d(float x, float y, float sin, float cos,
   *out_y = x * sin + y * cos;
 }
 
-void render_PT(void *data) {
+void render_OP(void *data) {
     static pvr_dr_state_t static_dr_state;
     pvr_dr_init(&static_dr_state);
 
     pvr_sprite_hdr_t *font_hdr_sq =
         (pvr_sprite_hdr_t *)pvr_dr_target((pvr_dr_state_t){0});
-    *font_hdr_sq = dina_font_pvr_hdr_PT;
+    *font_hdr_sq = dina_font_pvr_hdr_OP;
     pvr_dr_commit(font_hdr_sq);
     int fontstartx = 20 * ENJ_XSCALE;
     int fontstarty = vid_mode->height / 2 +100;
@@ -154,7 +154,7 @@ void main_mode_updater(void *data) {
   main_data_t *mdata = (main_data_t *)data;
   mdata->rotation++;
   enj_renderlist_add(PVR_LIST_TR_POLY, render_TR, data);
-  enj_renderlist_add(PVR_LIST_PT_POLY, render_PT, data);
+  enj_renderlist_add(PVR_LIST_OP_POLY, render_OP, data);
 }
 void setup_textures() {
   // load palettised texture from memory blobs
@@ -204,7 +204,7 @@ void setup_fonts() {
     ENJ_DEBUG_PRINT("Failed to setup dina_font_hdr header\n");
     return;
   }
-  if (!enj_font_PT_header(&dina_font_hdr, &dina_font_pvr_hdr_PT, 2,
+  if (!enj_font_OP_header(&dina_font_hdr, &dina_font_pvr_hdr_OP, 2,
                           (enj_color_t){.raw = 0xffffffff},
                           (enj_color_t){.raw = 0xff000000}, PVR_PAL_ARGB8888)) {
     ENJ_DEBUG_PRINT("Failed to setup dina_font_hdr header\n");
@@ -220,6 +220,9 @@ int main(__unused int argc, __unused char **argv) {
   // A is offset 0 in bitfield and START is offset
   // 8<<1 (two bits per button)
   enj_state_set_soft_reset(BUTTON_DOWN << (8 << 1) | BUTTON_DOWN);
+  enj_state_get()->video.bg_color.raw = (enj_color_t){.raw = 0xFF00bbff}.raw;
+  printf("bg color set to 0x%x \n", (void *)enj_state_get()->video.bg_color.raw);
+
   if (enj_startup() != 0) {
     ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
     return -1;
