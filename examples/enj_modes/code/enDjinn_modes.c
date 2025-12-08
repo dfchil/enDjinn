@@ -3,16 +3,16 @@
 #include <enDjinn/enj_enDjinn.h>
 #include <math.h>
 
-static const alignas(32) uint8_t enDjinn_txt_raw[] = {
-#embed "../embeds/mode_orchestration/texture/pal8/enDjinn512.dt"
+static const alignas(32) uint8_t enj_txr_blob[] = {
+#embed "../embeds/enj_modes/texture/pal8/enDjinn512.dt"
 };
-static const alignas(32) uint8_t enDjinn_palette_raw[] = {
-#embed "../embeds/mode_orchestration/texture/pal8/enDjinn512.dt.pal"
+static const alignas(32) uint8_t enj_palette_blob[] = {
+#embed "../embeds/enj_modes/texture/pal8/enDjinn512.dt.pal"
 };
 static enj_texture_info_t figure_texture_info;
 
 static const alignas(32) uint8_t help_txt_raw[] = {
-#embed "../embeds/mode_orchestration/texture/argb1555_vq_tw/info512.dt"
+#embed "../embeds/enj_modes/texture/argb1555_vq_tw/info512.dt"
 };
 static enj_texture_info_t help_texture_info;
 
@@ -217,9 +217,9 @@ void main_mode_updater(void* data) {
 
 void setup_textures() {
     // load textures from memory blobs
-    enj_texture_load_blob(enDjinn_txt_raw, &figure_texture_info);
+    enj_texture_load_blob(enj_txr_blob, &figure_texture_info);
     enj_texture_bind_palette(&figure_texture_info, 0);
-    enj_texture_load_palette_blob(enDjinn_palette_raw,
+    enj_texture_load_palette_blob(enj_palette_blob,
                                   figure_texture_info.flags.palette_format,
                                   figure_texture_info.flags.palette_position);
 
