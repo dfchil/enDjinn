@@ -66,10 +66,10 @@ int enj_startup() {
   }
 
   vid_set_mode(state->video.display_mode, state->video.pixel_mode);
+  pvr_init(&state->video.pvr_params);
   pvr_set_bg_color(state->video.bg_color.r / 255.0f,
                    state->video.bg_color.g / 255.0f,
                    state->video.bg_color.b / 255.0f);
-  pvr_init(&state->video.pvr_params);
 
 #ifdef ENJ_DEBUG
   perf_monitor_init(PMCR_OPERAND_CACHE_READ_MISS_MODE,
