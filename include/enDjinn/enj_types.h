@@ -1,3 +1,6 @@
+#ifndef _ENJ_TYPES_H_
+#define _ENJ_TYPES_H_
+
 typedef union {
   uint32 raw; // 0xBBGGRRAA
   struct {
@@ -7,3 +10,5 @@ typedef union {
     uint8 a;
   };
 } enj_color_t;
+
+#endif /* _ENJ_TYPES_H_ */
