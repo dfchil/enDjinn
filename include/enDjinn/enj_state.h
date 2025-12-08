@@ -25,7 +25,19 @@ typedef struct enj_state_s {
     vid_display_mode_generic_t display_mode;
     vid_pixel_mode_t pixel_mode;
     pvr_init_params_t pvr_params;
+<<<<<<< HEAD
     enj_color_t bg_color;
+=======
+    union {
+      struct {
+        uint32_t b : 8;
+        uint32_t g : 8;
+        uint32_t r : 8;
+        uint32_t a : 8;
+      };
+      uint32_t raw;
+    } bg_color;
+>>>>>>> 6ad090b23b56208661e710a5d1a2a6430e400b5b
   } video;
 } enj_state_t;
 
