@@ -99,17 +99,28 @@ static inline void palette_color_mixer(enj_color_t front_color,
                                        enj_color_t back_color,
                                        uint8_t palette_entry,
                                        pvr_palfmt_t pal_fmt) {
-  enj_color_t diff_color = {.a = 0,
+printf("Generating palette from front color RGBA(%d,%d,%d,%d) "
+       "and back color RGBA(%d,%d,%d,%d)\n",
+       front_color.r, front_color.g, front_color.b, front_color.a,
+       back_color.r, back_color.g, back_color.b, back_color.a);
+
+  enj_color_t diff_color = {.a = (front_color.a - back_color.a) / 15,
                             .r = (front_color.r - back_color.r) / 15,
                             .g = (front_color.g - back_color.g) / 15,
                             .b = (front_color.b - back_color.b) / 15};
+
+  printf("Color difference per step: R=%d, G=%d, B=%d\n", diff_color.r,
+         diff_color.g, diff_color.b);
+
   uint32_t palette_offset = palette_entry
                             << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4);
   for (int i = 0; i < 16; i++) {
-    enj_color_t color = {.a = 255,
+    enj_color_t color = {.a = back_color.a + diff_color.a * i,
                          .r = back_color.r + diff_color.r * i,
                          .g = back_color.g + diff_color.g * i,
                          .b = back_color.b + diff_color.b * i};
+    printf("Palette entry %d: RGBA(%d,%d,%d,%d)\n", i, color.r, color.g,
+           color.b, color.a);
     pvr_set_pal_entry(palette_offset + i, color.raw);
   }
 }
