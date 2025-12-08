@@ -6,7 +6,7 @@ The following examples are provided:
 The [hello_enDjinn](./hello_enDjinn/) example is a bare bones 
  'get a rotating sprite on screen in fewer than 100 lines' of C. 
 It implicitly also shows of the power of the underlying enDjinn make system, that is activated simply 
-by sym-linking the [enDjinn/Makefile.primary](../Makefile.primary) file to a **Makefile** in your project directory.
+by sym-linking the [enDjinn/Makefile.prime](../Makefile.prime) file to a **Makefile** in your project directory.
 
 
 ## enj_controls
