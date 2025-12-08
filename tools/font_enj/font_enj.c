@@ -78,10 +78,6 @@ int calculate_sheet_sizes(glyph_rendering_t renderings[NUM_GLYPHS],
                 ++line;
             }
             enj_font->glyph_endings[glyph_index].line = (uint16_t)line;
-            printf("Placing glyph '%c' at %d:%d, gwidth %d\n", glyph,
-                   enj_font->glyph_endings[glyph_index].line,
-                   enj_font->glyph_endings[glyph_index].x_min,
-                   renderings[glyph_index].width);
 
             if ((line + 1) * enj_font->line_height > sheet_height) {
                 if (sheet_height > sheet_width) {
@@ -89,11 +85,6 @@ int calculate_sheet_sizes(glyph_rendering_t renderings[NUM_GLYPHS],
                 } else {
                     sheet_height <<= 1;
                 }
-                // system("clear");
-                printf("***************************************\n");
-                printf("  -> too small, increasing size to %d * %d\n",
-                       sheet_width, sheet_height);
-                printf("***************************************\n");
                 break;
             }
         }

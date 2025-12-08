@@ -11,6 +11,9 @@ int enj_font_from_blob(const uint8_t *blob, enj_font_header_t *out_font) {
   memcpy(out_font, blob, sizeof(enj_font_header_t));
   int height = 1 << out_font->log2height;
   int width = 1 << out_font->log2width;
+
+  printf("Loaded font from blob: width=%d, height=%d, line_height=%d\n",
+         width, height, out_font->line_height);
   size_t pvr_mem_size = ((width * height) >> 1);
   pvr_ptr_t *pvr_data = pvr_mem_malloc(pvr_mem_size);
   if (!pvr_data) {
@@ -72,6 +75,7 @@ int enj_font_TR_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
                        uint8_t palette_entry, enj_color_t front_color,
                        pvr_palfmt_t pal_fmt) {
   // generate transparent palette
+  pvr_set_pal_format(pal_fmt);
   uint32_t palette_offset = palette_entry
                             << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4);
 
@@ -81,6 +85,8 @@ int enj_font_TR_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
     pvr_set_pal_entry(palette_offset + i, color.raw);
   }
 
+  printf("texture height : %d\n", 1 << font->log2height);
+  printf("texture width  : %d\n", 1 << font->log2width);
   // setup header
   pvr_sprite_cxt_t cxt;
   pvr_sprite_cxt_txr(
@@ -115,7 +121,7 @@ printf("Generating palette from front color RGBA(%d,%d,%d,%d) "
   uint32_t palette_offset = palette_entry
                             << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4);
   for (int i = 0; i < 16; i++) {
-    enj_color_t color = {.a = back_color.a + diff_color.a * i,
+    enj_color_t color = {.a = 255,
                          .r = back_color.r + diff_color.r * i,
                          .g = back_color.g + diff_color.g * i,
                          .b = back_color.b + diff_color.b * i};
@@ -134,7 +140,7 @@ int enj_font_OP_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
   // setup header
   pvr_sprite_cxt_t cxt;
   pvr_sprite_cxt_txr(&cxt, PVR_LIST_OP_POLY,
-                     PVR_TXRFMT_PAL4BPP | (palette_entry << 21),
+                     PVR_TXRFMT_PAL4BPP | (palette_entry << 25),
                      1 << font->log2width, 1 << font->log2height,
                      (pvr_ptr_t)(uintptr_t)font->pvr_data, PVR_FILTER_NEAREST);
   pvr_sprite_compile(hdr, &cxt);
@@ -147,11 +153,13 @@ int enj_font_PT_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
                        enj_color_t back_color, pvr_palfmt_t pal_fmt) {
   // generate punchthrough palette
   palette_color_mixer(front_color, back_color, palette_entry, pal_fmt);
+  pvr_set_pal_entry(palette_entry << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4), 0);
+
 
   // setup header
   pvr_sprite_cxt_t cxt;
   pvr_sprite_cxt_txr(&cxt, PVR_LIST_PT_POLY,
-                     PVR_TXRFMT_PAL4BPP | (palette_entry << 21),
+                     PVR_TXRFMT_PAL4BPP | (palette_entry << 25),
                      1 << font->log2width, 1 << font->log2height,
                      (pvr_ptr_t)(uintptr_t)font->pvr_data, PVR_FILTER_NEAREST);
   pvr_sprite_compile(hdr, &cxt);

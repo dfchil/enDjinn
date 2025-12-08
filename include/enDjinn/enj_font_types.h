@@ -4,8 +4,8 @@
 #include <stdint.h>
 
 typedef struct __attribute__((packed)) {
-  uint16_t line : 4;
-  uint16_t x_min : 11;
+  uint16_t line : 5;
+  uint16_t x_min : 10; // max 1024 width
   uint16_t available : 1;
 } enj_glyph_offset_t;
 
