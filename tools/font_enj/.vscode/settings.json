@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "Makefile.*": "makefile",
+        "stb_image_write.h": "c",
+        "enj_font_types.h": "c",
+        "stb_truetype.h": "c"
+    }
+}

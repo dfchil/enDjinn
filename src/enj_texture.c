@@ -147,11 +147,11 @@ int enj_texture_bind_palette(enj_texture_info_t *texinfo, size_t palette_offset)
     ENJ_DEBUG_PRINT("Error: texture is not palettised!\n");
     return 0;
   }
-  size_t pal_num = texinfo->flags.palette_format == PVR_PAL_ARGB4444 ? palette_offset >> 4
-                                                                     : palette_offset >> 8;
+  size_t pal_num = texinfo->flags.palette_format == PVR_PAL_ARGB8888 ? palette_offset >> 8
+                                                                     : palette_offset >> 4;
 
   texinfo->pvrformat |=
-      (pal_num << (texinfo->flags.palette_format == PVR_PAL_ARGB4444 ? 21 : 25));
+      (pal_num << (texinfo->flags.palette_format == PVR_PAL_ARGB8888 ? 25 : 21));
   texinfo->flags.palette_position = palette_offset;
   return 1;
 }
