@@ -26,10 +26,10 @@ typedef struct enj_state_s {
     pvr_init_params_t pvr_params;
     union {
       struct {
-        uint32_t a : 8;
-        uint32_t r : 8;
-        uint32_t g : 8;
         uint32_t b : 8;
+        uint32_t g : 8;
+        uint32_t r : 8;
+        uint32_t a : 8;
       };
       uint32_t raw;
     } bg_color;
