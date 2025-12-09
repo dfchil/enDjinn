@@ -3,33 +3,33 @@ ROMBASETEXTUREDIR:=$(notdir $(TEXTUREDIR))
 
 DTTEXTURES:=
 ifneq (,$(wildcard $(TEXTUREDIR)))
-	DTTEXTURES += $(shell find $(TEXTUREDIR)/ -name '*.png' | sed -e 's,'$(TEXTUREDIR)',$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR),g' -e 's,\.png,\.dt,g')
+	DTTEXTURES += $(shell find $(TEXTUREDIR)/ -name '*.png' | sed -e 's,'$(TEXTUREDIR)',$(ROMBASEPATH)/$(ROMBASETEXTUREDIR),g' -e 's,\.png,\.dt,g')
 endif
 
 
 ifeq ($(ADD_ENDJINN_LOGO_TEXTURE),1)
 # special case: add the enDjinn logo texture
-DTTEXTURES += $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn512.dt
-DTTEXTURES += $(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn256.dt
-$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/%.dt: ${ENJDIR}/assets/texture/pal8/%.png
+DTTEXTURES += $(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn512.dt
+DTTEXTURES += $(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn256.dt
+$(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/%.dt: ${ENJDIR}/assets/texture/pal8/%.png
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f PAL8BPP -c --max-color 256 -i $< -o $@
 endif
 
 
 # notice the different settings for different texture formats based on directory names
-$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal4/%.dt: $(TEXTUREDIR)/pal4/%.png
+$(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal4/%.dt: $(TEXTUREDIR)/pal4/%.png
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f PAL4BPP -c --max-color 16 -i $< -o $@
 
-$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/%.dt: $(TEXTUREDIR)/pal8/%.png
+$(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/%.dt: $(TEXTUREDIR)/pal8/%.png
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f PAL8BPP -c --max-color 256 -i $< -o $@
 
-$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/rgb565_vq_tw/%.dt: $(TEXTUREDIR)/rgb565_vq_tw/%.png 
+$(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/rgb565_vq_tw/%.dt: $(TEXTUREDIR)/rgb565_vq_tw/%.png 
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f RGB565 -c -i $< -o $@
 
-$(ROMDBASEPATH)/$(ROMBASETEXTUREDIR)/argb1555_vq_tw/%.dt: $(TEXTUREDIR)/argb1555_vq_tw/%.png
+$(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/argb1555_vq_tw/%.dt: $(TEXTUREDIR)/argb1555_vq_tw/%.png
 	@mkdir -p $(shell dirname $@)
 	pvrtex -f ARGB1555 -c -i $< -o $@

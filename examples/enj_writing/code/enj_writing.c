@@ -37,15 +37,15 @@ typedef struct {
 // font src:
 // https://github.com/zshoals/Dina-Font-TTF-Remastered?tab=readme-ov-file
 static const alignas(32) uint8_t dina_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/pal4/16/Dina-Regular.enjfont"
+#embed "../embeds/enj_writing/fonts/16/Dina-Regular.enjfont"
 };
 // font src: https://dejavu-fonts.github.io/
 static const alignas(32) uint8_t deja_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/pal4/23/DejaVuSans.enjfont"
+#embed "../embeds/enj_writing/fonts/23/DejaVuSans.enjfont"
 };
 // font src: https://www.fonttr.com/cmunbi-font
 static const alignas(32) uint8_t cmunrm_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/pal4/36/cmunrm.enjfont"
+#embed "../embeds/enj_writing/fonts/36/cmunrm.enjfont"
 };
 static alignas(32) enj_font_header_t dina_font_16_hdr;
 static alignas(32) enj_font_header_t deja_23_font_hdr;
@@ -124,13 +124,13 @@ void setup_fonts() {
     fonts_OP.indexed[i].font_hdr = font_hdrs_ql[i];
     fonts_TR.indexed[i].font_hdr = font_hdrs_ql[i];
     fonts_PT.indexed[i].font_hdr = font_hdrs_ql[i];
-    if (!enj_font_TR_header(
+    if (!enj_font_PAL_TR_header(
             fonts_TR.indexed[i].font_hdr, &fonts_TR.indexed[i].sprite_hdr, 1,
             (enj_color_t){.raw = 0xffffc010}, PVR_PAL_ARGB8888)) {
       ENJ_DEBUG_PRINT("Failed to setup font_hdrs_TR[%d] header\n", i);
       return;
     }
-    if (!enj_font_OP_header(
+    if (!enj_font_PAL_OP_header(
             fonts_OP.indexed[i].font_hdr, &fonts_OP.indexed[i].sprite_hdr, 2,
             (enj_color_t){.raw = 0xf171717f},
             (enj_color_t){.raw = enj_state_get()->video.bg_color.raw},
@@ -138,7 +138,7 @@ void setup_fonts() {
       ENJ_DEBUG_PRINT("Failed to setup font_hdrs_OP[%d] header\n", i);
       return;
     }
-    if (!enj_font_PT_header(
+    if (!enj_font_PAL_PT_header(
             fonts_PT.indexed[i].font_hdr, &fonts_PT.indexed[i].sprite_hdr, 3,
             (enj_color_t){.raw = 0xffff00ff},
             (enj_color_t){.raw = enj_state_get()->video.bg_color.raw},
@@ -255,6 +255,7 @@ void main_mode_updater(void *data) {
 }
 
 int main(__unused int argc, __unused char **argv) {
+
   // initialize enDjinn state with default values
   enj_state_defaults();
   // default soft-reset pattern is START + A + B + X + Y.
