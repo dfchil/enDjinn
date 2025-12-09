@@ -272,7 +272,7 @@ int main(__unused int argc, __unused char **argv) {
   /* setup at enDjinn modes */
   mode_data_t main_mode_data = {
       .rotation = 0,
-      .base_size = (figure_texture_info.width) * 0.42f,
+      .base_size = (figure_texture_info.width) * 0.63f,
       .center_x = vid_mode->width * ENJ_XSCALE * 0.5f,
       .center_y = vid_mode->height * 0.5f,
   };
