@@ -32,7 +32,7 @@ int enj_font_load(const char* path, enj_font_header_t* out_font);
  * 4bit and 4 for 8bit
  */
 
-int enj_font_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
+int enj_font_PAL_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
                        uint8_t palette_entry, enj_color_t front_color,
                        pvr_palfmt_t pal_fmt);
 
@@ -49,7 +49,7 @@ int enj_font_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
  4bit and 4 for 8bit
 
  */
-int enj_font_OP_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
+int enj_font_PAL_OP_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
                        uint8_t palette_entry, enj_color_t front_color,
                        enj_color_t back_color, pvr_palfmt_t pal_fmt);
 
@@ -66,7 +66,7 @@ int enj_font_OP_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
  * @note The number of useable palettes depends on the palette format: 64 for
  * 4bit and 4 for 8bit
  */
-int enj_font_PT_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
+int enj_font_PAL_PT_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
                        uint8_t palette_entry, enj_color_t front_color,
                        enj_color_t back_color, pvr_palfmt_t pal_fmt);
 
@@ -104,10 +104,12 @@ int enj_font_render_glyph(char glyph, enj_font_header_t* font, uint16_t x,
  * @param font Pointer to font header
  * @param x X position to draw at in pixels
  * @param y Y position to draw at in pixels
+ * @param state_ptr Optional pointer to PVR draw state
+
  * @return width of rendered text in pixels
  */
 int enj_font_render_text(const char* text, enj_font_header_t* font, uint16_t x,
-                         uint16_t y);
+                         uint16_t y, float zvalue, pvr_dr_state_t *state_ptr);
 
 /** Render text within a bounding box
  * @param text Null-terminated string to draw
@@ -116,12 +118,13 @@ int enj_font_render_text(const char* text, enj_font_header_t* font, uint16_t x,
  * @param y Y position of top-left corner of box in pixels
  * @param box_width Width of bounding box in pixels
  * @param box_height Height of bounding box in pixels
+ * @param state_ptr Optional pointer to PVR draw state
  *
  * @return number of lines rendered
  */
 int enj_font_render_text_in_box(const char* text, enj_font_header_t* font,
-                                uint16_t x, uint16_t y, uint16_t box_width,
-                                uint16_t box_height);
+                                uint16_t x, uint16_t y, float zvalue, uint16_t box_width,
+                                uint16_t box_height, pvr_dr_state_t *state_ptr);
 
 /** Calculate the width of a text string in pixels
  * @param text Null-terminated string to measure
