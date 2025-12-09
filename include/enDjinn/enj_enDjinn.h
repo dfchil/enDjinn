@@ -19,6 +19,7 @@
 #include <enDjinn/enj_bitmap.h>
 #include <enDjinn/enj_render.h>
 #include <enDjinn/enj_draw.h>
+#include <enDjinn/enj_debug.h>
 
 #define ENDJINN_ENDJINN_H
 
