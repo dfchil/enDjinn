@@ -12,6 +12,6 @@ void enj_debug_shutdown();
  * @param zvalue The z value to use for rendering
  * @return The width of the rendered string in pixels
  */
-int enj_debug_write_on_screen(const char* str, int x, int y, float zvalue);
+int enj_debug_write_on_screen(const char* str, int x, int y);
 
 #endif // ENJ_DEBUG_H
