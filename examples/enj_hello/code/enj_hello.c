@@ -1,9 +1,11 @@
 #include <enDjinn/enj_enDjinn.h>
+#define MARGIN_LEFT (20 * ENJ_XSCALE)
+
 void render_PT(void *__unused) {
   enj_font_set_scale(4);
-  enj_qfont_write("Hello, enDjinn!", 20 * ENJ_XSCALE, 20, PVR_LIST_PT_POLY);
+  enj_qfont_write("Hello, enDjinn!", MARGIN_LEFT, 20, PVR_LIST_PT_POLY);
   enj_font_set_scale(1);
-  enj_qfont_write("Press START+A+B+X+Y to end program.", 20 * ENJ_XSCALE, 120,
+  enj_qfont_write("Press START+A+B+X+Y to end program.", MARGIN_LEFT, 120,
                   PVR_LIST_PT_POLY);
 }
 void main_mode_updater(void *__unused) {
