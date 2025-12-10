@@ -37,15 +37,15 @@ typedef struct {
 // font src:
 // https://github.com/zshoals/Dina-Font-TTF-Remastered?tab=readme-ov-file
 static const alignas(32) uint8_t dina_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/pal4/16/Dina-Regular.enjfont"
+#embed "../embeds/enj_writing/fonts/16/Dina-Regular.enjfont"
 };
 // font src: https://dejavu-fonts.github.io/
 static const alignas(32) uint8_t deja_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/pal4/23/DejaVuSans.enjfont"
+#embed "../embeds/enj_writing/fonts/23/DejaVuSans.enjfont"
 };
 // font src: https://www.fonttr.com/cmunbi-font
 static const alignas(32) uint8_t cmunrm_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/pal4/36/cmunrm.enjfont"
+#embed "../embeds/enj_writing/fonts/36/cmunrm.enjfont"
 };
 static alignas(32) enj_font_header_t dina_font_16_hdr;
 static alignas(32) enj_font_header_t deja_23_font_hdr;
@@ -124,13 +124,13 @@ void setup_fonts() {
     fonts_OP.indexed[i].font_hdr = font_hdrs_ql[i];
     fonts_TR.indexed[i].font_hdr = font_hdrs_ql[i];
     fonts_PT.indexed[i].font_hdr = font_hdrs_ql[i];
-    if (!enj_font_TR_header(
+    if (!enj_font_PAL_TR_header(
             fonts_TR.indexed[i].font_hdr, &fonts_TR.indexed[i].sprite_hdr, 1,
             (enj_color_t){.raw = 0xffffc010}, PVR_PAL_ARGB8888)) {
       ENJ_DEBUG_PRINT("Failed to setup font_hdrs_TR[%d] header\n", i);
       return;
     }
-    if (!enj_font_OP_header(
+    if (!enj_font_PAL_OP_header(
             fonts_OP.indexed[i].font_hdr, &fonts_OP.indexed[i].sprite_hdr, 2,
             (enj_color_t){.raw = 0xf171717f},
             (enj_color_t){.raw = enj_state_get()->video.bg_color.raw},
@@ -138,7 +138,7 @@ void setup_fonts() {
       ENJ_DEBUG_PRINT("Failed to setup font_hdrs_OP[%d] header\n", i);
       return;
     }
-    if (!enj_font_PT_header(
+    if (!enj_font_PAL_PT_header(
             fonts_PT.indexed[i].font_hdr, &fonts_PT.indexed[i].sprite_hdr, 3,
             (enj_color_t){.raw = 0xffff00ff},
             (enj_color_t){.raw = enj_state_get()->video.bg_color.raw},
@@ -160,11 +160,12 @@ void render_OP(void *__unused) {
   int fontstartx = 20 * ENJ_XSCALE;
   int fontstarty = 0;
 
+  enj_font_set_zvalue(0.5f);
   const char *li = lorem_ipsum;
   while (*li != '\0') {
-    fontstartx += 1 + enj_font_render_glyph(
-                          *li, fonts_OP.named.cmunrm_36.font_hdr, fontstartx,
-                          fontstarty, 0.5f, &static_dr_state);
+    fontstartx +=
+        1 + enj_font_render_glyph(*li, fonts_OP.named.cmunrm_36.font_hdr,
+                                  fontstartx, fontstarty, &static_dr_state);
     if (fontstartx > vid_mode->width - 40) {
       fontstartx = 20 * ENJ_XSCALE;
       fontstarty += fonts_OP.named.cmunrm_36.font_hdr->line_height;
@@ -180,24 +181,27 @@ void render_PT(void *data) {
 
   int fontstartx = 20 * ENJ_XSCALE;
   int fontstarty = 0;
-  for (int i = 0; i < 3; i++) {
-    pvr_sprite_hdr_t *font_hdr_sq =
-        (pvr_sprite_hdr_t *)pvr_dr_target((pvr_dr_state_t){0});
-    *font_hdr_sq = fonts_PT.indexed[i].sprite_hdr;
-    pvr_dr_commit(font_hdr_sq);
+  enj_font_set_zvalue(1.5f);
+  // for (int i = 0; i < 3; i++) {
+  //   pvr_sprite_hdr_t *font_hdr_sq =
+  //       (pvr_sprite_hdr_t *)pvr_dr_target((pvr_dr_state_t){0});
+  //   *font_hdr_sq = fonts_PT.indexed[i].sprite_hdr;
+  //   pvr_dr_commit(font_hdr_sq);
 
-    fontstartx = 20 * ENJ_XSCALE;
-    for (char c = ' '; c <= '~'; c++) {
-      fontstartx +=
-          3 + enj_font_render_glyph(c, fonts_PT.indexed[i].font_hdr, fontstartx,
-                                    fontstarty, 2.0f, &static_dr_state);
-      if (fontstartx > vid_mode->width - 40) {
-        fontstartx = 20 * ENJ_XSCALE;
-        fontstarty += fonts_PT.indexed[i].font_hdr->line_height;
-      }
-    }
-    fontstarty += fonts_PT.indexed[i].font_hdr->line_height << 1;
-  }
+  //   fontstartx = 20 * ENJ_XSCALE;
+  //   for (char c = ' '; c <= '~'; c++) {
+  //     fontstartx +=
+  //         3 + enj_font_render_glyph(c, fonts_PT.indexed[i].font_hdr,
+  //         fontstartx,
+  //                                   fontstarty, &static_dr_state);
+  //     if (fontstartx > vid_mode->width - 40) {
+  //       fontstartx = 20 * ENJ_XSCALE;
+  //       fontstarty += fonts_PT.indexed[i].font_hdr->line_height;
+  //     }
+  //   }
+  //   fontstarty += fonts_PT.indexed[i].font_hdr->line_height << 1;
+  // }
+
   pvr_dr_finish();
 }
 
@@ -224,10 +228,24 @@ void render_TR(void *data) {
   enj_draw_sprite(corners, &static_dr_state, &mdata->hdr, NULL);
 
   int fontstartx = 20 * ENJ_XSCALE;
-  int fontstarty = (vid_mode->height >> 1) + 20;
+  int fontstarty = 20;
+  // fonts_PR.named.dina_16.sprite_hdr.argb = 0x0;
+  enj_font_set_zvalue(2.0f);
+
+  // pvr_sprite_hdr_t *font_hdr_sq =
+  //     (pvr_sprite_hdr_t *)pvr_dr_target((pvr_dr_state_t){0});
+  // *font_hdr_sq = fonts_TR.named.dina_16.sprite_hdr;
+  // pvr_dr_commit(font_hdr_sq);
+
+  enj_font_string_render("This is enDjinn writing example!",
+                         fonts_TR.named.dina_16.font_hdr, 20 * ENJ_XSCALE,
+                         fontstarty + 20, &(fonts_TR.named.dina_16.sprite_hdr),
+                         &static_dr_state);
+
+  fontstarty = (vid_mode->height >> 1) + 20;
   for (int i = 1; i < 3; i++) {
     pvr_sprite_hdr_t *font_hdr_sq =
-        (pvr_sprite_hdr_t *)pvr_dr_target((pvr_dr_state_t){0});
+        (pvr_sprite_hdr_t *)pvr_dr_target(static_dr_state);
     *font_hdr_sq = fonts_TR.indexed[i].sprite_hdr;
     pvr_dr_commit(font_hdr_sq);
 
@@ -235,7 +253,7 @@ void render_TR(void *data) {
     for (char c = ' '; c <= '~'; c++) {
       fontstartx +=
           3 + enj_font_render_glyph(c, fonts_TR.indexed[i].font_hdr, fontstartx,
-                                    fontstarty, 2.0f, &static_dr_state);
+                                    fontstarty, &static_dr_state);
       if (fontstartx > vid_mode->width - 40) {
         fontstartx = 20 * ENJ_XSCALE;
         fontstarty += fonts_TR.indexed[i].font_hdr->line_height;
@@ -255,6 +273,7 @@ void main_mode_updater(void *data) {
 }
 
 int main(__unused int argc, __unused char **argv) {
+
   // initialize enDjinn state with default values
   enj_state_defaults();
   // default soft-reset pattern is START + A + B + X + Y.
@@ -272,7 +291,7 @@ int main(__unused int argc, __unused char **argv) {
   /* setup at enDjinn modes */
   mode_data_t main_mode_data = {
       .rotation = 0,
-      .base_size = (figure_texture_info.width) * 0.42f,
+      .base_size = (figure_texture_info.width) * 0.63f,
       .center_x = vid_mode->width * ENJ_XSCALE * 0.5f,
       .center_y = vid_mode->height * 0.5f,
   };

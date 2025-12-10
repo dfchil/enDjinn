@@ -8,8 +8,8 @@ include ${ENJDIR}Makefile.cfg
 ifneq (,$(wildcard ./Makefile.local.cfg))
   include ./Makefile.local.cfg
 endif
-ifndef ROMDBASEPATH
-	ROMDBASEPATH:=$(ROMDIR)/${BASENAME}
+ifndef ROMBASEPATH
+	ROMBASEPATH:=$(ROMDIR)/${BASENAME}
 endif
 
 OBJS := $(shell find ${ENJDIR}src/ -name '*.c' -not -path "${ENJDIR}.git/*" |sed -e 's,${ENJDIR}\(.*\).c,$(BUILDDIR)/enDjinn/\1.o,g')	
@@ -27,17 +27,17 @@ all: $(BINDIR)/$(BASENAME).elf
 $(BUILDDIR)/enDjinn/%.o: ${ENJDIR}%.c Makefile
 	@mkdir -p $(shell dirname $@)
 	@echo "Building $@ from $<..."
-	@$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
+	$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
 
 $(BUILDDIR)/%.o: %.c Makefile $(DTTEXTURES) $(SNDFXFILES) $(FONTFILES) $(ENJFONTFILES)
 	@mkdir -p $(shell dirname $@)
 	@echo "Building $@ from $<..."
-	@$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
+	$(CC) $(INCLUDES) $(CFLAGS) $(DEFINES) -c $< -o $@
 
 $(BINDIR)/${BASENAME}.elf: $(OBJS)
 	@mkdir -p $(shell dirname $@)
 	@echo "Linking $@..."
-	@$(CC) $(INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(LDLIBS) 
+	$(CC) $(INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(LDLIBS) 
 
 $(BINDIR)/${BASENAME}.cdi: $(BINDIR)/${BASENAME}.elf
 	mkdcdisc \
@@ -61,7 +61,7 @@ clean:
 mrproper: clean
 	rm -rf $(BINDIR)/$(BASENAME).elf $(BINDIR)/$(BASENAME).cdi $(BINDIR)/$(BASENAME).bin
 	rm -rf $(DTTEXTURES) $(SNDFXFILES) $(FONTFILES) $(addsuffix .pal,$(DTTEXTURES)) $(ENJFONTFILES)
-	rm ${FONTMACHINE}
+	rm -f ${FONTMACHINE}
 	find . -type d -empty -delete
 
 

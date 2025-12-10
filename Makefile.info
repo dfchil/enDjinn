@@ -15,7 +15,7 @@ cfg_info:
 	@echo "ROMDIR        = ${ROMDIR}"
 	@echo "                  # Base directory for the CD-ROM image contents" 
 	@echo "                  # or for access via dc-tool-ip -m option"
-	@echo "ROMDBASEPATH  = ${ROMDBASEPATH}"
+	@echo "ROMBASEPATH  = ${ROMBASEPATH}"
 	@echo "                  # Base path inside the CD-ROM image for this project"
 	@echo "OPTLEVEL      = ${OPTLEVEL}"
 	@echo "                  # Optimization level (default: ${DEFAULT_OPTLEVEL})"

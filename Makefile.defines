@@ -1,4 +1,5 @@
-DEFINES=
+DEFINES:=-DENJ_DIR="\"${ENJDIR}\""
+
 ifdef RELEASEBUILD
 	DEFINES += -s -DRELEASEBUILD
 else
@@ -34,4 +35,8 @@ endif
 ifdef DCPROF
 DEFINES += -DDCPROF
 OBJS += $(BUILDDIR)/enDjinn/profilers/dcprof/profiler.o
+endif
+
+ifdef ENJ_INJECT_QFONT
+	DEFINES += -DENJ_INJECT_QFONT=1
 endif

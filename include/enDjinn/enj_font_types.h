@@ -11,13 +11,18 @@ typedef struct __attribute__((packed)) {
 
 typedef struct __attribute__((packed)) {
   struct {
+    uint16_t major : 2;
+    uint16_t minor : 6;
+    uint16_t patch : 8;
+  } version;
+  struct {
     uint16_t log2width : 4;
     uint16_t log2height : 4;
     uint16_t line_height : 8;
   };
   uint32_t pvr_data;
   enj_glyph_offset_t glyph_endings['~' - '!' + 2]; // 1 extra for <= and one for ending
-  enj_glyph_offset_t special_glyphs[14];
+  enj_glyph_offset_t special_glyphs[13];
 } enj_font_header_t;
 
 #endif // ENJ_FONT_TYPES_H

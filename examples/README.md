@@ -2,8 +2,8 @@
 
 The following examples are provided:
 
-## hello_enDjinn
-The [hello_enDjinn](./hello_enDjinn/) example is a bare bones 
+## enj_hello
+The [enj_hello](./enj_hello/) example is a bare bones 
  'get a rotating sprite on screen in fewer than 100 lines' of C. 
 It implicitly also shows of the power of the underlying enDjinn make system, that is activated simply 
 by sym-linking the [enDjinn/Makefile.prime](../Makefile.prime) file to a **Makefile** in your project directory.
