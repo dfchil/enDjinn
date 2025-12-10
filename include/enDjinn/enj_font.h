@@ -33,8 +33,8 @@ int enj_font_load(const char* path, enj_font_header_t* out_font);
  */
 
 int enj_font_PAL_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
-                       uint8_t palette_entry, enj_color_t front_color,
-                       pvr_palfmt_t pal_fmt);
+                           uint8_t palette_entry, enj_color_t front_color,
+                           pvr_palfmt_t pal_fmt);
 
 /** Configure a PVR sprite header for rendering text glyphs with outline
  * @param font Pointer to font header
@@ -50,8 +50,8 @@ int enj_font_PAL_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
 
  */
 int enj_font_PAL_OP_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
-                       uint8_t palette_entry, enj_color_t front_color,
-                       enj_color_t back_color, pvr_palfmt_t pal_fmt);
+                           uint8_t palette_entry, enj_color_t front_color,
+                           enj_color_t back_color, pvr_palfmt_t pal_fmt);
 
 /** Configure a PVR sprite header for rendering text glyphs with drop shadow
  * @param font Pointer to font header
@@ -67,8 +67,8 @@ int enj_font_PAL_OP_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
  * 4bit and 4 for 8bit
  */
 int enj_font_PAL_PT_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
-                       uint8_t palette_entry, enj_color_t front_color,
-                       enj_color_t back_color, pvr_palfmt_t pal_fmt);
+                           uint8_t palette_entry, enj_color_t front_color,
+                           enj_color_t back_color, pvr_palfmt_t pal_fmt);
 
 /** Get UV coordinates for a glyph in a font
  * @param font Pointer to font header
@@ -109,13 +109,13 @@ int enj_font_render_glyph(char glyph, enj_font_header_t* font, uint16_t x,
  * @return width of rendered text in pixels
  */
 int enj_font_render_text(const char* text, enj_font_header_t* font, uint16_t x,
-                         uint16_t y, float zvalue, pvr_dr_state_t *state_ptr);
+                         uint16_t y, float zvalue, pvr_dr_state_t* state_ptr);
 
 /** Render text within a bounding box
  * @param text Null-terminated string to draw
  * @param font Pointer to font header
- * @param x X position of top-left corner of box in pixels
- * @param y Y position of top-left corner of box in pixels
+ * @param min_x X position of top-left corner of box in pixels
+ * @param min_y Y position of top-left corner of box in pixels
  * @param box_width Width of bounding box in pixels
  * @param box_height Height of bounding box in pixels
  * @param state_ptr Optional pointer to PVR draw state
@@ -123,8 +123,10 @@ int enj_font_render_text(const char* text, enj_font_header_t* font, uint16_t x,
  * @return number of lines rendered
  */
 int enj_font_render_text_in_box(const char* text, enj_font_header_t* font,
-                                uint16_t x, uint16_t y, float zvalue, uint16_t box_width,
-                                uint16_t box_height, pvr_dr_state_t *state_ptr);
+                                uint16_t min_x, uint16_t min_y, float zvalue,
+                                uint16_t box_width, uint16_t box_height,
+                                pvr_dr_state_t* state_ptr);
+
 
 /** Calculate the width of a text string in pixels
  * @param text Null-terminated string to measure
@@ -132,5 +134,20 @@ int enj_font_render_text_in_box(const char* text, enj_font_header_t* font,
  * @return width of text in pixels
  */
 int enj_font_text_width(const char* text, enj_font_header_t* font);
+
+/**
+ *  Convert an enDjinn font to a 16-bit PVR texture
+ * @param font Pointer to font header
+ * @param mode Pixel mode to convert to (ARGB1555, ARGB4444,
+ * RGB565)
+ * @param front_color Color to use for the front of the glyphs
+ * @param back_color Color to use for the background of the glyphs
+ * @return Pointer to allocated PVR texture data, or NULL on failure
+ */
+pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t* font,
+                                    pvr_pixel_mode_t mode,
+                                    enj_color_t front_color,
+                                    enj_color_t back_color);
+
 
 #endif  // ENJ_FONTS_H
