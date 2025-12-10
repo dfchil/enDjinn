@@ -15,7 +15,7 @@ static pvr_list_type_t enj_qf_prev_mode;
 static inline void enj_qfont_set_header(pvr_list_type_t mode) {
     pvr_sprite_cxt_t cxt;
 
-    pvr_sprite_cxt_txr(&cxt, mode, PVR_TXRFMT_ARGB1555 | PVR_TXRFMT_NONTWIDDLED,
+    pvr_sprite_cxt_txr(&cxt, mode, PVR_TXRFMT_ARGB1555 | PVR_TXRFMT_NONTWIDDLED | PVR_TXRFMT_VQ_DISABLE,
                        1 << enj_qf_hdr->log2width, 1 << enj_qf_hdr->log2height,
                        (pvr_ptr_t)enj_qf_pvr_data,
                        PVR_FILTER_NEAREST);
