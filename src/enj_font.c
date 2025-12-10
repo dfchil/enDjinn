@@ -148,7 +148,7 @@ int enj_font_PAL_OP_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
         1 << font->log2width, 1 << font->log2height,
         (pvr_ptr_t)(uintptr_t)font->pvr_data, PVR_FILTER_NEAREST);
     pvr_sprite_compile(hdr, &cxt);
-hdr->argb = front_color.raw;
+    hdr->argb = front_color.raw;
 
     return 1;
 }
@@ -253,41 +253,47 @@ int enj_font_string_width(const char* text, enj_font_header_t* font) {
             enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index + 1];
             int startx =
                 glyph_start.x_min > glyph_end.x_min ? 0 : glyph_start.x_min;
-            output += (enj_font_letter_spacing + glyph_end.x_min - startx) * enj_font_scale;
+            output += (enj_font_letter_spacing + glyph_end.x_min - startx) *
+                      enj_font_scale;
             text++;
         }
     }
     return output;
 }
 
-int enj_font_string_render(const char* text, enj_font_header_t* font, uint16_t x,
-                         uint16_t y, pvr_sprite_hdr_t* sprite_header,
-                         pvr_dr_state_t* state_ptr) {
+int enj_font_string_render(const char* text, enj_font_header_t* font,
+                           uint16_t x, uint16_t y,
+                           pvr_sprite_hdr_t* sprite_header,
+                           pvr_dr_state_t* state_ptr) {
     static pvr_dr_state_t static_dr_state;
     if (state_ptr == NULL) {
         pvr_dr_init(&static_dr_state);
         state_ptr = &static_dr_state;
     }
     if (sprite_header != NULL) {
-        pvr_sprite_hdr_t* hdr_ptr = (pvr_sprite_hdr_t*)pvr_dr_target(*state_ptr);
+        pvr_sprite_hdr_t* hdr_ptr =
+            (pvr_sprite_hdr_t*)pvr_dr_target(*state_ptr);
         *hdr_ptr = *sprite_header;
         pvr_dr_commit(state_ptr);
     }
 
     int x_pos = x;
 
-    int max_len = 1<<12;
+    int max_len = 1 << 12;
     while (*text != '\0') {
         max_len--;
         if (max_len <= 0) {
             ENJ_DEBUG_PRINT("enj_font_string_render: max_len break\n");
             break;
         }
-        x_pos += (enj_font_letter_spacing * enj_font_scale ) + enj_font_render_glyph(*text, font, x_pos, y, state_ptr);
+        x_pos += (enj_font_letter_spacing * enj_font_scale) +
+                 enj_font_render_glyph(*text, font, x_pos, y, state_ptr);
         text++;
-
     }
     return x_pos - x;
+    if (state_ptr == &static_dr_state) {
+        pvr_dr_finish();
+    }
 }
 
 int enj_font_render_text_in_box(const char* text, enj_font_header_t* font,

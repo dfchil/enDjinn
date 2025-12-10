@@ -181,6 +181,7 @@ void render_PT(void *data) {
 
   int fontstartx = 20 * ENJ_XSCALE;
   int fontstarty = 0;
+  enj_font_set_zvalue(1.5f);
   // for (int i = 0; i < 3; i++) {
   //   pvr_sprite_hdr_t *font_hdr_sq =
   //       (pvr_sprite_hdr_t *)pvr_dr_target((pvr_dr_state_t){0});
@@ -188,7 +189,6 @@ void render_PT(void *data) {
   //   pvr_dr_commit(font_hdr_sq);
 
   //   fontstartx = 20 * ENJ_XSCALE;
-  //   enj_font_set_zvalue(1.5f);
   //   for (char c = ' '; c <= '~'; c++) {
   //     fontstartx +=
   //         3 + enj_font_render_glyph(c, fonts_PT.indexed[i].font_hdr, fontstartx,
@@ -201,9 +201,6 @@ void render_PT(void *data) {
   //   fontstarty += fonts_PT.indexed[i].font_hdr->line_height << 1;
   // }
 
-  enj_font_string_render(
-      "This is enDjinn writing example!", fonts_PT.named.dina_16.font_hdr, 20 * ENJ_XSCALE,
-      fontstarty + 20, &fonts_PT.named.dina_16.sprite_hdr, &static_dr_state);
 
   pvr_dr_finish();
 }
@@ -230,15 +227,30 @@ void render_TR(void *data) {
   pvr_dr_init(&static_dr_state);
   enj_draw_sprite(corners, &static_dr_state, &mdata->hdr, NULL);
 
+
+  
+  
   int fontstartx = 20 * ENJ_XSCALE;
-  int fontstarty = (vid_mode->height >> 1) + 20;
+  int fontstarty = 20;
+  // fonts_PR.named.dina_16.sprite_hdr.argb = 0x0;
+  enj_font_set_zvalue(2.0f);
+
+  pvr_sprite_hdr_t *font_hdr_sq =
+      (pvr_sprite_hdr_t *)pvr_dr_target((pvr_dr_state_t){0});
+  *font_hdr_sq = fonts_TR.named.dina_16.sprite_hdr;
+  pvr_dr_commit(font_hdr_sq);
+
+  enj_font_string_render(
+      "This is enDjinn writing example!", fonts_TR.named.dina_16.font_hdr, 20 * ENJ_XSCALE,
+      fontstarty + 20, NULL, &static_dr_state);
+
+  fontstarty = (vid_mode->height >> 1) + 20;
   for (int i = 1; i < 3; i++) {
     pvr_sprite_hdr_t *font_hdr_sq =
         (pvr_sprite_hdr_t *)pvr_dr_target((pvr_dr_state_t){0});
     *font_hdr_sq = fonts_TR.indexed[i].sprite_hdr;
     pvr_dr_commit(font_hdr_sq);
 
-    enj_font_set_zvalue(2.0f);
     fontstartx = 20 * ENJ_XSCALE;
     for (char c = ' '; c <= '~'; c++) {
       fontstartx +=
