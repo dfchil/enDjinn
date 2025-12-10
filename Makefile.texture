@@ -7,7 +7,7 @@ ifneq (,$(wildcard $(TEXTUREDIR)))
 endif
 
 
-ifeq ($(ADD_ENDJINN_LOGO_TEXTURE),1)
+ifdef ADD_ENDJINN_LOGO_TEXTURE
 # special case: add the enDjinn logo texture
 DTTEXTURES += $(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn512.dt
 DTTEXTURES += $(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/enDjinn256.dt
