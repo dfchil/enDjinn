@@ -5,12 +5,24 @@
 #include <enDjinn/enj_font_types.h>
 #include <enDjinn/enj_types.h>
 
+/**
+ * Set the integer scale for font rendering
+ * @param scale The integer scale factor (must be > 0)
+ */
+void enj_font_set_scale(uint8_t scale);
 
 /**
+
  * Set the Z value used for font rendering
  * @param zvalue The Z value to use for rendering
  */
 void enj_font_set_zvalue(float zvalue);
+
+/**
+ * Set the letter spacing for font rendering
+ * @param spacing The number of pixels to add between letters
+ */
+void enj_font_set_letter_spacing(uint8_t spacing);
 
 /**
  * Load an enDjinn font from a memory blob
@@ -100,6 +112,7 @@ int enj_font_glyph_uv_coords(enj_font_header_t* font, char glyph, uint32_t* auv,
  * @return width of rendered glyph in pixels
  *
  * @note Method assumes that the PVR sprite header has already been committed
+ * before calling this function
  */
 int enj_font_render_glyph(char glyph, enj_font_header_t* font, uint16_t x,
                           uint16_t y, pvr_dr_state_t* state_ptr);
@@ -110,12 +123,14 @@ int enj_font_render_glyph(char glyph, enj_font_header_t* font, uint16_t x,
  * @param font Pointer to font header
  * @param x X position to draw at in pixels
  * @param y Y position to draw at in pixels
+ * @param sprite_header Optional pointer PVR sprite header to use for rendering
  * @param state_ptr Optional pointer to PVR draw state
 
  * @return width of rendered text in pixels
  */
-int enj_font_render_text(const char* text, enj_font_header_t* font, uint16_t x,
-                         uint16_t y, pvr_dr_state_t* state_ptr);
+int enj_font_string_render(const char* text, enj_font_header_t* font, uint16_t x,
+                         uint16_t y, pvr_sprite_hdr_t* sprite_header,
+                         pvr_dr_state_t* state_ptr);
 
 /** Render text within a bounding box
  * @param text Null-terminated string to draw
@@ -124,6 +139,7 @@ int enj_font_render_text(const char* text, enj_font_header_t* font, uint16_t x,
  * @param min_y Y position of top-left corner of box in pixels
  * @param box_width Width of bounding box in pixels
  * @param box_height Height of bounding box in pixels
+ * @param sprite_header Optional pointer PVR sprite header to use for rendering
  * @param state_ptr Optional pointer to PVR draw state
  *
  * @return number of lines rendered
@@ -131,18 +147,18 @@ int enj_font_render_text(const char* text, enj_font_header_t* font, uint16_t x,
 int enj_font_render_text_in_box(const char* text, enj_font_header_t* font,
                                 uint16_t min_x, uint16_t min_y,
                                 uint16_t box_width, uint16_t box_height,
+                                pvr_sprite_hdr_t* sprite_header,
                                 pvr_dr_state_t* state_ptr);
-
 
 /** Calculate the width of a text string in pixels
  * @param text Null-terminated string to measure
  * @param font Pointer to font header
  * @return width of text in pixels
  */
-int enj_font_text_width(const char* text, enj_font_header_t* font);
+int enj_font_string_width(const char* text, enj_font_header_t* font);
 
 /**
- *  Convert an enDjinn font to a 16-bit PVR texture
+ *  Convert an enDjinn font to a 16-bit PVR uncompressed texture
  * @param font Pointer to font header
  * @param mode Pixel mode to convert to (ARGB1555, ARGB4444,
  * RGB565)
@@ -150,10 +166,9 @@ int enj_font_text_width(const char* text, enj_font_header_t* font);
  * @param back_color Color to use for the background of the glyphs
  * @return Pointer to allocated PVR texture data, or NULL on failure
  */
-pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t* font,
+pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t* font, uint8_t* data_4bpp,
                                     pvr_pixel_mode_t mode,
                                     enj_color_t front_color,
                                     enj_color_t back_color);
-
 
 #endif  // ENJ_FONTS_H

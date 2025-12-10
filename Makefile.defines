@@ -37,6 +37,6 @@ DEFINES += -DDCPROF
 OBJS += $(BUILDDIR)/enDjinn/profilers/dcprof/profiler.o
 endif
 
-ifdef ENJ_ADD_DBG_FONT
-	DEFINES += -DENJ_ADD_DBG_FONT=1
+ifdef ENJ_INJECT_QFONT
+	DEFINES += -DENJ_INJECT_QFONT=1
 endif

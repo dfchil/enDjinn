@@ -7,23 +7,23 @@ endif
 
 FONTMACHINE=${ENJDIR}tools/font_enj/bin/font_enj
 
-ifeq ($(ENJ_ADD_DBG_FONT),1)
+ifdef ENJ_INJECT_QFONT
 # special case: add the enDjinn logo texture
-ENJFONTFILES += $(ENJDIR)/include/enDjinn/debug_font.h
+ENJFONTFILES += ${ENJDIR}include/enDjinn/embeds/enj_qfont_data.h
 
-$(ENJDIR)/include/enDjinn/debug_font.h: $(ENJDIR)/embeds/debug_font.enjfont
+${ENJDIR}include/enDjinn/embeds/enj_qfont_data.h: ${ENJDIR}embeds/enj_qfont.enjfont
 	@mkdir -p $(shell dirname $@)
 	@echo "Embedding debug font $< into header $@..."
-	xxd -n enj_debug_font_data -i $< > $@
+	xxd -n $(basename $(notdir $@)) -i $< > $@
 
-$(ENJDIR)/embeds/debug_font.enjfont: ${ENJDIR}/assets/fonts/16/debug_font.ttf ${FONTMACHINE}
+${ENJDIR}embeds/enj_qfont.enjfont: ${ENJDIR}assets/fonts/16/Dina-Regular.ttf ${FONTMACHINE}
 	@mkdir -p $(shell dirname $@)
 	${FONTMACHINE} -i $< -o $@ -l 16 -x "~" -h -p $(shell dirname $@)/$(basename $(notdir $@)).png -d
 endif
 
 
 ${FONTMACHINE}:
-	@$(MAKE) -C ${ENJDIR}/tools/font_enj
+	@$(MAKE) -C ${ENJDIR}tools/font_enj
 
 $(ROMBASEPATH)/$(ROMBASEFONTSDIR)/%.enjfont: $(FONTSDIR)/%.ttf ${FONTMACHINE}
 	@mkdir -p $(shell dirname $@)

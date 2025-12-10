@@ -347,7 +347,7 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
     while ((1 << header.log2width) < sheet_width) {
         header.log2width++;
     };
-    header.log2height = header.log2width;  // height is always >= width
+    header.log2height = 5; 
     while ((1 << header.log2height) < sheet_height) {
         header.log2height++;
     };
