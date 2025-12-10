@@ -4,7 +4,7 @@
 #set the KOS environtment variables
 source /opt/toolchains/dc/kos/environ.sh
 
-TARGET=enj_writing
+TARGET=enj_hello
 
 cd examples/${TARGET}/
 DCTRACE=1 ENJ_DEBUG=1 make clean
