@@ -15,7 +15,7 @@ static pvr_list_type_t enj_qf_prev_mode;
 static inline void enj_qfont_set_header(pvr_list_type_t mode) {
     pvr_sprite_cxt_t cxt;
 
-    pvr_sprite_cxt_txr(&cxt, mode, PVR_TXRFMT_ARGB1555 | PVR_TXRFMT_NONTWIDDLED | PVR_TXRFMT_VQ_DISABLE,
+    pvr_sprite_cxt_txr(&cxt, mode, PVR_TXRFMT_ARGB1555,
                        1 << enj_qf_hdr->log2width, 1 << enj_qf_hdr->log2height,
                        (pvr_ptr_t)enj_qf_pvr_data,
                        PVR_FILTER_NEAREST);
@@ -47,7 +47,6 @@ int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode) {
 
     int renderwidth = enj_font_string_render(str, enj_qf_hdr, x, y,
                                        &enj_qf_sprite_hdr, &state);
-    ENJ_DEBUG_PRINT("%d\n", enj_font_render_glyph('H', enj_qf_hdr, x, y, &state)); 
     pvr_dr_finish();
     return renderwidth;
 }

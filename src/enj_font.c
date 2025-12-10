@@ -274,7 +274,7 @@ int enj_font_string_render(const char* text, enj_font_header_t* font,
         pvr_sprite_hdr_t* hdr_ptr =
             (pvr_sprite_hdr_t*)pvr_dr_target(*state_ptr);
         *hdr_ptr = *sprite_header;
-        pvr_dr_commit(state_ptr);
+        pvr_dr_commit(hdr_ptr);
     }
 
     int x_pos = x;
@@ -348,10 +348,14 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t* font, uint8_t* data_4bpp,
             for (int i = 0; i < width * height; i++) {
                 uint8_t pixel_4bpp = extr_4bpp_pixel(data_4bpp, i);
                 buffer[i] = (pixel_4bpp > 0) << 15 |
-                            ((back_color.r + dr * pixel_4bpp) & 0x1F) << 10 |
-                            ((back_color.g + dg * pixel_4bpp) & 0x1F) << 5 |
-                            ((back_color.b + db * pixel_4bpp) & 0x1F);
-                buffer[i] = 0xffff;
+                    0x7fff;
+
+
+
+                // (((back_color.r + dr) * pixel_4bpp) & 0x1F) << 6 |
+                //             (((back_color.g + dg) * pixel_4bpp) & 0x1F) << 1 |
+                //             (((back_color.b + db) * pixel_4bpp) & 0x1F) >> 3;
+                // buffer[i] = 0x7FE0;
             }
             break;
         case PVR_PIXEL_MODE_RGB565:
