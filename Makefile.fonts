@@ -1,15 +1,15 @@
-ROMBASEFONTSDIR:=$(notdir $(FONTSDIR))
+ROMBASEENJ_FONTSDIR:=$(notdir $(ENJ_FONTS_SRC_DIR))
 
-ENJFONTFILES:=
-ifneq (,$(wildcard $(FONTSDIR)))
-	ENJFONTFILES += $(shell find $(FONTSDIR)/ -name '*.ttf' | sed -e 's,'$(FONTSDIR)',$(ROMBASEPATH)/$(ROMBASEFONTSDIR),g' -e 's,\.ttf,\.enjfont,g')
+ENJ_FONTFILES:=
+ifneq (,$(wildcard $(ENJ_FONTS_SRC_DIR)))
+	ENJ_FONTFILES += $(shell find $(ENJ_FONTS_SRC_DIR)/ -name '*.ttf' | sed -e 's,'$(ENJ_FONTS_SRC_DIR)',$(ROMBASEPATH)/$(ROMBASEENJ_FONTSDIR),g' -e 's,\.ttf,\.enjfont,g')
 endif
 
 FONTMACHINE=${ENJDIR}tools/font_enj/bin/font_enj
 
 ifdef ENJ_INJECT_QFONT
 # special case: add the enDjinn logo texture
-ENJFONTFILES += ${ENJDIR}include/enDjinn/embeds/enj_qfont_data.h
+ENJ_FONTFILES += ${ENJDIR}include/enDjinn/embeds/enj_qfont_data.h
 
 ${ENJDIR}include/enDjinn/embeds/enj_qfont_data.h: ${ENJDIR}embeds/enj_qfont.enjfont
 	@mkdir -p $(shell dirname $@)
@@ -18,13 +18,13 @@ ${ENJDIR}include/enDjinn/embeds/enj_qfont_data.h: ${ENJDIR}embeds/enj_qfont.enjf
 
 ${ENJDIR}embeds/enj_qfont.enjfont: ${ENJDIR}assets/fonts/16/Dina-Regular.ttf ${FONTMACHINE}
 	@mkdir -p $(shell dirname $@)
-	${FONTMACHINE} -i $< -o $@ -l 16 -x "~" -h -p $(shell dirname $@)/$(basename $(notdir $@)).png -d
+	${FONTMACHINE} -i $< -o $@ -l 16 -x "~" -h -p $(shell dirname $@)/$(basename $(notdir $@)).png
 endif
 
 
 ${FONTMACHINE}:
 	@$(MAKE) -C ${ENJDIR}tools/font_enj
 
-$(ROMBASEPATH)/$(ROMBASEFONTSDIR)/%.enjfont: $(FONTSDIR)/%.ttf ${FONTMACHINE}
+$(ROMBASEPATH)/$(ROMBASEENJ_FONTSDIR)/%.enjfont: $(ENJ_FONTS_SRC_DIR)/%.ttf ${FONTMACHINE}
 	@mkdir -p $(shell dirname $@)
 	${FONTMACHINE} -i $< -o $@ -l $(notdir $(shell dirname $@)) -p $(shell dirname $@)/$(basename $(notdir $@)).png
