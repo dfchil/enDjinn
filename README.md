@@ -8,7 +8,7 @@ It is very obviously a play on the word 'engine', which enDjinn isn't quite, and
 
 So in short an invisible helper that sets heaven and earth in motion for you without any fuss and guides you along your quest to deliver software for the Dreamcast.
 
-enDjinn really tries to do all the boilerplate stuff for you in a reasonable way, leading to the following 29 lines of C code: 
+enDjinn really tries to do all the boilerplate stuff for you in a reasonable way, leading to that the following 29 lines of C code: 
 
 ```c
 #include <enDjinn/enj_enDjinn.h>
