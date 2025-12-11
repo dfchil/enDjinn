@@ -3,7 +3,7 @@
 
 #include <dc/pvr.h>
 #include <dc/video.h>
-#include <enDjinn/enj_ctrlr.h>
+#include <enDjinn/enj_ctrl.h>
 #include <enDjinn/enj_mode.h>
 #include <enDjinn/enj_types.h>
 

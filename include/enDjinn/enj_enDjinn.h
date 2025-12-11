@@ -13,7 +13,7 @@
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_mode.h>
 #include <enDjinn/enj_state.h>
-#include <enDjinn/enj_ctrlr.h>
+#include <enDjinn/enj_ctrl.h>
 #include <enDjinn/enj_texture.h>
 #include <enDjinn/enj_font.h>
 #include <enDjinn/enj_bitmap.h>

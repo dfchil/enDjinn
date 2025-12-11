@@ -1,4 +1,4 @@
-#include <enDjinn/enj_ctrlr.h>
+#include <enDjinn/enj_ctrl.h>
 
 static cont_state_t state_backups[MAPLE_PORT_COUNT] = {0};
 
