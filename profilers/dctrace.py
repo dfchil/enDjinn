@@ -24,7 +24,7 @@ This script performs:
   ✓ Accurate wall-clock runtime reconstruction
   ✓ Call graph reconstruction and self/inclusive time breakdown
   ✓ Parent → child contribution tracking
-  ✓ Low-impact function detection and Makefile CFLAGS suggestions
+  ✓ Low-impact function detection and Makefile ENJ_CFLAGS suggestions
   ✓ DOT file generation for Graphviz
 
 Output:
@@ -378,11 +378,11 @@ def suggest_exclude_functions(total_time, total_ev0, total_ev1, percent_threshol
     for name in exclude_names:
         print(f"    {name} \\")
 
-    print("CFLAGS += -finstrument-functions-exclude-function-list=$(EXCLUDE_FUNCS)\n")
-    print("  NOTE: Be sure your CFLAGS appear *before* kos-cc or kos-c++ in your Makefile command:")
+    print("ENJ_CFLAGS += -finstrument-functions-exclude-function-list=$(EXCLUDE_FUNCS)\n")
+    print("  NOTE: Be sure your ENJ_CFLAGS appear *before* kos-cc or kos-c++ in your Makefile command:")
     print("    Example:")
     print("    $(TARGET): $(OBJS)")
-    print("        kos-cc $(CFLAGS) -o $(TARGET)\n")
+    print("        kos-cc $(ENJ_CFLAGS) -o $(TARGET)\n")
 
 def read_uleb128(f):
     result = 0

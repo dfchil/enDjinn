@@ -2,16 +2,54 @@
 
 ## What is enDjinn?
 It is very obviously a play on the word 'engine', which enDjinn isn't quite, and an invocation of the Middle Eastern mythos of supernatural invisible beings, Djinn, or Genies as they are more commenly known as in the west.
-
-So in short an invisible helper that sets heaven and earth in motion for you without any fuss and guides you along your quest to deliver software for the Dreamcast.
-
 <div style="float:right; clear:none;">
 <img style="float:right; height:220px" src="./docs/img/enDjinn.svg" alt="enDjinn logo" />
 </div>
 
-Have a look at the [enj_hello](./examples/enj_hello/code/enj_hello.c) example to see how that can play out. Notice that the **Makefile** is just a symlink to the [enDjinn/Makefile.prime](Makefile.prime) that is amended with two lines in the [Makefile.local.cfg](./examples//enj_hello/Makefile.local.cfg). So one symlink and two files in total and a bit of adherence to how enDjinn expects things to be arranged and you're off to make things run on the Dreamcast.
+So in short an invisible helper that sets heaven and earth in motion for you without any fuss and guides you along your quest to deliver software for the Dreamcast.
 
-And don't worry about being strong armed into a rigoristic and very specific way to do things, because while one part of the design philosphy is "powerfull zero config features out of the gate", another part is "as much a as possible should be reconfigurable by the user". I'll have more on how to wrangle the make system to your tastes and needs later. 
+enDjinn really tries to do all the boilerplate stuff for you in a reasonable way, leading to the following 29 lines of C code: 
+
+```c
+#include <enDjinn/enj_enDjinn.h>
+#define MARGIN_LEFT (20 * ENJ_XSCALE)
+
+void render_PT(void *__unused) {
+  enj_font_set_scale(4);
+  enj_qfont_write("Hello, enDjinn!", MARGIN_LEFT, 20, PVR_LIST_PT_POLY);
+  enj_font_set_scale(1);
+  enj_qfont_write("Press START+A+B+X+Y to end program.", MARGIN_LEFT, 120,
+                  PVR_LIST_PT_POLY);
+}
+void main_mode_updater(void *__unused) {
+  enj_renderlist_add(PVR_LIST_PT_POLY, render_PT, NULL);
+}
+int main(__unused int argc, __unused char **argv) {
+  // initialize enDjinn state with default values
+  enj_state_defaults();
+  if (enj_startup() != 0) {
+    ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
+    return -1;
+  }
+  enj_mode_t main_mode = {
+      .name = "Main Mode",
+      .mode_updater = main_mode_updater,
+      .data = NULL,
+  };
+  enj_mode_push(&main_mode);
+  enj_run();
+  return 0;
+}
+```
+Gives you a functional program on the Dreamcast with this single screen: 
+
+![Screenshot of the simplest enDjinn program, enj_hello.c](docs/img/hello.png)
+
+Notice that the **Makefile** for this program is just a symlink to the [enDjinn/Makefile.prime](Makefile.prime) that is amended with one line in the [Makefile.local.cfg](./examples//enj_hello/Makefile.local.cfg) for injecting enDjinns built in qfont. So one symlink and two files in total and a bit of adherence to how enDjinn expects things to be arranged and you're off to make things run on the Dreamcast!
+
+The complete setup can be found under examples this repository: [enj_hello](./examples/enj_hello/code/)
+
+Please don't worry about being strong armed into a rigoristic and very specific way to do things, because while one part of the design philosphy is "powerfull zero config features out of the gate", another part is "as much a as possible should be reconfigurable by the user". I'll have more on how to wrangle the make system to your tastes and needs later. 
 
 The other half of enDjinn is the runtime that delivers a gameplay loop driver, a powerful sate machine as demonstrated in the [enj_modes example](./examples/enj_modes/code/enj_modes.c), that tries to alleviate some of quirks of the Dreamcast system while amplifying its strengths. 
 

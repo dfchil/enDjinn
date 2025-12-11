@@ -9,8 +9,8 @@ endif
 ifdef OPTLEVEL
 	DEFINES += -O${OPTLEVEL}
 else
-	DEFINES += -O${DEFAULT_OPTLEVEL}
-	OPTLEVEL=${DEFAULT_OPTLEVEL}
+	DEFINES += -O${ENJ_DEFAULT_OPTLEVEL}
+	OPTLEVEL=${ENJ_DEFAULT_OPTLEVEL}
 endif
 
 ifdef ENJ_SHOWFRAMETIMES
@@ -20,7 +20,7 @@ endif
 ifdef ENJ_CBASEPATH
 	DEFINES += -DENJ_CBASEPATH="\"${ENJ_CBASEPATH}\""
 else
-	DEFINES += -DENJ_CBASEPATH="\"/cd/${BASENAME}/\""
+	DEFINES += -DENJ_CBASEPATH="\"/cd/${ENJ_BASENAME}/\""
 endif
 	
 ifdef ENJ_DEBUG
@@ -29,12 +29,12 @@ endif
 
 ifdef DCTRACE
 DEFINES += -finstrument-functions -DDCTRACE
-OBJS += $(BUILDDIR)/enDjinn/profilers/dcprofiler.o
+OBJS += $(ENJ_BUILDDIR)/enDjinn/profilers/dcprofiler.o
 endif 
 
 ifdef DCPROF
 DEFINES += -DDCPROF
-OBJS += $(BUILDDIR)/enDjinn/profilers/dcprof/profiler.o
+OBJS += $(ENJ_BUILDDIR)/enDjinn/profilers/dcprof/profiler.o
 endif
 
 ifdef ENJ_INJECT_QFONT

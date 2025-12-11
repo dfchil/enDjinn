@@ -1,10 +1,10 @@
-ROMBASESFXDIR:=$(notdir $(SOUNDFXDIR))
+ROMBASESFXDIR:=$(notdir $(ENJ_SOUNDFX_SRC_DIR))
 
-SNDFXFILES:=
-ifneq (,$(wildcard $(SOUNDFXDIR)))
-	SNDFXFILES += $(shell find $(SOUNDFXDIR)/ -name '*.wav' | sed -e 's,'$(SOUNDFXDIR)',$(ROMBASEPATH)/$(ROMBASESFXDIR),g')
+ENJ_SNDFXFILES:=
+ifneq (,$(wildcard $(ENJ_SOUNDFX_SRC_DIR)))
+	ENJ_SNDFXFILES += $(shell find $(ENJ_SOUNDFX_SRC_DIR)/ -name '*.wav' | sed -e 's,'$(ENJ_SOUNDFX_SRC_DIR)',$(ROMBASEPATH)/$(ROMBASESFXDIR),g')
 
-$(ROMBASEPATH)/$(ROMBASESFXDIR)/%.wav: $(SOUNDFXDIR)/%.wav
+$(ROMBASEPATH)/$(ROMBASESFXDIR)/%.wav: $(ENJ_SOUNDFX_SRC_DIR)/%.wav
 	@mkdir -p $(shell dirname $@)
 	cp $< $@
 endif

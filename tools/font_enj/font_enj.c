@@ -217,9 +217,6 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
     header.version.major = 0;
     header.version.minor = 1;
     header.version.patch = 1;
-    printf("version %d.%d.%d\n", header.version.major, header.version.minor,
-           header.version.patch);
-    printf("sizeof header: %lu\n", sizeof(enj_font_header_t));
 
     header.line_height = line_height;
 
@@ -440,11 +437,10 @@ int main(int argc, char* argv[]) {
                 verbose_flag = 1;
                 break;
             case 'x':
-                printf("eXclude characters %s", optarg);
                 exclude_chars = optarg;
                 break;
             case 's':
-                printf("additional charachters %s", optarg);
+                printf("additional charachters %s, but not yet implementet", optarg);
             case '?':
                 printf("help text!\n");
             case 'h':
