@@ -24,7 +24,7 @@ include ${ENJDIR}Makefile.defines
 all: $(ENJ_BINDIR)/$(ENJ_BASENAME).elf
 .DEFAULT: all
 
-$(ENJ_BUILDDIR)/enDjinn/%.o: ${ENJDIR}%.c Makefile $(ENJ_FONTFILES)
+$(ENJ_BUILDDIR)/enDjinn/%.o: ${ENJDIR}%.c Makefile $(ENJ_FONTINJECTTION)
 	@mkdir -p $(shell dirname $@)
 	@echo "Building $@ from $<..."
 	$(ENJ_CC) $(ENJ_INCLUDES) $(ENJ_CFLAGS) $(DEFINES) -c $< -o $@
