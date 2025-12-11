@@ -51,7 +51,7 @@ The complete setup can be found in the examples folder in this repository: [enj_
 
 And please don't worry about being strong armed into a rigoristic and very specific way to do things, because while one part of the design philosphy is "powerfull zero config features out of the gate", another part is "as much a as possible should be reconfigurable by the user". I'll have more on how to wrangle the make system to your tastes and needs later. 
 
-Apart from the build system alluded to above, another big part of enDjinn is the runtime that tries to alleviate some of quirks of the Dreamcast system while amplifying its strengths. In this runtime you'll find a gameplay loop driver, a powerful sate machine, texture loading, a truetype based fonting system, controller and rumblepack handling and various other small things that I like to reuse between projects. 
+Apart from the build system alluded to above, another big part of enDjinn is the runtime that tries to alleviate some of quirks of the Dreamcast system while amplifying its strengths. In this runtime you'll find a gameplay loop driver, a powerful state machine, texture loading, a truetype based fonting system, controller and rumblepack handling and various other small things that I like to reuse between projects. 
 
 I'll add more documentation to all of the above and some features I haven't mentioned it in due time.
 
