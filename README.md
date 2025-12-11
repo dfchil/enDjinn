@@ -47,7 +47,7 @@ Gives you a functional program on the Dreamcast with this single screen:
 
 Notice that the **Makefile** for this program is just a symlink to the [enDjinn/Makefile.prime](Makefile.prime) that is amended with one line in the [Makefile.local.cfg](./examples//enj_hello/Makefile.local.cfg) for injecting enDjinns built in qfont. So one symlink and two files in total and a bit of adherence to how enDjinn expects things to be arranged and you're off to make things run on the Dreamcast!
 
-The complete setup can be found under examples this repository: [enj_hello](./examples/enj_hello/code/)
+The complete setup can be found under examples this repository: [enj_hello](./examples/enj_hello/)
 
 Please don't worry about being strong armed into a rigoristic and very specific way to do things, because while one part of the design philosphy is "powerfull zero config features out of the gate", another part is "as much a as possible should be reconfigurable by the user". I'll have more on how to wrangle the make system to your tastes and needs later. 
 
