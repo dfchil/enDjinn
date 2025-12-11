@@ -23,6 +23,18 @@ static inline void enj_qfont_set_header(pvr_list_type_t mode) {
     enj_qf_prev_mode = mode;
 }
 
+pvr_ptr_t enj_qfont_get_pvr_ptr() {
+    return enj_qf_pvr_data;
+}
+
+enj_font_header_t* enj_qfont_get_header() {
+    return enj_qf_hdr;
+}
+
+pvr_sprite_hdr_t *enj_qfont_get_sprite_hdr() {
+    return &enj_qf_sprite_hdr;
+}
+
 int enj_qfont_init() {
 
     enj_qf_hdr = (enj_font_header_t*)enj_qfont_data;

@@ -15,8 +15,33 @@ void enj_debug_shutdown();
  * @return The width of the rendered string in pixels
  *
  * @note The intended time to use this function is when while submitting to the
- * same list as the cur_mode argument. PVR_LIST_PT_POLY is recommended. 
+ * same list as the cur_mode argument. PVR_LIST_PT_POLY is recommended.
+ * 
+ * @note The built in font is 1 bit without gradients and is very suitable for integer scaling by calling
+ * @see  @link enj_font_set_scale @endlink.
  */
-int enj_qfont_write(const char *str, int x, int y, pvr_list_type_t cur_mode);
+int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode);
 
-#endif // ENJ_DEBUG_H
+/**
+ * Get the pointer to the injected font's PVR texture data
+ * @return Pointer to PVR texture data
+ */
+pvr_ptr_t enj_qfont_get_pvr_ptr();
+
+/**
+ * Get the pointer to the injected font's header
+ * @return Pointer to font header
+ */
+enj_font_header_t* enj_qfont_get_header();
+
+/**
+ * Get the pointer to the injected font's sprite header
+ * @return Pointer to sprite header
+ * 
+ * @note The sprite header will be configured for PVR_LIST_PT_POLY by default
+ * but will be reconfigured if used with enj_qfont_write with a different list
+ * type.
+ */
+pvr_sprite_hdr_t* enj_qfont_get_sprite_hdr();
+
+#endif  // ENJ_DEBUG_H
