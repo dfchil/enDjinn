@@ -3,7 +3,7 @@
 ## What is enDjinn?
 It is very obviously a play on the word 'engine', which enDjinn isn't quite, and an invocation of the Middle Eastern mythos of supernatural invisible beings, Djinn, or Genies as they are more commenly known as in the west.
 <div>
-<img style="height:220px" src="./docs/img/enDjinn.svg" alt="enDjinn logo" />
+<img style="height:220px" code="./docs/img/enDjinn.svg" alt="enDjinn logo" />
 </div>
 
 So in short an invisible helper that sets heaven and earth in motion for you without any fuss and guides you along your quest to deliver software for the Dreamcast.
@@ -64,7 +64,9 @@ My current outline of topics to cover is as follows:
 ### Generators
 #### Textures
 #### Fonts
-See [enj_writing example](./examples/enj_writing/code/enj_writing.c) for now, description to follow. 
+The simplicity of the qfont system is demonstrated in the [enj_hello](./examples/enj_hello/) example. 
+
+For more richer font requirements to the [enj_writing example](./examples/enj_writing/code/enj_writing.c) for now. A more in depth description of this will follow. 
 
 #### Sound Effects
 #### CDI Images
