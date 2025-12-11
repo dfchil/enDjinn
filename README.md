@@ -66,7 +66,7 @@ My current outline of topics to cover is as follows:
 #### Fonts
 The simplicity of the qfont system is demonstrated in the [enj_hello](./examples/enj_hello/) example. 
 
-For more richer font requirements to the [enj_writing example](./examples/enj_writing/code/enj_writing.c) for now. A more in depth description of this will follow. 
+For richer font requirements to the [enj_writing example](./examples/enj_writing/code/enj_writing.c) for now. A more in depth description of this will follow. 
 
 #### Sound Effects
 #### CDI Images
