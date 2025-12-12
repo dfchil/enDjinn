@@ -23,14 +23,14 @@ typedef enum {
     PORT_N = 13,
     PORT_O = 14,
     PORT_P = 15,
-} port_name_e;
+} enj_ctrl_port_name_e;
 
 typedef enum {
     BUTTON_UP = 0b00,
     BUTTON_DOWN = 0b01,
     BUTTON_UP_THIS_FRAME = 0b10,
     BUTTON_DOWN_THIS_FRAME = 0b11,
-} button_state_e;
+} enj_button_state_e;
 
 // TODO: probably unecessary, remove in future
 typedef enum controller_type {
@@ -75,7 +75,7 @@ typedef struct {
 typedef struct enj_abstract_controller_s {
     struct {
         enj_controller_type_e type : 27;
-        port_name_e port : 5;
+        enj_ctrl_port_name_e port : 5;
     };
     void (*updatefun)(void* state, enj_ctrlr_state_t* dest);
     void* state;

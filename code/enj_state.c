@@ -60,6 +60,9 @@ void enj_state_set_soft_reset(uint32_t pattern) {
 
 void enj_shutdown_flag(void) { state.flags.shut_down = 1; }
 
+void enj_ctrl_init_local_devices(void);
+void enj_rumble_init_local_devices(void);
+
 int enj_startup() {
     enj_state_t* state = enj_state_get();
 
@@ -90,6 +93,10 @@ int enj_startup() {
 #endif
 
     state->flags.started = 1;
+
+    enj_ctrl_init_local_devices();
+    enj_rumble_init_local_devices();
+
     return 0;
 }
 
