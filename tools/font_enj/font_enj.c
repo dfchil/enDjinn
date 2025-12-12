@@ -215,7 +215,7 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
                      char* exclude_chars) {
     enj_font_header_t header = {0};
     header.version.major = 0;
-    header.version.minor = 1;
+    header.version.minor = 3;
     header.version.patch = 1;
 
     header.line_height = line_height;
