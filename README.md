@@ -12,7 +12,7 @@ enDjinn really tries to do all the boilerplate stuff for you in a reasonable way
 
 ```c
 #include <enDjinn/enj_enDjinn.h>
-#define MARGIN_LEFT (20 * ENJ_XSCALE)
+#define MARGIN_LEFT 40
 
 void render_PT(void *__unused) {
   enj_font_set_scale(4);

@@ -218,7 +218,7 @@ int enj_font_render_glyph(char glyph, enj_font_header_t* font, uint16_t x,
         return -1;
     }
     if (glyph == ' ') {
-        return font->line_height >> 1;
+        return (font->line_height * enj_font_scale) >> 2;
     }
     int glyph_index = (uint32_t)glyph - '!';
 
@@ -245,18 +245,25 @@ int enj_font_render_glyph(char glyph, enj_font_header_t* font, uint16_t x,
 int enj_font_string_width(const char* text, enj_font_header_t* font) {
     int output = 0;
     while (*text != '\0') {
-        if (*text == ' ' || !font->glyph_endings[*text].available == 0) {
-            output += (font->line_height >> 1) * enj_font_scale;
+        if (*text < ' ' || *text > '~') {
+            ENJ_DEBUG_PRINT("Glyph '%c' out of range for font\n", *text);
+            continue;
+        }
+        if (*text == ' ' ||
+            !font->glyph_endings[(uint8_t)*text].available == 0) {
+            output += ((font->line_height * enj_font_scale) >> 2);
         } else if (*text >= '!' && *text <= '~') {
             int glyph_index = (uint32_t)(*text) - '!';
             enj_glyph_offset_t glyph_start = font->glyph_endings[glyph_index];
             enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index + 1];
             int startx =
                 glyph_start.x_min > glyph_end.x_min ? 0 : glyph_start.x_min;
-            output += (enj_font_letter_spacing + glyph_end.x_min - startx) *
-                      enj_font_scale;
-            text++;
+            int width = (glyph_end.x_min - startx) * enj_font_scale;
+            output += width;
         }
+        output += enj_font_letter_spacing * enj_font_scale;
+        printf("Char '%c' adds width, total now %d\n", *text, output);
+        text++;
     }
     return output;
 }
@@ -288,12 +295,13 @@ int enj_font_string_render(const char* text, enj_font_header_t* font,
         }
         x_pos += (enj_font_letter_spacing * enj_font_scale) +
                  enj_font_render_glyph(*text, font, x_pos, y, state_ptr);
+        printf("Rendered char '%c' at x pos %d\n", *text, x_pos - x);
         text++;
     }
-    return x_pos - x;
     if (state_ptr == &static_dr_state) {
         pvr_dr_finish();
     }
+    return x_pos - x;
 }
 
 int enj_font_render_text_in_box(const char* text, enj_font_header_t* font,
@@ -331,7 +339,7 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t* font, uint8_t* data_4bpp,
         return NULL;
     }
 
-    uint16_t* buffer = calloc(width * height, sizeof(uint16_t));
+    uint16_t buffer[width * height * sizeof(uint16_t)];
     int dr, dg, db;
 
     switch (mode) {
@@ -347,13 +355,11 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t* font, uint8_t* data_4bpp,
 
             for (int i = 0; i < width * height; i++) {
                 uint8_t pixel_4bpp = extr_4bpp_pixel(data_4bpp, i);
-                buffer[i] = (pixel_4bpp > 0) << 15 |
-                    0x7fff;
-
-
+                buffer[i] = (pixel_4bpp > 0) << 15 | 0x7fff;
 
                 // (((back_color.r + dr) * pixel_4bpp) & 0x1F) << 6 |
-                //             (((back_color.g + dg) * pixel_4bpp) & 0x1F) << 1 |
+                //             (((back_color.g + dg) * pixel_4bpp) & 0x1F) << 1
+                //             |
                 //             (((back_color.b + db) * pixel_4bpp) & 0x1F) >> 3;
                 // buffer[i] = 0x7FE0;
             }
@@ -374,6 +380,5 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t* font, uint8_t* data_4bpp,
     }
     pvr_txr_load_ex((uint8_t*)buffer, pvr_data, width, height,
                     PVR_TXRLOAD_16BPP);
-    free(buffer);
     return pvr_data;
 }

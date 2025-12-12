@@ -296,7 +296,5 @@ int main(__unused int argc, __unused char** argv) {
     slide_data_t slide_mode_data;
     setup_modes(&main_mode, &slide_mode_data);
     enj_run();
-    enj_texture_unload(&figure_texture_info);
-    enj_texture_unload(&help_texture_info);
     return 0;
 }

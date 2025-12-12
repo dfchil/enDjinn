@@ -1,6 +1,4 @@
 
-#define ENJ_INJECT_QFONT
-
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/embeds/enj_qfont_data.h>
 #include <enDjinn/enj_draw.h>
