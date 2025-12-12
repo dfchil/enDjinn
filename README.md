@@ -3,7 +3,7 @@
 ## What is enDjinn?
 It is very obviously a play on the word 'engine', which enDjinn isn't quite, and an invocation of the Middle Eastern mythos of supernatural invisible beings, Djinn, or Genies as they are more commenly known as in the west.
 <div>
-<img style="height:220px" code="./docs/img/enDjinn.svg" alt="enDjinn logo" />
+<img style="height:220px" src="./docs/img/enDjinn.svg" alt="enDjinn logo" "/>
 </div>
 
 So in short an invisible helper that sets heaven and earth in motion for you without any fuss and guides you along your quest to deliver software for the Dreamcast.
@@ -51,7 +51,7 @@ The complete setup can be found in the examples folder in this repository: [enj_
 
 And please don't worry about being strong armed into a rigoristic and very specific way to do things, because while one part of the design philosphy is "powerfull zero config features out of the gate", another part is "as much a as possible should be reconfigurable by the user". I'll have more on how to wrangle the make system to your tastes and needs later. 
 
-Apart from the build system alluded to above, another big part of enDjinn is the runtime that tries to alleviate some of quirks of the Dreamcast system while amplifying its strengths. In this runtime you'll find a gameplay loop driver, a powerful sate machine, texture loading, a truetype based fonting system, controller and rumblepack handling and various other small things that I like to reuse between projects. 
+Apart from the build system alluded to above, another big part of enDjinn is the runtime that tries to alleviate some of quirks of the Dreamcast system while amplifying its strengths. In this runtime you'll find a gameplay loop driver, a powerful state machine, texture loading, a truetype based fonting system, controller and rumblepack handling and various other small things that I like to reuse between projects. 
 
 I'll add more documentation to all of the above and some features I haven't mentioned it in due time.
 
@@ -66,7 +66,7 @@ My current outline of topics to cover is as follows:
 #### Fonts
 The simplicity of the qfont system is demonstrated in the [enj_hello](./examples/enj_hello/) example. 
 
-For more richer font requirements to the [enj_writing example](./examples/enj_writing/code/enj_writing.c) for now. A more in depth description of this will follow. 
+For richer font requirements to the [enj_writing example](./examples/enj_writing/code/enj_writing.c) for now. A more in depth description of this will follow. 
 
 #### Sound Effects
 #### CDI Images
