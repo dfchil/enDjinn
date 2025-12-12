@@ -99,6 +99,5 @@ int main(__unused int argc, __unused char **argv) {
   setup_modes(&main_mode);
   enj_mode_push(&main_mode);
   enj_run();
-  enj_texture_unload(&figure_texture_info);
   return 0;
 }
