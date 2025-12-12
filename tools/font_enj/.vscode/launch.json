@@ -15,7 +15,7 @@
                 "16",
                 "-p",
                 "ctrl.png",
-                "--verbose"
+                "--verbose",
                 "-x",
                 "~",
                 "-h",
@@ -32,6 +32,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/font_enj",
+            // "args": ["-l", "27", "-i", "font/DejaVuSans.ttf", "-o", "out.enjfont", "-p", "ctrl.png"],
             "args": [
                 "-i",
                 "font/Dina-Regular.ttf",
@@ -41,10 +42,13 @@
                 "16",
                 "-p",
                 "ctrl.png",
-                "--verbose"
+                "--verbose",
+                "-x",
+                "\"~\"",
+                "-h",
             ],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${fileDirname}",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -61,6 +65,6 @@
                 }
             ],
             "preLaunchTask": "C gcc build active file"
-        },
+        }
     ]
 }

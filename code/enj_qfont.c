@@ -40,7 +40,7 @@ int enj_qfont_init() {
     enj_qf_pvr_data = enj_font_to_16bit_texture(
         enj_qf_hdr, enj_qfont_data + sizeof(enj_font_header_t), PVR_PIXEL_MODE_ARGB1555,
         (enj_color_t){.raw = 0xffffffff}, (enj_color_t){.raw = 0x00000000});
-
+    enj_qf_hdr->pvr_data = (uint32_t)enj_qf_pvr_data;
     enj_qfont_set_header(PVR_LIST_PT_POLY);
     return 0;
 }

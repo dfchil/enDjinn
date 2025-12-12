@@ -360,8 +360,8 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
             enj_glyph_offset_t glyph_start = header.glyph_endings[glyph_index];
             enj_glyph_offset_t glyph_end =
                 header.glyph_endings[glyph_index + 1];
-            printf(" Glyph '%c': %d:%d to %d:%d\n", glyph, glyph_start.line,
-                   glyph_start.x_min, glyph_end.line, glyph_end.x_min);
+            printf(" Glyph '%c': %d:%d to %d:%d available: %d\n", glyph, glyph_start.line,
+                   glyph_start.x_min, glyph_end.line, glyph_end.x_min, glyph_start.available);
         }
     }
 
