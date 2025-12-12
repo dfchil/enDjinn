@@ -29,9 +29,9 @@
 #endif
 
 #if ENJ_SUPERSAMPLING == 1
-#define ENJ_XSCALE 2.0f
+#define ENJ_XSCALE (int)2
 #else
-#define ENJ_XSCALE 1.0f
+#define ENJ_XSCALE (int)1
 #endif
 
 #ifdef ENJ_DEBUG

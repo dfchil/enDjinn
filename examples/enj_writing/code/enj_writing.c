@@ -134,7 +134,7 @@ void setup_fonts() {
     }
     if (!enj_font_PAL_OP_header(
             fonts_OP.indexed[i].font_hdr, &fonts_OP.indexed[i].sprite_hdr, 2,
-            (enj_color_t){.raw = 0xf171717f},
+            (enj_color_t){.raw = 0xff7f7f7f },
             (enj_color_t){.raw = enj_state_get()->video.bg_color.raw},
             PVR_PAL_ARGB8888)) {
       ENJ_DEBUG_PRINT("Failed to setup font_hdrs_OP[%d] header\n", i);
@@ -183,8 +183,9 @@ void render_PT(void *data) {
 
   enj_font_set_scale(2);
   int txtwidth = enj_font_string_width(proclamation, enj_qfont_get_header());
+  enj_qfont_get_sprite_hdr()->argb = 0xff1f1fff;
   int text_offset =
-      vid_mode->width - (mdata->rotation % (vid_mode->width + txtwidth));
+      vid_mode->width - ((mdata->rotation * ENJ_XSCALE ) % ((vid_mode->width + txtwidth)|1));
 
   int act_rw =
       enj_qfont_write(proclamation, text_offset, 114, PVR_LIST_PT_POLY);
@@ -221,24 +222,24 @@ void render_PT(void *data) {
 void render_TR(void *data) {
   mode_data_t *mdata = (mode_data_t *)data;
   float cos, sin;
-  fsincosr(-((mdata->rotation % 360) * (F_PI / 180.0f)), &sin, &cos);
-  alignas(32) float corners[4][3] = {
-      {-mdata->base_size, +mdata->base_size, 1.0f},
-      {-mdata->base_size, -mdata->base_size, 1.0f},
-      {+mdata->base_size, -mdata->base_size, 1.0f},
-      {+mdata->base_size, +mdata->base_size, 1.0f},
-  };
-  for (int i = 0; i < 4; i++) {
-    float x = corners[i][0];
-    float y = corners[i][1];
-    rotate2d(x, y, sin, cos, &corners[i][0], &corners[i][1]);
-    corners[i][0] += mdata->center_x;
-    corners[i][1] += mdata->center_y;
-  }
+//   fsincosr(-((mdata->rotation % 360) * (F_PI / 180.0f)), &sin, &cos);
+//   alignas(32) float corners[4][3] = {
+//       {-mdata->base_size, +mdata->base_size, 1.0f},
+//       {-mdata->base_size, -mdata->base_size, 1.0f},
+//       {+mdata->base_size, -mdata->base_size, 1.0f},
+//       {+mdata->base_size, +mdata->base_size, 1.0f},
+//   };
+//   for (int i = 0; i < 4; i++) {
+//     float x = corners[i][0];
+//     float y = corners[i][1];
+//     rotate2d(x, y, sin, cos, &corners[i][0], &corners[i][1]);
+//     corners[i][0] += mdata->center_x;
+//     corners[i][1] += mdata->center_y;
+//   }
 
   static pvr_dr_state_t static_dr_state;
   pvr_dr_init(&static_dr_state);
-  enj_draw_sprite(corners, &static_dr_state, &mdata->hdr, NULL);
+//   enj_draw_sprite(corners, &static_dr_state, &mdata->hdr, NULL);
 
   int fontstartx = MARGIN_LEFT;
   int fontstarty = 20;

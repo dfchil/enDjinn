@@ -27,6 +27,11 @@ ifdef ENJ_DEBUG
 	DEFINES += -DENJ_DEBUG
 endif
 
+ifdef ENJ_SUPERSAMPLING
+	DEFINES += -DENJ_SUPERSAMPLING=${ENJ_SUPERSAMPLING}
+endif
+
+
 ifdef DCTRACE
 DEFINES += -finstrument-functions -DDCTRACE
 OBJS += $(ENJ_BUILDDIR)/enDjinn/profilers/dcprofiler.o
