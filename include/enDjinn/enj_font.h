@@ -114,8 +114,8 @@ int enj_font_glyph_uv_coords(enj_font_header_t* font, char glyph, uint32_t* auv,
  * @note Method assumes that the PVR sprite header has already been committed
  * before calling this function
  */
-int enj_font_render_glyph(char glyph, enj_font_header_t* font, uint16_t x,
-                          uint16_t y, pvr_dr_state_t* state_ptr);
+int enj_font_render_glyph(char glyph, enj_font_header_t* font, int16_t x,
+                          int16_t y, pvr_dr_state_t* state_ptr);
 
 /**
  * Render a text string to the PVR command buffer
@@ -128,8 +128,8 @@ int enj_font_render_glyph(char glyph, enj_font_header_t* font, uint16_t x,
 
  * @return width of rendered text in pixels
  */
-int enj_font_string_render(const char* text, enj_font_header_t* font, uint16_t x,
-                         uint16_t y, pvr_sprite_hdr_t* sprite_header,
+int enj_font_string_render(const char* text, enj_font_header_t* font, int16_t x,
+                         int16_t y, pvr_sprite_hdr_t* sprite_header,
                          pvr_dr_state_t* state_ptr);
 
 /** Render text within a bounding box
@@ -145,7 +145,7 @@ int enj_font_string_render(const char* text, enj_font_header_t* font, uint16_t x
  * @return number of lines rendered
  */
 int enj_font_render_text_in_box(const char* text, enj_font_header_t* font,
-                                uint16_t min_x, uint16_t min_y,
+                                int16_t min_x, int16_t min_y,
                                 uint16_t box_width, uint16_t box_height,
                                 pvr_sprite_hdr_t* sprite_header,
                                 pvr_dr_state_t* state_ptr);
