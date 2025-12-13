@@ -4,17 +4,24 @@
 #include <string.h>
 #include <stdio.h>
 
+#ifndef ENJ_DEBUG_PRINT
+#define ENJ_DEBUG_PRINT(...)        \
+do {                                \
+  fprintf(stdout, __VA_ARGS__);     \
+} while (0)
+#endif
+
 
 #define BYTE_OFFSET(b) ((b) / ENJ_BITS_PER_BYTE)
 #define BIT_OFFSET(b) ((b) % ENJ_BITS_PER_BYTE)
 
 enj_bitmap_t *enj_bitmap_create(int width, int height) {
   if (width % 8 != 0) {
-    // ENJ_DEBUG_PRINT("Width must be a multiple of 8");
+    ENJ_DEBUG_PRINT("Width must be a multiple of 8");
     return NULL;
   }
   if (height % 8 != 0) {
-    // ENJ_DEBUG_PRINT("Height must be a multiple of 8");
+    ENJ_DEBUG_PRINT("Height must be a multiple of 8");
     return NULL;
   }
 
@@ -48,7 +55,7 @@ void enj_bitmap_set(enj_bitmap_t *bmap, int x, int y) {
   }
   int bit_offset = ((y * bmap->width) + x);
   if (bit_offset >= (bmap->width * bmap->height)) {
-    // ENJ_DEBUG_PRINT("enj_bitmap_set: x: %d y:%d offset:%d\n", x, y, bit_offset);
+    ENJ_DEBUG_PRINT("enj_bitmap_set: x: %d y:%d offset:%d\n", x, y, bit_offset);
     return;
   }
   int byte_index = BYTE_OFFSET(bit_offset);

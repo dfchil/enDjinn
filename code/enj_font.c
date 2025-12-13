@@ -12,6 +12,7 @@ static float enj_font_zvalue = 10.0f;
 static uint8_t enj_font_scale = 1;
 static uint8_t enj_font_letter_spacing = 1;
 
+
 void enj_font_set_scale(uint8_t scale) {
   if (scale == 0) {
     ENJ_DEBUG_PRINT("Scale cannot be zero, ignoring\n");
