@@ -2,6 +2,9 @@
 #define ENJ_BITMAP_H
 #include <stdint.h>
 
+
+#define ENJ_BITS_PER_BYTE 8
+
 typedef struct {
   uint32_t start_x : 9;
   int32_t start_y : 8;
@@ -13,7 +16,7 @@ typedef struct {
 typedef struct {
   int width;
   int height;
-  int8_t *data;
+  uint8_t *data;
 } enj_bitmap_t;
 
 /**
@@ -38,6 +41,14 @@ void enj_bitmap_destroy(enj_bitmap_t *bitmap);
  * @param y Y coordinate of the pixel to set
  */
 void enj_bitmap_set(enj_bitmap_t *bmap, int x, int y);
+
+/** Get a pixel from the bitmap
+ * @param bmap Pointer to the bitmap
+ * @param x X coordinate of the pixel to get
+ * @param y Y coordinate of the pixel to get
+ * @return 1 if the pixel is set, 0 if it is clear
+ */
+int enj_bitmap_get(enj_bitmap_t* bmap, int x, int y);
 
 /**
  * Clear a pixel in the bitmap
