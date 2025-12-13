@@ -1,6 +1,7 @@
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_draw.h>
 #include <enDjinn/enj_font.h>
+#include <enDjinn/enj_bitmap.h>
 #include <errno.h>
 #include <malloc.h>
 #include <stdio.h>
@@ -342,15 +343,25 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t *font, uint8_t *data_4bpp,
     dg = (front_color.g - back_color.g) / 15;
     db = (front_color.b - back_color.b) / 15;
 
-    for (int i = 0; i < width * height; i++) {
-      uint8_t pixel_4bpp = extr_4bpp_pixel(data_4bpp, i);
-      buffer[i] = (pixel_4bpp > 0) << 15 | 0x7fff;
-
-      // (((back_color.r + dr) * pixel_4bpp) & 0x1F) << 6 |
-      //             (((back_color.g + dg) * pixel_4bpp) & 0x1F) << 1
-      //             |
-      //             (((back_color.b + db) * pixel_4bpp) & 0x1F) >> 3;
-      // buffer[i] = 0x7FE0;
+    if (font->palette_type == ENJ_FONT_4BIT_PALETTE){
+        for (int i = 0; i < width * height; i++) {
+          uint8_t pixel_4bpp = extr_4bpp_pixel(data_4bpp, i);
+          buffer[i] = (pixel_4bpp > 0) << 15 | 0x7fff;
+    
+          // (((back_color.r + dr) * pixel_4bpp) & 0x1F) << 6 |
+          //             (((back_color.g + dg) * pixel_4bpp) & 0x1F) << 1
+          //             |
+          //             (((back_color.b + db) * pixel_4bpp) & 0x1F) >> 3;
+          // buffer[i] = 0x7FE0;
+        }
+    } else {
+        enj_bitmap_t bmap;
+        bmap.width = width;
+        bmap.height = height;
+        bmap.data = data_4bpp;
+        for (int i = 0; i < width * height; i++) {
+            buffer[i] = enj_bitmap_get(&bmap, i % width, i / width) << 15 | 0x7fff;
+        }
     }
     break;
   case PVR_PIXEL_MODE_RGB565:

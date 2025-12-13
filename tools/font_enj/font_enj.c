@@ -9,11 +9,13 @@
 #include "../stb/stb_image_write.h" /* http://nothings.org/stb/stb_image_write.h */
 
 #define STB_TRUETYPE_IMPLEMENTATION
+#include "../../include/enDjinn/enj_bitmap.h"
 #include "../../include/enDjinn/enj_font_types.h"
 #include "../stb/stb_truetype.h" /* http://nothings.org/stb/stb_truetype.h */
 
 static int verbose_flag = 0;
 static int horizontal_first = 0;
+static int bitmap_palette = 0;
 
 #define NUM_GLYPHS '~' - '!' + 1
 typedef struct {
@@ -280,7 +282,8 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
                                &sheet_height)) {
         return -1;
     }
-    uint8_t* bitmap = calloc(1, sheet_height * sheet_width * sizeof(uint8_t));
+    uint8_t* grayscale =
+        calloc(1, sheet_height * sheet_width * sizeof(uint8_t));
     for (char glyph = 0; glyph < NUM_GLYPHS; ++glyph) {
         if (!header.glyph_endings[glyph].available) {
             continue;
@@ -296,7 +299,7 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
                 uint8_t v1 =
                     renderings[glyph].data[yp * line_height * 2 +
                                            (xp + renderings[glyph].trim.start)];
-                bitmap[(y_min + yp) * sheet_width + (x_min + xp)] = v1;
+                grayscale[(y_min + yp) * sheet_width + (x_min + xp)] = v1;
             }
         }
     }
@@ -309,10 +312,11 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
     //         special_renderings[special_index].glyph = *sc;
     //         special_renderings[special_index].data =
     //             render_buffer +
-    //             ((NUM_GLYPHS + special_index) * line_height * line_height * 2);
+    //             ((NUM_GLYPHS + special_index) * line_height * line_height *
+    //             2);
     //         generate_glyph(special_renderings + special_index, &info,
     //                        line_height, scale);
-    //         // copy to bitmap
+    //         // copy to ctrl_grayscale
     //         int x_min = header.glyph_endings[NUM_GLYPHS].x_min;
     //         int y_min = header.glyph_endings[NUM_GLYPHS].line * line_height;
     //         if (header.special_glyphs[NUM_GLYPHS].line >
@@ -322,20 +326,36 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
     //     }
     // }
 
-    // 4 bits per pixel to PVR4bpp
-    uint8_t* pvrout =
-        calloc(1, (sheet_height * sheet_width * sizeof(uint8_t)) >> 1);
-
-    for (int i = 0; i < sheet_height * sheet_width; i += 1) {
-        uint8_t v1 = bitmap[i];
-        uint8_t curcol = ((v1 * 15 + 135) >> 4) & 0xF0;
-        bitmap[i] = curcol;
-        pvrout[i >> 1] |= i & 1 ? (curcol & 0xF0) : (curcol >> 4);
+    uint8_t* pvrout = NULL;
+    enj_bitmap_t* pvrbm = NULL;
+    if (!bitmap_palette) {
+        header.palette_type = ENJ_FONT_4BIT_PALETTE;
+        // 4 bits per pixel to PVR4bpp
+        pvrout = calloc(1, (sheet_height * sheet_width * sizeof(uint8_t)) >> 1);
+        for (int i = 0; i < sheet_height * sheet_width; i += 1) {
+            uint8_t v1 = grayscale[i];
+            uint8_t curcol = ((v1 * 15 + 135) >> 4) & 0xF0;
+            grayscale[i] = curcol;
+            pvrout[i >> 1] |= i & 1 ? (curcol & 0xF0) : (curcol >> 4);
+        }
+    } else {
+        header.palette_type = ENJ_FONT_1BIT_PALETTE;
+        // 1 bit per pixel to PVR1bpp
+        pvrbm = enj_bitmap_create(sheet_width, sheet_height);
+        pvrout = pvrbm->data;
+        for (int i = 0; i < sheet_height * sheet_width; i += 1) {
+            uint8_t v1 = grayscale[i];
+            uint8_t curcol = (v1 > 128) ? 0xFF : 0x00;
+            grayscale[i] = curcol;
+            if (curcol) {
+                enj_bitmap_set(pvrbm, i % sheet_width, i / sheet_width);
+            };
+        }
     }
 
     /* save out a 1 channel image */
     if (png_control) {
-        stbi_write_png(png_control, sheet_width, sheet_height, 1, bitmap,
+        stbi_write_png(png_control, sheet_width, sheet_height, 1, grayscale,
                        sheet_width);
     }
 
@@ -344,7 +364,7 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
     while ((1 << header.log2width) < sheet_width) {
         header.log2width++;
     };
-    header.log2height = 5; 
+    header.log2height = 5;
     while ((1 << header.log2height) < sheet_height) {
         header.log2height++;
     };
@@ -360,19 +380,27 @@ int font_genenerator(int line_height, char* font_path, char* output_path,
             enj_glyph_offset_t glyph_start = header.glyph_endings[glyph_index];
             enj_glyph_offset_t glyph_end =
                 header.glyph_endings[glyph_index + 1];
-            printf(" Glyph '%c': %d:%d to %d:%d available: %d\n", glyph, glyph_start.line,
-                   glyph_start.x_min, glyph_end.line, glyph_end.x_min, glyph_start.available);
+            printf(" Glyph '%c': %d:%d to %d:%d available: %d\n", glyph,
+                   glyph_start.line, glyph_start.x_min, glyph_end.line,
+                   glyph_end.x_min, glyph_start.available);
         }
     }
 
     FILE* outFile = fopen(output_path, "wb");
     fwrite(&header, 1, sizeof(enj_font_header_t), outFile);
-    fwrite(pvrout, 1, (sheet_height * sheet_width) / 2, outFile);
+
+    if (bitmap_palette) {
+        fwrite(pvrout, 1, (sheet_height * sheet_width) / ENJ_BITS_PER_BYTE,
+               outFile);
+        enj_bitmap_destroy(pvrbm);
+    } else {
+        fwrite(pvrout, 1, (sheet_height * sheet_width) / 2, outFile);
+        free(pvrout);
+    }
     fclose(outFile);
     free(render_buffer);
     free(fontBuffer);
-    free(bitmap);
-    free(pvrout);
+    free(grayscale);
 
     return 0;
 }
@@ -403,14 +431,14 @@ int main(int argc, char* argv[]) {
         {"png_control", optional_argument, 0, 'p'},
         {"special", optional_argument, 0, 's'},
         {"exclude", optional_argument, 0, 'x'},
-
+        {"bitmap_palette", optional_argument, 0, 'b'},
         {0, 0, 0, 0}};
 
     int sucess = 1;
     char opt;
     int option_index = 0;
 
-    while ((opt = getopt_long(argc, argv, "l:i:o:p:x:s:vdh", long_options,
+    while ((opt = getopt_long(argc, argv, "l:i:o:p:x:s:vdhb", long_options,
                               &option_index)) != -1) {
         switch (opt) {
             case 0:
@@ -436,11 +464,15 @@ int main(int argc, char* argv[]) {
             case 'v':
                 verbose_flag = 1;
                 break;
+            case 'b':
+                bitmap_palette = 1;
+                break;
             case 'x':
                 exclude_chars = optarg;
                 break;
             case 's':
-                printf("additional charachters %s, but not yet implementet", optarg);
+                printf("additional charachters %s, but not yet implementet",
+                       optarg);
             case '?':
                 printf("help text!\n");
             case 'h':
