@@ -52,6 +52,7 @@ struct font_hdrs_s {
 };
 
 #define MARGIN_LEFT 40
+#define MARGIN_RIGHT 40
 
 static const char* lorem_ipsum =
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod "
@@ -130,7 +131,7 @@ void render_OP(void* __unused) {
         fontstartx +=
             1 + enj_font_render_glyph(*li, fonts_OP.named.cmunrm_36.font_hdr,
                                       fontstartx, fontstarty, &static_dr_state);
-        if (fontstartx > vid_mode->width - 40) {
+        if (fontstartx > vid_mode->width - MARGIN_RIGHT) {
             fontstartx = MARGIN_LEFT;
             fontstarty += fonts_OP.named.cmunrm_36.font_hdr->line_height;
         }
@@ -143,11 +144,11 @@ void render_PT(void* data) {
     mode_data_t* mdata = (mode_data_t*)data;
     const char* proclamation = "enDjinn makes writing on the Dreamcast easy!";
 
-    enj_font_set_scale(8);
+    enj_font_set_scale(9);
     enj_font_set_zvalue(1.0f);
     int txtwidth = enj_font_string_width(proclamation, enj_qfont_get_header());
 
-    // enj_qfont_get_sprite_hdr()->argb = 0xff1f1fff;
+    enj_qfont_get_sprite_hdr()->argb = 0xff14a5ff;
     int text_offset = vid_mode->width - ((mdata->horizontal_scroll * ENJ_XSCALE) %
                                          ((vid_mode->width + txtwidth) | 1));
 
@@ -159,9 +160,9 @@ void render_PT(void* data) {
     pvr_dr_init(&static_dr_state);
 
     int fontstartx = MARGIN_LEFT;
-    int fontstarty = 0;
+    int fontstarty = (vid_mode->height >> 1) - 40;
     enj_font_set_zvalue(1.5f);
-    for (int i = 0; i < 3; i++) {
+    for (int i = 2; i >= 0; i--) {
         pvr_sprite_hdr_t* font_hdr_sq =
             (pvr_sprite_hdr_t*)pvr_dr_target((pvr_dr_state_t){0});
         *font_hdr_sq = fonts_PT.indexed[i].sprite_hdr;
@@ -172,12 +173,12 @@ void render_PT(void* data) {
             fontstartx += 3 + enj_font_render_glyph(
                                   c, fonts_PT.indexed[i].font_hdr, fontstartx,
                                   fontstarty, &static_dr_state);
-            if (fontstartx > vid_mode->width - 40) {
+            if (fontstartx > vid_mode->width - MARGIN_RIGHT) {
                 fontstartx = MARGIN_LEFT;
                 fontstarty += fonts_PT.indexed[i].font_hdr->line_height;
             }
         }
-        fontstarty += fonts_PT.indexed[i].font_hdr->line_height << 1;
+        fontstarty += fonts_PT.indexed[i].font_hdr->line_height;
     }
 
     pvr_dr_finish();
@@ -188,10 +189,9 @@ void render_TR(void* data) {
     pvr_dr_init(&static_dr_state);
 
     int fontstartx = MARGIN_LEFT;
-    int fontstarty = 20;
+    int fontstarty = 0;
     enj_font_set_zvalue(2.0f);
-
-    fontstarty = (vid_mode->height >> 1) + 20;
+    
     for (int i = 1; i < 3; i++) {
         pvr_sprite_hdr_t* font_hdr_sq =
             (pvr_sprite_hdr_t*)pvr_dr_target(static_dr_state);
@@ -203,7 +203,7 @@ void render_TR(void* data) {
             fontstartx += 3 + enj_font_render_glyph(
                                   c, fonts_TR.indexed[i].font_hdr, fontstartx,
                                   fontstarty, &static_dr_state);
-            if (fontstartx > vid_mode->width - 40) {
+            if (fontstartx > vid_mode->width - MARGIN_RIGHT) {
                 fontstartx = MARGIN_LEFT;
                 fontstarty += fonts_TR.indexed[i].font_hdr->line_height;
             }
