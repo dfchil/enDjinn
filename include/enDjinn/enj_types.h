@@ -1,5 +1,5 @@
-#ifndef _ENJ_TYPES_H_
-#define _ENJ_TYPES_H_
+#ifndef ENJ_TYPES_H
+#define ENJ_TYPES_H
 
 typedef union {
   uint32 raw; // 0xBBGGRRAA
@@ -11,4 +11,4 @@ typedef union {
   };
 } enj_color_t;
 
-#endif /* _ENJ_TYPES_H_ */
+#endif /* ENJ_TYPES_H */
