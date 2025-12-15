@@ -5,8 +5,7 @@
 #include <enDjinn/enj_defs.h>
 
 
-static int enj_rumble_rate_limit = 24; // frames of cooldown between rumble commands
-
+static int enj_rumble_rate_limit = 12; // frames of cooldown between rumble commands
 static maple_device_t* local_rumblers[MAPLE_PORT_COUNT] = {0};
 static int rumble_rate_limits[MAPLE_PORT_COUNT] = {0};
 static uint32_t pending_rumble_effects[MAPLE_PORT_COUNT] = {0};
