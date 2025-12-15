@@ -1,11 +1,11 @@
 
 
-#include <enDjinn/enj_rumble.h>
+#include <enDjinn/enj_rumbler.h>
 #include <dc/maple/purupuru.h>
+#include <enDjinn/enj_defs.h>
 
 
-static int enj_rumble_rate_limit = 6; // frames of cooldown between rumble commands
-
+static int enj_rumble_rate_limit = 12; // frames of cooldown between rumble commands
 static maple_device_t* local_rumblers[MAPLE_PORT_COUNT] = {0};
 static int rumble_rate_limits[MAPLE_PORT_COUNT] = {0};
 static uint32_t pending_rumble_effects[MAPLE_PORT_COUNT] = {0};
@@ -38,7 +38,7 @@ void enj_rumble_set_rate_limit(int frames) {
     enj_rumble_rate_limit = frames;
 }
 
-enj_rumble_reply_e enj_set_rumble(enj_ctrl_port_name_e ctrloffset,
+enj_rumbler_reply_e enj_rumbler_set_effect(enj_ctrl_port_name_e ctrloffset,
                                    uint32_t raw) {
     
     if (ctrloffset > MAPLE_PORT_COUNT) {
@@ -48,17 +48,43 @@ enj_rumble_reply_e enj_set_rumble(enj_ctrl_port_name_e ctrloffset,
     if (rumble_dev == NULL) {
         return enj_rumble_no_device;
     }
-    enj_rumble_reply_e reply = enj_rumble_set;
+    enj_rumbler_reply_e reply = enj_rumble_set;
     if (pending_rumble_effects[ctrloffset] != 0) {
         // there's a pending effect to send
         reply |= enj_rumble_overwrote_previous;
     }
     if (rumble_rate_limits[ctrloffset] > 0) {
         reply |= enj_rumble_rate_limited;
-    } else {
-      rumble_rate_limits[ctrloffset] = enj_rumble_rate_limit;
     }
 
     pending_rumble_effects[ctrloffset] = raw;
     return reply;
+}
+
+maple_device_t** enj_rumbler_get_states() {
+    return local_rumblers;
+}
+
+void enj_rumbler_update(void) {
+    for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+        if (rumble_rate_limits[i] > 0) {
+            rumble_rate_limits[i]--;
+        }
+        if (local_rumblers[i] == NULL) {
+            // no rumble device on this port
+            if (pending_rumble_effects[i] != 0 || rumble_rate_limits[i] != 0) {
+                ENJ_DEBUG_PRINT(
+                    "Rumble effect pending for port %d but no device!\n", i);
+            }
+            pending_rumble_effects[i] = 0;
+            rumble_rate_limits[i] = 0;
+            continue;
+        }
+        if (pending_rumble_effects[i] != 0 && rumble_rate_limits[i] == 0) {
+            purupuru_rumble_raw(local_rumblers[i],
+                                  pending_rumble_effects[i]);
+            pending_rumble_effects[i] = 0;
+            rumble_rate_limits[i] = enj_rumble_rate_limit;
+        }
+    }
 }

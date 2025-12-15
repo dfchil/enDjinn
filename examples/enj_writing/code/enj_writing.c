@@ -152,7 +152,7 @@ void render_PT(void* data) {
     int text_offset = vid_mode->width - ((mdata->horizontal_scroll * ENJ_XSCALE) %
                                          ((vid_mode->width + txtwidth) | 1));
 
-    enj_qfont_write(proclamation, text_offset, 114, PVR_LIST_PT_POLY);
+    enj_qfont_write(proclamation, text_offset, 134, PVR_LIST_PT_POLY);
     enj_font_set_scale(1);
     enj_font_set_zvalue(2.0f);
 
@@ -178,7 +178,7 @@ void render_PT(void* data) {
                 fontstarty += fonts_PT.indexed[i].font_hdr->line_height;
             }
         }
-        fontstarty += fonts_PT.indexed[i].font_hdr->line_height;
+        fontstarty += fonts_PT.indexed[i].font_hdr->line_height << 1;
     }
 
     pvr_dr_finish();
