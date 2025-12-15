@@ -1,18 +1,11 @@
-#include <dc/maple.h>
-#include <dc/maple/controller.h>
-#include <dc/maple/purupuru.h>
-#include <dc/minifont.h>
-#include <dc/video.h>
 #include <enDjinn/enj_enDjinn.h>
-#include <kos/init.h>
+#include <dc/maple/purupuru.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 
 typedef struct {
   purupuru_effect_t effect;
-  const char *description;
+  const char* description;
 } baked_pattern_t;
 
 typedef struct {
@@ -20,18 +13,13 @@ typedef struct {
     uint32_t no_controller : 1;
     uint32_t no_rumbler : 1;
     uint32_t active_controller : 2;
-    uint32_t reserved : 28;
-  } flags;
-  int cursor_pos = 0;
-  size_t catalog_index = 0;
-  int loaded_pattern = -1;
+    uint32_t catalog_index: 4;
+    int32_t cursor_pos : 5;
+    int32_t loaded_pattern : 5;
+    uint32_t reserved : 14;
+  };
   purupuru_effect_t effect;
-
-  cont_state_t *state;
-  maple_device_t *contdev = NULL;
-  maple_device_t *purudev = NULL;
-  uint16_t old_buttons = 0;
-  uint16_t rel_buttons = 0;
+  maple_device_t* purudev;
 
 } RAT_state_t;
 
@@ -60,7 +48,7 @@ static const baked_pattern_t catalog[] = {
      .description = "Ship's Thrust (as in AAC)"},
 };
 
-static const char *fieldnames[] = {"cont", "res",  "motor", "bpow", "div",
+static const char* fieldnames[] = {"cont", "res",  "motor", "bpow", "div",
                                    "fpow", "conv", "freq",  "inc"};
 static const int num_fields = sizeof(fieldnames) / sizeof(fieldnames[0]);
 
@@ -72,129 +60,119 @@ void enj_qfont_set_color(uint8_t r, uint8_t g, uint8_t b) {
   enj_qfont_get_sprite_hdr()->argb = 0xff000000 | (r << 16) | (g << 8) | b;
 }
 
-static inline uint8_t offset2field(int offset) {
+static inline uint8_t offset2field(int offset, RAT_state_t *state) {
   switch (offset) {
-  case 0:
-    return effect.cont; // cont
-  case 1:
-    return effect.res; // res
-  case 2:
-    return effect.motor; // motor
-  case 3:
-    return effect.bpow; // bpow
-  case 4:
-    return effect.div; // div
-  case 5:
-    return effect.fpow; // fpow
-  case 6:
-    return effect.conv; // conv
-  case 7:
-    return effect.freq; // freq
-  case 8:
-    return effect.inc; // inc
-  default:
-    return -1;
-  }
-}
-static inline void alter_field_at_offset(int offset, int delta) {
-  switch (offset) {
-  case 0:
-    effect.cont = !effect.cont; // cont
-    break;
-  case 1:
-    break; // res (reserved, cannot be changed)
-  case 2:
-    effect.motor = (effect.motor + delta) & 0xf; // motor
-    if (effect.motor == 0)
-      effect.motor = 1; // motor cannot be zero
-    break;
-  case 3:
-    effect.bpow = (effect.bpow + delta) & 0x7; // bpow
-    if (effect.bpow)
-      effect.fpow = 0; // cannot have both forward and backward power
-    break;
-  case 4:
-    effect.div = !effect.div; // div
-    if (effect.conv && effect.div)
-      effect.conv = false; // cannot have both convergent and divergent
-    break;
-  case 5:
-    effect.fpow = (effect.fpow + delta) & 0x7; // fpow
-    if (effect.fpow)
-      effect.bpow = 0; // cannot have both forward and backward power
-    break;
-  case 6:
-    effect.conv = !effect.conv; // conv
-    if (effect.conv && effect.div)
-      effect.div = false; // cannot have both convergent and divergent
-    break;
-  case 7:
-    effect.freq = (effect.freq + delta) & 0xff; // freq
-    break;
-  case 8:
-    effect.inc = (effect.inc + delta) & 0xff; // inc
-    break;
-  default:
-    break;
+    case 0:
+      return state->effect.cont;  // cont
+    case 1:
+      return state->effect.res;  // res
+    case 2:
+      return state->effect.motor;  // motor
+    case 3:
+      return state->effect.bpow;  // bpow
+    case 4:
+      return state->effect.div;  // div
+    case 5:
+      return state->effect.fpow;  // fpow
+    case 6:
+      return state->effect.conv;  // conv
+    case 7:
+      return state->effect.freq;  // freq
+    case 8:
+      return state->effect.inc;  // inc
+    default:
+      return -1;
   }
 }
 
-void render_error(void *data) {
-  int func = (int)data;
-  int textpos_x = 40, textpos_y = 200;
+static inline void alter_field_at_offset(int offset, int delta, RAT_state_t *state) {
+  switch (offset) {
+    case 0:
+      state->effect.cont = !state->effect.cont;  // cont
+      break;
+    case 1:
+      break;  // res (reserved, cannot be changed)
+    case 2:
+      state->effect.motor = (state->effect.motor + delta) & 0xf;  // motor
+      if (state->effect.motor == 0) state->effect.motor = 1;      // motor cannot be zero
+      break;
+    case 3:
+      state->effect.bpow = (state->effect.bpow + delta) & 0x7;  // bpow
+      if (state->effect.bpow)
+        state->effect.fpow = 0;  // cannot have both forward and backward power
+      break;
+    case 4:
+      state->effect.div = !state->effect.div;  // div
+      if (state->effect.conv && state->effect.div)
+        state->effect.conv = false;  // cannot have both convergent and divergent
+      break;
+    case 5:
+      state->effect.fpow = (state->effect.fpow + delta) & 0x7;  // fpow
+      if (state->effect.fpow)
+        state->effect.bpow = 0;  // cannot have both forward and backward power
+      break;
+    case 6:
+      state->effect.conv = !state->effect.conv;  // conv
+      if (state->effect.conv && state->effect.div)
+        state->effect.div = false;  // cannot have both convergent and divergent
+      break;
+    case 7:
+      state->effect.freq = (state->effect.freq + delta) & 0xff;  // freq
+      break;
+    case 8:
+      state->effect.inc = (state->effect.inc + delta) & 0xff;  // inc
+      break;
+    default:
+      break;
+  }
+}
 
-  switch (func) {
-  case MAPLE_FUNC_CONTROLLER:
-    enj_qfont_write("Please attach a controller to port A!", textpos_x,
-                    textpos_y, PVR_LIST_PT_POLY);
-    break;
+void render(void* data) {
+  RAT_state_t* state = (RAT_state_t*)data;
 
-  case MAPLE_FUNC_PURUPURU:
+  if (state->no_controller) {
+    enj_qfont_write("Please attach a controller to port A!", 20,
+                    20, PVR_LIST_PT_POLY);
+    return;
+  }
+  if (state->no_rumbler) {
     enj_qfont_write("Please attach a rumbler to controller in port A!",
-                    textpos_x, textpos_y, PVR_LIST_PT_POLY);
-  default:
-    break;
+                    20, 20, PVR_LIST_PT_POLY);
+    return;
   }
-}
-
-/* This blocks waiting for a specified device to be present and valid */
-void wait_for_dev_attach(maple_device_t **dev_ptr, unsigned int func) {
-  maple_device_t *dev = NULL;
-  do {
-    /* If we already have it, and it's still valid, leave */
-    for (int u = 0; u < MAPLE_UNIT_COUNT; u++) {
-      /* Only check for valid device on port A/0 */
-      dev = maple_enum_dev(0, u);
-
-      if (dev != NULL && dev->valid && (dev->info.functions & func)) {
-        *dev_ptr = dev;
-        return;
-      }
-    }
-  } while ((dev == NULL) || !dev->valid);
-  enj_renderlist_add(PVR_LIST_PT_POLY, render_error, (void *)func);
-}
-
-void render(void *__unused) {
 
 #define STRBUFSIZE 64
-  static char str_buffer[STRBUFSIZE];
+#define MARGIN_LEFT 10
+  char str_buffer[STRBUFSIZE];
 
-  /* Start drawing and draw the header */
   enj_qfont_set_color(0xff, 0xc0, 0x10); /* gold */
   enj_font_set_scale(2);
   int twidth =
       enj_font_string_width("Rumble Accessory Tester", enj_qfont_get_header());
   int textpos_x = (vid_mode->width - twidth) >> 1;
-  int textpos_y = 24;
+  int textpos_y = 4;
   enj_qfont_write("Rumble Accessory Tester", textpos_x, textpos_y,
                   PVR_LIST_PT_POLY);
   enj_font_set_scale(1);
-  /* Start drawing the changeable section of the screen */
-  textpos_y += 28;
-  textpos_x = 10;
-  enj_qfont_set_color(0, 0, 255); /* Blue */
 
+  /* Start drawing the changeable section of the screen */
+  textpos_y += 4 * enj_qfont_get_header()->line_height;
+
+  textpos_x = MARGIN_LEFT;
+  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_write("Effect as hex value:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
+  enj_qfont_set_color(255, 0, 255); /* Magenta */
+  snprintf(str_buffer, STRBUFSIZE, "0x%08lx", state->effect.raw);
+  textpos_x = 170;
+  enj_qfont_write(str_buffer, textpos_x, textpos_y, PVR_LIST_PT_POLY);
+  textpos_y += enj_qfont_get_header()->line_height *2;
+  textpos_x = MARGIN_LEFT;
+
+  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_write("Effect as fields:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
+  textpos_y += enj_qfont_get_header()->line_height;
+  
+  enj_qfont_set_color(0x14, 0xaf, 255); /* Light Blue */
   for (int i = 0; i < num_fields; i++) {
     enj_qfont_write(fieldnames[i], textpos_x + 60 * i, textpos_y,
                     PVR_LIST_PT_POLY);
@@ -202,40 +180,33 @@ void render(void *__unused) {
   textpos_y += enj_qfont_get_header()->line_height;
 
   for (int i = 0; i < num_fields; i++) {
-    if (cursor_pos == i)
+    if (state->cursor_pos == i)
       enj_qfont_set_color(255, 0, 0); /* Red */
     else
       enj_qfont_set_color(255, 255, 255); /* White */
 
-    snprintf(str_buffer, STRBUFSIZE, " %u ", offset2field(i));
+    snprintf(str_buffer, STRBUFSIZE, " %u ", offset2field(i, &*state));
     enj_qfont_write(str_buffer, textpos_x + 60 * i, textpos_y,
                     PVR_LIST_PT_POLY);
   }
 
   textpos_y += 20;
-  textpos_x = 10;
-  enj_qfont_set_color(255, 255, 255); /* White */
-
-  enj_qfont_write("effect hex value:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
-  enj_qfont_set_color(255, 0, 255); /* Magenta */
-  snprintf(str_buffer, STRBUFSIZE, "0x%08lx", effect.raw);
-  textpos_x = 170;
-  enj_qfont_write(str_buffer, textpos_x, textpos_y, PVR_LIST_PT_POLY);
 
   textpos_y += enj_qfont_get_header()->line_height;
-  textpos_x = 10;
+  textpos_x = MARGIN_LEFT;
   enj_qfont_set_color(255, 255, 255); /* White */
   enj_qfont_write("Field description:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
   enj_qfont_set_color(255, 0, 0); /* RED */
   textpos_x = 170;
   textpos_x += enj_qfont_write(" [", textpos_x, textpos_y, PVR_LIST_PT_POLY);
-  textpos_x += enj_qfont_write(fieldnames[cursor_pos], textpos_x, textpos_y,
+  textpos_x += enj_qfont_write(fieldnames[state->cursor_pos], textpos_x, textpos_y,
                                PVR_LIST_PT_POLY);
-  textpos_x += enj_qfont_write("]", textpos_x, textpos_y, PVR_LIST_PT_POLY);
+  enj_qfont_write("]", textpos_x, textpos_y, PVR_LIST_PT_POLY);
   textpos_y += enj_qfont_get_header()->line_height;
-  textpos_x += 20;
+  textpos_x = MARGIN_LEFT * 3;
+
   enj_qfont_set_color(255, 255, 255); /* White */
-  const char *field_descriptions[] = {
+  const char* field_descriptions[] = {
       // note that each description is 2 lines, some empty
       "Continuous Vibration. When set vibration will "
       "continue until stopped",
@@ -266,10 +237,8 @@ void render(void *__unused) {
       "it stops.",
       "Exclusive with .div.",
 
-      "Vibration frequency. For most purupuru the range is "
-      "4-59. Field is "
-      "8-bits.",
-      "",
+      "Vibration frequency. For most purupuru the range is 4-59.",
+      "Field is 8-bits.",
 
       "Vibration inclination period setting bits. Field is "
       "8-bits.",
@@ -278,33 +247,37 @@ void render(void *__unused) {
       "Setting .inc == 0 when .conv or .div are set "
       "results in error.",
       ""};
-  enj_qfont_write(field_descriptions[cursor_pos * 2], textpos_x, textpos_y,
+  enj_qfont_write(field_descriptions[state->cursor_pos * 2], textpos_x, textpos_y,
                   PVR_LIST_PT_POLY);
   textpos_y += enj_qfont_get_header()->line_height;
-  enj_qfont_write(field_descriptions[cursor_pos * 2 + 1], textpos_x, textpos_y,
+  enj_qfont_write(field_descriptions[state->cursor_pos * 2 + 1], textpos_x, textpos_y,
                   PVR_LIST_PT_POLY);
-  if (loaded_pattern >= 0) {
-    textpos_y = 200;
-    textpos_x = 10;
+  if (state->loaded_pattern >= 0) {
+    textpos_y = 240;
+    textpos_x = MARGIN_LEFT;
     enj_qfont_write("Loaded baked pattern:", textpos_x, textpos_y,
                     PVR_LIST_PT_POLY);
     enj_qfont_set_color(0, 255, 0); /* Green */
     textpos_y += enj_qfont_get_header()->line_height;
-    enj_qfont_write(catalog[loaded_pattern].description, textpos_x, textpos_y,
+    enj_qfont_write(catalog[state->loaded_pattern].description, textpos_x, textpos_y,
                     PVR_LIST_PT_POLY);
     textpos_y += enj_qfont_get_header()->line_height;
   }
 
   /* Draw the bottom half of the screen and finish it up. */
-  textpos_y = 360;
-  textpos_x = 10;
+  textpos_y = 344;
+  textpos_x = MARGIN_LEFT;
+
+  enj_qfont_set_color(0xff, 0xc0, 0x10); /* gold */
+  enj_qfont_write("Instructions:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
+  textpos_y += enj_qfont_get_header()->line_height;
   enj_qfont_set_color(255, 255, 255); /* White */
-  const char *instructions[] = {"Press left/right to switch field.",
+  const char* instructions[] = {"Press left/right to switch field.",
                                 "Press up/down to change values.",
                                 "Press A to send effect to rumblepack.",
                                 "Press B to stop rumble.",
-                                "Press X for next baked pattern",
-                                "Press Start to quit."};
+                                "Press X for next baked pattern.",
+                                "Press START to end program."};
 
   for (size_t i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++) {
     enj_qfont_write(instructions[i], textpos_x, textpos_y, PVR_LIST_PT_POLY);
@@ -312,84 +285,90 @@ void render(void *__unused) {
   }
 }
 
-void main_mode_updater(void *data) {
+void main_mode_updater(void* data) {
+  do {
+    RAT_state_t* state = (RAT_state_t*)data;
 
-  state = NULL;
-  // while (state == NULL) {
-  //   wait_for_dev_attach(&contdev, MAPLE_FUNC_CONTROLLER);
-  //   /* Store current button states + buttons which have been released. */
-  //   state = (cont_state_t *)maple_dev_status(contdev);
-  // }
-  // wait_for_dev_attach(&purudev, MAPLE_FUNC_PURUPURU);
+    // neeeds to be at least one controller with a rumble pack
+    enj_ctrlr_state_t** ctrl_states = enj_ctrl_get_states();
+    maple_device_t** rumble_states = enj_rumbler_get_states();
 
-  /* Make sure we can rely on the state, otherwise loop. */
-  // if (state == NULL)
-  //   return;
+    state->no_controller = 1;
+    state->no_rumbler = 1;
+    state->purudev = NULL;
 
-  rel_buttons = (old_buttons ^ state->buttons);
 
-  if ((state->buttons & CONT_DPAD_LEFT) && (rel_buttons & CONT_DPAD_LEFT)) {
-    cursor_pos = cursor_pos - 1;
+    for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+      if (ctrl_states[i] != NULL) {
+        state->no_controller = 0;
+      }
+      if (rumble_states[i] != NULL) {
+        state->no_rumbler = 0;
+        state->purudev = rumble_states[i];
+        state->active_controller = i;
+      }
+    }
+    if (state->no_controller || state->no_rumbler) {
+      break;
+    }
 
-    if (cursor_pos < 0)
-      cursor_pos = num_fields - 1;
+    if (ctrl_states[state->active_controller]->buttons.LEFT ==
+        BUTTON_DOWN_THIS_FRAME) {
+      state->cursor_pos = (state->cursor_pos - 1) % num_fields;
+      if (state->cursor_pos == 1) state->cursor_pos = 0;
+    }
 
-    if (cursor_pos == 1)
-      cursor_pos = 0;
-  }
+    if (ctrl_states[state->active_controller]->buttons.RIGHT ==
+        BUTTON_DOWN_THIS_FRAME) {
+      state->cursor_pos = (state->cursor_pos + 1) % num_fields;
+      if (state->cursor_pos == 1) state->cursor_pos = 2;
+    }
 
-  if ((state->buttons & CONT_DPAD_RIGHT) && (rel_buttons & CONT_DPAD_RIGHT)) {
-    cursor_pos = (cursor_pos + 1) % num_fields;
+    int delta = ctrl_states[state->active_controller]->buttons.UP ==
+                        BUTTON_DOWN_THIS_FRAME
+                    ? 1
+                : ctrl_states[state->active_controller]->buttons.DOWN ==
+                        BUTTON_DOWN_THIS_FRAME
+                    ? -1
+                    : 0;
 
-    if (cursor_pos == 1)
-      cursor_pos = 2;
-  }
+    if (delta) {
+      alter_field_at_offset(state->cursor_pos, delta, state);
+      state->loaded_pattern = -1;  // custom pattern, not from catalog
+    }
 
-  int delta = (state->buttons & CONT_DPAD_UP)
-                  ? 1
-                  : ((state->buttons & CONT_DPAD_DOWN) ? -1 : 0);
+    if (ctrl_states[state->active_controller]->buttons.X ==
+        BUTTON_DOWN_THIS_FRAME) {
+      state->effect = catalog[state->catalog_index].effect;
+      state->loaded_pattern = state->catalog_index;
+      state->catalog_index++;
 
-  if (delta) {
-    alter_field_at_offset(cursor_pos, delta);
-    loaded_pattern = -1;
-    usleep(100000); /* 1/10th second to make it humanely manageable*/
-  }
+      if (state->catalog_index >= sizeof(catalog) / sizeof(baked_pattern_t))
+        state->catalog_index = 0;
+    }
 
-  if ((state->buttons & CONT_X) && (rel_buttons & CONT_X)) {
-    effect = catalog[catalog_index].effect;
-    loaded_pattern = catalog_index;
-    catalog_index++;
-
-    if (catalog_index >= sizeof(catalog) / sizeof(baked_pattern_t))
-      catalog_index = 0;
-  }
-
-  if ((state->buttons & CONT_A) && (rel_buttons & CONT_A)) {
-    /* We print these out to make it easier to track the options chosen
-     */
-    printf("Rumble effect hex code: 0x%lx!\n", effect.raw);
-    // purupuru_rumble(purudev, &effect);
-  }
-
-  if ((state->buttons & CONT_B) && (rel_buttons & CONT_B)) {
-    // purupuru_rumble(purudev, &rumble_stop);
-    printf("Rumble Stopped!\n");
-  }
-
-  old_buttons = state->buttons;
-
+    if (ctrl_states[state->active_controller]->buttons.A ==
+        BUTTON_DOWN_THIS_FRAME) {
+      /* We print these out to make it easier to track the options chosen
+       */
+      ENJ_DEBUG_PRINT("Rumble effect hex code: 0x%lx!\n", state->effect.raw);
+      enj_rumbler_set_effect(state->active_controller, state->effect.raw);
+    }
+    if (ctrl_states[state->active_controller]->buttons.B ==
+        BUTTON_DOWN_THIS_FRAME) {
+          enj_rumbler_set_effect(state->active_controller, rumble_stop.raw);
+      ENJ_DEBUG_PRINT("Rumble Stopped!\n");
+    }
+  } while (0);
   enj_renderlist_add(PVR_LIST_PT_POLY, render, data);
 }
 
-int main(__unused int argc, __unused char **argv) {
+int main(__unused int argc, __unused char** argv) {
   enj_state_defaults();
   // default soft-reset pattern is START + A + B + X + Y.
-  // Lets make it easier with just START + A.
-  // A is offset 0 in bitfield and START is offset
-  // 8<<1 (two bits per button)
-  enj_state_set_soft_reset(BUTTON_DOWN << (8 << 1) | BUTTON_DOWN);
-  // enj_state_get()->video.bg_color.raw = (enj_color_t){.raw =
-  // 0xFF00bbff}.raw;
+  // Lets make it easier with just START
+  // START is offset 8<<1 (two bits per button)
+  enj_state_set_soft_reset(BUTTON_DOWN << (8 << 1));
 
   if (enj_startup() != 0) {
     ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
@@ -399,7 +378,7 @@ int main(__unused int argc, __unused char **argv) {
     .catalog_index = 0,
     .cursor_pos = 0,
     .loaded_pattern = -1,
-    .effect = rumble_stop;
+    .effect = rumble_stop
 };
 enj_mode_t main_mode = {
     .name = "Main Mode",
@@ -408,10 +387,6 @@ enj_mode_t main_mode = {
 };
 enj_mode_push(&main_mode);
 enj_run();
-
-/* Stop rumbling before exiting, if it still exists. */
-// if ((purudev != NULL) && purudev->valid)
-//     purupuru_rumble(purudev, &rumble_stop);
 
 return 0;
 }

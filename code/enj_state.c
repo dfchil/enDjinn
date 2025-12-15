@@ -62,6 +62,7 @@ void enj_shutdown_flag(void) { state.flags.shut_down = 1; }
 
 void enj_ctrl_init_local_devices(void);
 void enj_rumble_init_local_devices(void);
+void enj_rumbler_update(void);
 
 int enj_startup() {
     enj_state_t* state = enj_state_get();
@@ -161,6 +162,7 @@ void enj_run(void) {
             }
         }
         enj_next_frame(enj_mode_get());
+        enj_rumbler_update();
     }
 #ifdef DCPROF
     profiler_stop();
