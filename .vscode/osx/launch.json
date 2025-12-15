@@ -10,12 +10,12 @@
 			"request": "launch",
 			"preLaunchTask": "Build",
 			"cwd": "${workspaceFolder}",
-			"program": "${workspaceFolder}/examples/enj_hello/bin/enj_hello.elf",
+			"program": "${workspaceFolder}/examples/enj_rumble/bin/enj_rumble.elf",
 			"MIMode": "gdb",
 			"miDebuggerPath": "/opt/toolchains/dc/sh-elf/bin/sh-elf-gdb",
 			"miDebuggerServerAddress": "localhost:2159", //common misconception: we connect to the gdb server offered by dc-tool-ip, NOT to the Dreamcast directly !
 			"debugServerPath": "/opt/toolchains/dc/bin/dc-tool-ip",
-			"debugServerArgs": "-g -t 192.168.2.7 -x ${workspaceFolder}/examples/enj_hello/bin/enj_hello.elf",
+			"debugServerArgs": "-g -t 192.168.2.7 -x ${workspaceFolder}/examples/enj_rumble/bin/enj_rumble.elf",
 			"externalConsole": false,
 			"avoidWindowsConsoleRedirection": false,
 			"internalConsoleOptions": "openOnSessionStart"
