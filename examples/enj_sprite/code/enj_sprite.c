@@ -68,10 +68,6 @@ void setup_modes(enj_mode_t *main_mode) {
 
 int main(__unused int argc, __unused char **argv) {
 
-  #ifdef ENJ_DIR
-  ENJ_DEBUG_PRINT("enDjinn directory: %s\n", ENJ_DIR);
-  #endif
-
   // initialize enDjinn state with default values
   enj_state_defaults();
   // default soft-reset pattern is START + A + B + X + Y.
