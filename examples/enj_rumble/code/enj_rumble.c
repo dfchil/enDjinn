@@ -314,7 +314,9 @@ void main_mode_updater(void* data) {
 
     if (ctrl_states[state->active_controller]->buttons.LEFT ==
         BUTTON_DOWN_THIS_FRAME) {
-      state->cursor_pos = (state->cursor_pos - 1) % num_fields;
+      state->cursor_pos = state->cursor_pos - 1;
+      if (state->cursor_pos < 0)
+        state->cursor_pos = num_fields - 1;
       if (state->cursor_pos == 1) state->cursor_pos = 0;
     }
 
