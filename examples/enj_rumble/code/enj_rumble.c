@@ -146,7 +146,7 @@ void render(void* data) {
   char str_buffer[STRBUFSIZE];
 
   enj_qfont_set_color(0xff, 0xc0, 0x10); /* gold */
-  enj_font_set_scale(2);
+  enj_font_set_scale(3);
   int twidth =
       enj_font_string_width("Rumble Accessory Tester", enj_qfont_get_header());
   int textpos_x = (vid_mode->width - twidth) >> 1;
