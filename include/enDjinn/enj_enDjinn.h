@@ -9,7 +9,9 @@
  *  \copyright MIT License
  */
 
-#ifndef ENDJINN_ENDJINN_H
+#ifndef ENJ_ENDJINN_H
+#define ENJ_ENDJINN_H
+
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_mode.h>
 #include <enDjinn/enj_state.h>
@@ -19,9 +21,8 @@
 #include <enDjinn/enj_bitmap.h>
 #include <enDjinn/enj_render.h>
 #include <enDjinn/enj_draw.h>
-#include <enDjinn/enj_rumbler.h>
+#include <enDjinn/enj_rumble.h>
 #include <enDjinn/enj_qfont.h>
 
-#define ENDJINN_ENDJINN_H
 
-#endif // ENDJINN_ENDJINN_H
+#endif // ENJ_ENDJINN_H
