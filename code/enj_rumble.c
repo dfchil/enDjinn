@@ -4,7 +4,6 @@
 #include <dc/maple/purupuru.h>
 #include <enDjinn/enj_defs.h>
 
-
 static int enj_rumble_rate_limit = 1; // frames of cooldown between rumble commands
 static maple_device_t* local_rumbles[MAPLE_PORT_COUNT] = {0};
 static int rumble_rate_limits[MAPLE_PORT_COUNT] = {0};

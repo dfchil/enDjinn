@@ -132,24 +132,6 @@ int enj_font_string_render(const char* text, enj_font_header_t* font, int16_t x,
                          int16_t y, pvr_sprite_hdr_t* sprite_header,
                          pvr_dr_state_t* state_ptr);
 
-/** Render text within a bounding box
- * @param text Null-terminated string to draw
- * @param font Pointer to font header
- * @param min_x X position of top-left corner of box in pixels
- * @param min_y Y position of top-left corner of box in pixels
- * @param box_width Width of bounding box in pixels
- * @param box_height Height of bounding box in pixels
- * @param sprite_header Optional pointer PVR sprite header to use for rendering
- * @param state_ptr Optional pointer to PVR draw state
- *
- * @return number of lines rendered
- */
-int enj_font_render_text_in_box(const char* text, enj_font_header_t* font,
-                                int16_t min_x, int16_t min_y,
-                                uint16_t box_width, uint16_t box_height,
-                                pvr_sprite_hdr_t* sprite_header,
-                                pvr_dr_state_t* state_ptr);
-
 /** Calculate the width of a text string in pixels
  * @param text Null-terminated string to measure
  * @param font Pointer to font header
