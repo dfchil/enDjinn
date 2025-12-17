@@ -294,13 +294,6 @@ int enj_font_string_render(const char *text, enj_font_header_t *font,
   return x_pos - x;
 }
 
-int enj_font_render_text_in_box(const char *text, enj_font_header_t *font,
-                                int16_t min_x, int16_t min_y,
-                                uint16_t box_width, uint16_t box_height,
-                                pvr_sprite_hdr_t *sprite_header,
-                                pvr_dr_state_t *state_ptr) {
-  return 0;
-}
 
 static inline uint8_t extr_4bpp_pixel(uint8_t *data_4bpp, int index) {
   uint8_t byte = data_4bpp[index >> 1];

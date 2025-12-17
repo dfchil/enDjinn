@@ -1,6 +1,7 @@
 #include <dc/video.h>
 #include <enDjinn/enj_enDjinn.h>
 #include <kos.h>
+#include <dc/sound/sound.h>
 
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/enj_qfont.h>
@@ -97,6 +98,7 @@ int enj_startup() {
 
     enj_ctrl_init_local_devices();
     enj_rumble_init_local_devices();
+    snd_init();
 
     return 0;
 }

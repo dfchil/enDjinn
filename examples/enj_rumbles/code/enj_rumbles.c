@@ -11,7 +11,7 @@ typedef struct {
 typedef struct {
   struct {
     uint32_t no_controller : 1;
-    uint32_t no_rumbler : 1;
+    uint32_t no_rumbles : 1;
     uint32_t active_controller : 2;
     uint32_t catalog_index: 4;
     int32_t cursor_pos : 5;
@@ -56,9 +56,6 @@ static const int num_fields = sizeof(fieldnames) / sizeof(fieldnames[0]);
  * everything else to 0 for stopping */
 static const purupuru_effect_t rumble_stop = {.motor = 1};
 
-void enj_qfont_set_color(uint8_t r, uint8_t g, uint8_t b) {
-  enj_qfont_get_sprite_hdr()->argb = 0xff000000 | (r << 16) | (g << 8) | b;
-}
 
 static inline uint8_t offset2field(int offset, RAT_state_t *state) {
   switch (offset) {
@@ -135,7 +132,7 @@ void render(void* data) {
                     20, PVR_LIST_PT_POLY);
     return;
   }
-  if (state->no_rumbler) {
+  if (state->no_rumbles) {
     enj_qfont_write("Please attach a rumbler to controller in port A!",
                     20, 20, PVR_LIST_PT_POLY);
     return;
@@ -147,11 +144,12 @@ void render(void* data) {
 
   enj_qfont_set_color(0xff, 0xc0, 0x10); /* gold */
   enj_font_set_scale(3);
+  const char* title = "Rumble Accessory Tester";
   int twidth =
-      enj_font_string_width("Rumble Accessory Tester", enj_qfont_get_header());
+      enj_font_string_width(title, enj_qfont_get_header());
   int textpos_x = (vid_mode->width - twidth) >> 1;
   int textpos_y = 4;
-  enj_qfont_write("Rumble Accessory Tester", textpos_x, textpos_y,
+  enj_qfont_write(title, textpos_x, textpos_y,
                   PVR_LIST_PT_POLY);
   enj_font_set_scale(1);
 
@@ -291,10 +289,10 @@ void main_mode_updater(void* data) {
 
     // neeeds to be at least one controller with a rumble pack
     enj_ctrlr_state_t** ctrl_states = enj_ctrl_get_states();
-    maple_device_t** rumble_states = enj_rumbler_get_states();
+    maple_device_t** rumble_states = enj_rumble_get_states();
 
     state->no_controller = 1;
-    state->no_rumbler = 1;
+    state->no_rumbles = 1;
     state->purudev = NULL;
 
 
@@ -303,12 +301,12 @@ void main_mode_updater(void* data) {
         state->no_controller = 0;
       }
       if (rumble_states[i] != NULL) {
-        state->no_rumbler = 0;
+        state->no_rumbles = 0;
         state->purudev = rumble_states[i];
         state->active_controller = i;
       }
     }
-    if (state->no_controller || state->no_rumbler) {
+    if (state->no_controller || state->no_rumbles) {
       break;
     }
 
@@ -354,11 +352,11 @@ void main_mode_updater(void* data) {
       /* We print these out to make it easier to track the options chosen
        */
       ENJ_DEBUG_PRINT("Rumble effect hex code: 0x%lx!\n", state->effect.raw);
-      enj_rumbler_set_effect(state->active_controller, state->effect.raw);
+      enj_rumble_set_effect(state->active_controller, state->effect.raw);
     }
     if (ctrl_states[state->active_controller]->buttons.B ==
         BUTTON_DOWN_THIS_FRAME) {
-          enj_rumbler_set_effect(state->active_controller, rumble_stop.raw);
+          enj_rumble_set_effect(state->active_controller, rumble_stop.raw);
       ENJ_DEBUG_PRINT("Rumble Stopped!\n");
     }
   } while (0);

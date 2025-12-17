@@ -44,4 +44,14 @@ enj_font_header_t* enj_qfont_get_header();
  */
 pvr_sprite_hdr_t* enj_qfont_get_sprite_hdr();
 
+/**
+ * Set the color of the sprite that glyphs are rendered with
+ * @param r Red component (0-255)
+ * @param g Green component (0-255)
+ * @param b Blue component (0-255)
+ * 
+ * @note The effect depends on the texture mode and pvr_list_type being used.
+ */
+void enj_qfont_set_color(uint8_t r, uint8_t g, uint8_t b);
+
 #endif  // ENJ_DEBUG_H
