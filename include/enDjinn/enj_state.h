@@ -37,26 +37,29 @@ enj_state_t *enj_state_get(void);
  *
  * @note The default pattern is START + A + B + X + Y all pressed down.
  *
- * @example To set the soft reset pattern to START + A:
- * enj_state_set_soft_reset(((enj_ctrlr_state_t){.buttons = {.START =
- * BUTTON_DOWN, .A = BUTTON_DOWN, .B = BUTTON_DOWN, .X = BUTTON_DOWN, .Y =
- * BUTTON_DOWN}}) .buttons.raw)
- *
+ * @note To set the soft reset pattern to START + A:
+ * enj_state_soft_reset_set(((enj_ctrlr_state_t){.button = {.START =
+ * ENJ_BUTTON_DOWN, .A = ENJ_BUTTON_DOWN}}).button.raw)
  */
-void enj_state_set_soft_reset(uint32_t pattern);
+void enj_state_soft_reset_set(uint32_t pattern);
 
 /** Set the enDjinn state to default values */
-void enj_state_defaults(void);
+void enj_state_init_defaults(void);
 
 /** Initialize enDjinn subsystems based on the current state
  * @return 0 on success, -1 on failure
  */
-int enj_startup();
+int enj_state_startup();
 
-/** Main enDjinn loop, runs until shutdown is requested */
-void enj_run(void);
+/** 
+ * Main enDjinn loop, runs until shutdown is signaled 
+ * */
+void enj_state_run(void);
 
-/** Flag enDjinn to shut down at the next opportunity */
-void enj_shutdown_flag(void);
+/** Flag enDjinn to shut down at the next opportunity
+ * @param __unused Unused parameter, having this allows usage as enj_mode update
+ * function
+ */
+void enj_state_flag_shutdown(void *__unused);
 
 #endif // ENJ_STATE_H

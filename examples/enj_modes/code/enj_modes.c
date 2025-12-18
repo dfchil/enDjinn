@@ -106,15 +106,15 @@ void info_updater(void* data) {
     enj_ctrlr_state_t** ctrls = enj_ctrl_get_states();
     for (int i = 0; i < 4; i++) {
         if (ctrls[i] != NULL) {
-            if (ctrls[i]->buttons.START == BUTTON_DOWN_THIS_FRAME) {
+            if (ctrls[i]->button.START == ENJ_BUTTON_DOWN_THIS_FRAME) {
                 enj_mode_flag_end_current();
             }
         }
     }
     animate(zoom_mode.data);
 
-    enj_renderlist_add(PVR_LIST_TR_POLY, enDjinn_render, zoom_mode.data);
-    enj_renderlist_add(PVR_LIST_PT_POLY, info_renderer, data);
+    enj_render_list_add(PVR_LIST_TR_POLY, enDjinn_render, zoom_mode.data);
+    enj_render_list_add(PVR_LIST_PT_POLY, info_renderer, data);
 }
 
 void slide_default_direction(enj_mode_t* prev, enj_mode_t* next) {
@@ -144,7 +144,7 @@ void zoom_mode_updater(void* data) {
     } else {
         mdata->size_bump--;
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, enDjinn_render, data);
+    enj_render_list_add(PVR_LIST_TR_POLY, enDjinn_render, data);
 }
 
 void slide_mode_updater(void* data) {
@@ -161,7 +161,7 @@ void slide_mode_updater(void* data) {
             vid_mode->height + figure_texture_info.height * 0.5f) {
         enj_mode_flag_end_current();
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, enDjinn_render, smdata->mode_data);
+    enj_render_list_add(PVR_LIST_TR_POLY, enDjinn_render, smdata->mode_data);
 }
 
 void main_mode_updater(void* data) {
@@ -171,7 +171,7 @@ void main_mode_updater(void* data) {
     enj_ctrlr_state_t** ctrls = enj_ctrl_get_states();
     for (int i = 0; i < 4; i++) {
         if (ctrls[i] != NULL) {
-            if (ctrls[i]->buttons.START == BUTTON_DOWN_THIS_FRAME) {
+            if (ctrls[i]->button.START == ENJ_BUTTON_DOWN_THIS_FRAME) {
                 enj_mode_push(&info_mode);
             }
 
@@ -181,10 +181,10 @@ void main_mode_updater(void* data) {
                      atan2f(ctrls[i]->joyy, -ctrls[i]->joyx + 0.0001f)) *
                     (180.0f / F_PI);
             }
-            uint32_t dpad = BUTTON_DOWN_THIS_FRAME
+            uint32_t dpad = ENJ_BUTTON_DOWN_THIS_FRAME
                             << 8;  // ie dpad DOWN pressed this frame
             for (int d = 0; d < 4; d++) {
-                if ((ctrls[i]->buttons.raw & dpad) == dpad) {
+                if ((ctrls[i]->button.raw & dpad) == dpad) {
                     enj_mode_push(
                         &zoom_mode);  // this will run after slide mode finishes
                     enj_mode_push(&slide_mode);
@@ -212,7 +212,7 @@ void main_mode_updater(void* data) {
             }
         }
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, enDjinn_render, data);
+    enj_render_list_add(PVR_LIST_TR_POLY, enDjinn_render, data);
 }
 
 void setup_textures() {
@@ -260,7 +260,7 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
 
     enj_mode_push(&slide_mode);
     enj_mode_push(main_mode);
-    enj_mode_set_soft_reset_target(enj_mode_get_current_index());
+    enj_mode_soft_reset_target_set(enj_mode_get_current_index());
     enj_mode_push(&zoom_mode);
     // pushing doesnt trigger pop function, so call it manually
     zoom_mode.pop_fun(NULL, &zoom_mode);
@@ -268,14 +268,14 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
 
 int main(__unused int argc, __unused char** argv) {
     // initialize enDjinn state with default values
-    enj_state_defaults();
+    enj_state_init_defaults();
 
     // default pattern is START + A + B + X + Y
     // lets make it easier, A is offset 0 in bitfield and START is
     // offset 8<<1 (two bits per button)
-    enj_state_set_soft_reset(BUTTON_DOWN << (8 << 1) | BUTTON_DOWN);
+    enj_state_soft_reset_set(ENJ_BUTTON_DOWN << (8 << 1) | ENJ_BUTTON_DOWN);
 
-    if (enj_startup() != 0) {
+    if (enj_state_startup() != 0) {
         ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
         return -1;
     }
@@ -295,6 +295,6 @@ int main(__unused int argc, __unused char** argv) {
     };
     slide_data_t slide_mode_data;
     setup_modes(&main_mode, &slide_mode_data);
-    enj_run();
+    enj_state_run();
     return 0;
 }

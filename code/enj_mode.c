@@ -71,7 +71,7 @@ int enj_mode_get_current_index(void) {
     return current_mode_index;
 }
 
-void enj_mode_set_soft_reset_target(int index) {
+void enj_mode_soft_reset_target_set(int index) {
     enj_state_get()->soft_reset_target_index = index;
 }
 
@@ -79,7 +79,7 @@ int enj_mode_cut_to_soft_reset_target(void) {
     int index = enj_state_get()->soft_reset_target_index;
     if (index < 0) {
         ENJ_DEBUG_PRINT("Title screen index not set!\n");
-        enj_shutdown_flag();
+        enj_state_flag_shutdown(NULL);
         return 0;
     }
     enj_mode_goto_index(index);

@@ -2,6 +2,7 @@
 #define ENJ_DEBUG_H
 
 #include <dc/pvr.h>
+#include <enDjinn/enj_font_types.h>
 
 int enj_qfont_init();
 void enj_debug_shutdown();
@@ -18,7 +19,7 @@ void enj_debug_shutdown();
  * same list as the cur_mode argument. PVR_LIST_PT_POLY is recommended.
  * 
  * @note The built in font is 1 bit without gradients and is very suitable for integer scaling by calling
- * @see  @link enj_font_set_scale @endlink.
+ * @see  @link enj_font_scale_set @endlink.
  */
 int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode);
 
@@ -52,6 +53,6 @@ pvr_sprite_hdr_t* enj_qfont_get_sprite_hdr();
  * 
  * @note The effect depends on the texture mode and pvr_list_type being used.
  */
-void enj_qfont_set_color(uint8_t r, uint8_t g, uint8_t b);
+void enj_qfont_color_set(uint8_t r, uint8_t g, uint8_t b);
 
 #endif  // ENJ_DEBUG_H
