@@ -5,6 +5,7 @@
 #include <enDjinn/enj_font.h>
 #include <enDjinn/enj_qfont.h>
 #include <enDjinn/enj_render.h>
+
 static enj_font_header_t* enj_qf_hdr;
 static pvr_ptr_t enj_qf_pvr_data;
 static pvr_sprite_hdr_t enj_qf_sprite_hdr;
@@ -32,6 +33,12 @@ enj_font_header_t* enj_qfont_get_header() {
 pvr_sprite_hdr_t *enj_qfont_get_sprite_hdr() {
     return &enj_qf_sprite_hdr;
 }
+
+
+void enj_qfont_set_color(uint8_t r, uint8_t g, uint8_t b) {
+  enj_qfont_get_sprite_hdr()->argb = 0xff000000 | (r << 16) | (g << 8) | b;
+}
+
 
 int enj_qfont_init() {
 

@@ -1,6 +1,7 @@
 #include <dc/video.h>
 #include <enDjinn/enj_enDjinn.h>
 #include <kos.h>
+#include <dc/sound/sound.h>
 
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/enj_qfont.h>
@@ -16,6 +17,8 @@
 #ifdef ENJ_DEBUG
 #include <dc/perf_monitor.h>
 #endif
+
+#include <enDjinn/embeds/enj_logo_header.h>
 
 KOS_INIT_FLAGS(INIT_DEFAULT);
 
@@ -52,6 +55,17 @@ void enj_state_defaults(void) {
     state.video.display_mode = DM_640x480;
     state.video.pixel_mode = PM_RGB888P;
     state.video.bg_color.raw = 0x00000000;
+
+    /** set vmu screens */
+    vmufb_t vmufb;
+    vmufb_clear(&vmufb);
+    vmufb_paint_area(&vmufb, 0, 0, 48, 32, enj_logo_bitmap_header);
+    for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+      maple_device_t *vmulcd = enj_maple_port_type(i, MAPLE_FUNC_LCD);
+      if (vmulcd) {
+        vmufb_present(&vmufb, vmulcd);
+      }
+    }
 }
 
 void enj_state_set_soft_reset(uint32_t pattern) {
@@ -97,6 +111,7 @@ int enj_startup() {
 
     enj_ctrl_init_local_devices();
     enj_rumble_init_local_devices();
+    snd_init();
 
     return 0;
 }
