@@ -49,7 +49,6 @@ static void play_sfx(void* data) {
     enj_sound_play(state->sounds[state->cursor_pos], 192, state->pan);
   }
 }
-
 static const SFX_menu_entry_t sfx_catalog[] = {
     {.name = "Wilhelm scream, ADPCM encoded", .on_press_A = play_sfx},
     {.name = "Wilhelm scream, PCM 8bit encoded", .on_press_A = play_sfx},
@@ -59,8 +58,7 @@ static const SFX_menu_entry_t sfx_catalog[] = {
     {.name = "Clean test tone, PCM 16bit encoded", .on_press_A = play_sfx},
     {.name = "Exit example", .on_press_A = enj_state_flag_shutdown},
 };
-
-static const int num_sfx_entries = sizeof(sfx_catalog) / sizeof(sfx_catalog[0]);
+static const int num_sfx_menu_entries = sizeof(sfx_catalog) / sizeof(sfx_catalog[0]);
 
 #define MARGIN_LEFT 30
 void render(void* data) {
@@ -73,8 +71,6 @@ void render(void* data) {
   int textpos_y = 4;
   enj_qfont_write(title, textpos_x, textpos_y, PVR_LIST_PT_POLY);
   enj_font_scale_set(1);
-
-  /* Start drawing the changeable section of the screen */
   textpos_y += 4 * enj_qfont_get_header()->line_height;
 
   /* show pan */
@@ -97,7 +93,7 @@ void render(void* data) {
   enj_qfont_color_set(255, 255, 255); /* White */
   textpos_x = MARGIN_LEFT;
 
-  for (int i = 0; i < num_sfx_entries; i++) {
+  for (int i = 0; i < num_sfx_menu_entries; i++) {
     if (state->cursor_pos == i) {
       enj_qfont_color_set(0, 255, 0); /* green */
       enj_qfont_write("->", textpos_x - 20,
@@ -112,6 +108,7 @@ void render(void* data) {
     textpos_y += enj_qfont_get_header()->line_height;
   }
   textpos_y = (vid_mode->height >> 4) * 13;
+
   /* show instructions */
   enj_qfont_color_set(255, 255, 255); /* White */
 
@@ -131,7 +128,6 @@ void render(void* data) {
 void main_mode_updater(void* data) {
   do {
     SPE_state_t* state = (SPE_state_t*)data;
-    // neeeds to be at least one controller with a rumble pack
     enj_ctrlr_state_t** ctrl_states = enj_ctrl_get_states();
     int delta = ctrl_states[state->active_controller]->button.UP ==
                         ENJ_BUTTON_DOWN_THIS_FRAME
@@ -141,8 +137,8 @@ void main_mode_updater(void* data) {
                     ? 1
                     : 0;
     if (delta) {
-      state->cursor_pos = (state->cursor_pos + delta) % num_sfx_entries;
-      if (state->cursor_pos < 0) state->cursor_pos = num_sfx_entries - 1;
+      state->cursor_pos = (state->cursor_pos + delta) % num_sfx_menu_entries;
+      if (state->cursor_pos < 0) state->cursor_pos = num_sfx_menu_entries - 1;
     }
     if (ctrl_states[state->active_controller]->button.A ==
         ENJ_BUTTON_DOWN_THIS_FRAME) {
@@ -157,7 +153,6 @@ void main_mode_updater(void* data) {
 
 int main(__unused int argc, __unused char** argv) {
   enj_state_init_defaults();
-
   if (enj_state_startup() != 0) {
     ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
     return -1;

@@ -55,6 +55,8 @@ Apart from the build system alluded to above, another big part of enDjinn is the
 
 I'll add more documentation to all of the above and some features I haven't mentioned it in due time.
 
+Until I get around to that task, I suggest going through [the many examples](./examples/README.md) included in this repository for reference and inspiration. 
+
 My current outline of topics to cover is as follows:
 
 ## Build System
