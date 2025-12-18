@@ -28,15 +28,15 @@ typedef struct {
 // font src:
 // https://github.com/zshoals/Dina-Font-TTF-Remastered?tab=readme-ov-file
 static const alignas(32) uint8_t dina_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/16/Dina-Regular.enjfont"
+#embed "../embeds/enj_fonts/fonts/16/Dina-Regular.enjfont"
 };
 // font src: https://dejavu-fonts.github.io/
 static const alignas(32) uint8_t deja_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/23/DejaVuSans.enjfont"
+#embed "../embeds/enj_fonts/fonts/23/DejaVuSans.enjfont"
 };
 // font src: https://www.fonttr.com/cmunbi-font
 static const alignas(32) uint8_t cmunrm_font_blob[] = {
-#embed "../embeds/enj_writing/fonts/36/cmunrm.enjfont"
+#embed "../embeds/enj_fonts/fonts/36/cmunrm.enjfont"
 };
 static alignas(32) enj_font_header_t dina_font_16_hdr;
 static alignas(32) enj_font_header_t deja_23_font_hdr;
