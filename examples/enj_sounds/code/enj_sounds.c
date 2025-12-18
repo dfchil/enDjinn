@@ -13,11 +13,9 @@ uint8_t wilhelm_pcm8_data[] = {
 uint8_t wilhelm_pcm16_data[] = {
 #embed "../embeds/enj_sounds/sfx/PCM/16/Wilhelm_Scream.dca"
 };
-
 uint8_t clean_test_adpcm[] = {
 #embed "../embeds/enj_sounds/sfx/ADPCM/clean-audio-test-tone.dca"
 };
-
 uint8_t clean_test_pcm8[] = {
 #embed "../embeds/enj_sounds/sfx/PCM/8/clean-audio-test-tone.dca"
 };
@@ -31,7 +29,6 @@ typedef struct {
     void (*on_press_A)(void* data);
   };
 } SFX_menu_entry_t;
-
 typedef struct {
   struct {
     uint32_t active_controller : 2;
@@ -175,9 +172,7 @@ int main(__unused int argc, __unused char** argv) {
       .mode_updater = main_mode_updater,
       .data = &rat_state,
   };
-
   enj_mode_push(&main_mode);
   enj_state_run();
-
   return 0;
 }
