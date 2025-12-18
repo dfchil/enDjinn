@@ -29,7 +29,11 @@ The [enj_controls](./enj_controls/) example demonstrates the controller input re
 </div>
 
 ## enj_modes
-The [enj_modes](./enj_modes/) example demonstrates the built in state handling in the enj_mode_% subsystem. 
+Most games will have several different modes that they switch between, like a titlescreen mode, a game setup 
+mode a single player mode and so on and so on. 
+
+The [enj_modes](./enj_modes/) example demonstrates the built in mode handling system in enDjinn, where modes and transitions
+between them are organised in a FIFO stack. 
 
 <div>
 <img style="height:220px" src="../docs/img/examples/enj_modes.png" alt="enj_modes example screen" />
@@ -37,7 +41,7 @@ The [enj_modes](./enj_modes/) example demonstrates the built in state handling i
 
 
 ## enj_fonts 
-The [enj_fonts](./enj_fonts/) example emonstrates the rich truetype based font system built into enDjinn.
+The [enj_fonts](./enj_fonts/) example demonstrates the rich truetype based font system built into enDjinn.
 
 <div>
 <img style="height:220px" src="../docs/img/examples/enj_fonts.png" alt="enj_fonts example screen" />
