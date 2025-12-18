@@ -50,7 +50,7 @@ int enj_mode_get_current_index(void);
  * Set the target index for soft resets
  * @param index Index to set as the soft reset target
  */
-void enj_mode_set_soft_reset_target(int index);
+void enj_mode_soft_reset_target_set(int index);
 
 /**
  * Cut to the soft reset target

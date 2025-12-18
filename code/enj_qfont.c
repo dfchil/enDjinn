@@ -35,7 +35,7 @@ pvr_sprite_hdr_t *enj_qfont_get_sprite_hdr() {
 }
 
 
-void enj_qfont_set_color(uint8_t r, uint8_t g, uint8_t b) {
+void enj_qfont_color_set(uint8_t r, uint8_t g, uint8_t b) {
   enj_qfont_get_sprite_hdr()->argb = 0xff000000 | (r << 16) | (g << 8) | b;
 }
 

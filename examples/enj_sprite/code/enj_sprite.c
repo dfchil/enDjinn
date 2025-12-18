@@ -45,7 +45,7 @@ void render(void *data) {
 void main_mode_updater(void *data) {
   main_data_t *mdata = (main_data_t *)data;
   mdata->rotation++;
-  enj_renderlist_add(PVR_LIST_TR_POLY, render, data);
+  enj_render_list_add(PVR_LIST_TR_POLY, render, data);
 }
 void setup_textures() {
   // load palettised texture from memory blobs
@@ -69,13 +69,13 @@ void setup_modes(enj_mode_t *main_mode) {
 int main(__unused int argc, __unused char **argv) {
 
   // initialize enDjinn state with default values
-  enj_state_defaults();
+  enj_state_init_defaults();
   // default soft-reset pattern is START + A + B + X + Y.
   // Lets make it easier with just START + A.
   // A is offset 0 in bitfield and START is offset 
   // 8<<1 (two bits per button)
-  enj_state_set_soft_reset(BUTTON_DOWN << (8 << 1) | BUTTON_DOWN);
-  if (enj_startup() != 0) {
+  enj_state_soft_reset_set(ENJ_BUTTON_DOWN << (8 << 1) | ENJ_BUTTON_DOWN);
+  if (enj_state_startup() != 0) {
     ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
     return -1;
   }
@@ -94,6 +94,6 @@ int main(__unused int argc, __unused char **argv) {
   };
   setup_modes(&main_mode);
   enj_mode_push(&main_mode);
-  enj_run();
+  enj_state_run();
   return 0;
 }

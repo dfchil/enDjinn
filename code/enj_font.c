@@ -12,7 +12,7 @@ static float enj_font_zvalue = 10.0f;
 static uint8_t enj_font_scale = 1;
 static uint8_t enj_font_letter_spacing = 2;
 
-void enj_font_set_scale(uint8_t scale) {
+void enj_font_scale_set(uint8_t scale) {
   if (scale == 0) {
     ENJ_DEBUG_PRINT("Scale cannot be zero, ignoring\n");
     return;
@@ -20,9 +20,9 @@ void enj_font_set_scale(uint8_t scale) {
   enj_font_scale = scale;
 }
 
-void enj_font_set_zvalue(float zvalue) { enj_font_zvalue = zvalue; }
+void enj_font_zvalue_set(float zvalue) { enj_font_zvalue = zvalue; }
 
-void enj_font_set_letter_spacing(uint8_t spacing) {
+void enj_font_letter_spacing_set(uint8_t spacing) {
   enj_font_letter_spacing = spacing;
 }
 

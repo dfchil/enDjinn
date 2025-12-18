@@ -125,7 +125,7 @@ void render_OP(void* __unused) {
     int fontstartx = MARGIN_LEFT;
     int fontstarty = 0;
 
-    enj_font_set_zvalue(0.5f);
+    enj_font_zvalue_set(0.5f);
     const char* li = lorem_ipsum;
     while (*li != '\0') {
         fontstartx +=
@@ -144,8 +144,8 @@ void render_PT(void* data) {
     mode_data_t* mdata = (mode_data_t*)data;
     const char* proclamation = "enDjinn makes writing on the Dreamcast easy!";
 
-    enj_font_set_scale(9);
-    enj_font_set_zvalue(1.0f);
+    enj_font_scale_set(9);
+    enj_font_zvalue_set(1.0f);
     int txtwidth = enj_font_string_width(proclamation, enj_qfont_get_header());
 
     enj_qfont_get_sprite_hdr()->argb = 0xff14a5ff;
@@ -153,15 +153,15 @@ void render_PT(void* data) {
                                          ((vid_mode->width + txtwidth) | 1));
 
     enj_qfont_write(proclamation, text_offset, 134, PVR_LIST_PT_POLY);
-    enj_font_set_scale(1);
-    enj_font_set_zvalue(2.0f);
+    enj_font_scale_set(1);
+    enj_font_zvalue_set(2.0f);
 
     static pvr_dr_state_t static_dr_state;
     pvr_dr_init(&static_dr_state);
 
     int fontstartx = MARGIN_LEFT;
     int fontstarty = (vid_mode->height >> 1) - 40;
-    enj_font_set_zvalue(1.5f);
+    enj_font_zvalue_set(1.5f);
     for (int i = 2; i >= 0; i--) {
         pvr_sprite_hdr_t* font_hdr_sq =
             (pvr_sprite_hdr_t*)pvr_dr_target((pvr_dr_state_t){0});
@@ -190,7 +190,7 @@ void render_TR(void* data) {
 
     int fontstartx = MARGIN_LEFT;
     int fontstarty = 0;
-    enj_font_set_zvalue(2.0f);
+    enj_font_zvalue_set(2.0f);
     
     for (int i = 1; i < 3; i++) {
         pvr_sprite_hdr_t* font_hdr_sq =
@@ -216,23 +216,23 @@ void render_TR(void* data) {
 void main_mode_updater(void* data) {
     mode_data_t* mdata = (mode_data_t*)data;
     mdata->horizontal_scroll++;
-    enj_renderlist_add(PVR_LIST_OP_POLY, render_OP, data);
-    enj_renderlist_add(PVR_LIST_TR_POLY, render_TR, data);
-    enj_renderlist_add(PVR_LIST_PT_POLY, render_PT, data);
+    enj_render_list_add(PVR_LIST_OP_POLY, render_OP, data);
+    enj_render_list_add(PVR_LIST_TR_POLY, render_TR, data);
+    enj_render_list_add(PVR_LIST_PT_POLY, render_PT, data);
 }
 
 int main(__unused int argc, __unused char** argv) {
     // initialize enDjinn state with default values
-    enj_state_defaults();
+    enj_state_init_defaults();
     // default soft-reset pattern is START + A + B + X + Y.
     // Lets make it easier with just START + A.
     // A is offset 0 in bitfield and START is offset
     // 8<<1 (two bits per button)
-    enj_state_set_soft_reset(BUTTON_DOWN << (8 << 1) | BUTTON_DOWN);
+    enj_state_soft_reset_set(ENJ_BUTTON_DOWN << (8 << 1) | ENJ_BUTTON_DOWN);
     // enj_state_get()->video.bg_color.raw = (enj_color_t){.raw =
     // 0xFF00bbff}.raw;
 
-    if (enj_startup() != 0) {
+    if (enj_state_startup() != 0) {
         ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
         return -1;
     }
@@ -247,6 +247,6 @@ int main(__unused int argc, __unused char** argv) {
     };
     setup_fonts();
     enj_mode_push(&main_mode);
-    enj_run();
+    enj_state_run();
     return 0;
 }

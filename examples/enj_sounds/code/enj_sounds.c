@@ -30,9 +30,7 @@ typedef struct {
     char name[48];
     void (*on_press_A)(void* data);
   };
-} SFX_entry_t;
-
-static void end_program(void* __unused) { enj_shutdown_flag(); }
+} SFX_menu_entry_t;
 
 typedef struct {
   struct {
@@ -52,14 +50,14 @@ static void play_sfx(void* data) {
   }
 }
 
-static const SFX_entry_t sfx_catalog[] = {
+static const SFX_menu_entry_t sfx_catalog[] = {
     {.name = "Wilhelm scream, ADPCM encoded", .on_press_A = play_sfx},
     {.name = "Wilhelm scream, PCM 8bit encoded", .on_press_A = play_sfx},
     {.name = "Wilhelm scream, PCM 16bit encoded", .on_press_A = play_sfx},
     {.name = "Clean test tone, ADPCM encoded", .on_press_A = play_sfx},
     {.name = "Clean test tone, PCM 8bit encoded", .on_press_A = play_sfx},
     {.name = "Clean test tone, PCM 16bit encoded", .on_press_A = play_sfx},
-    {.name = "Exit example", .on_press_A = end_program},
+    {.name = "Exit example", .on_press_A = enj_state_flag_shutdown},
 };
 
 static const int num_sfx_entries = sizeof(sfx_catalog) / sizeof(sfx_catalog[0]);
@@ -67,20 +65,20 @@ static const int num_sfx_entries = sizeof(sfx_catalog) / sizeof(sfx_catalog[0]);
 #define MARGIN_LEFT 30
 void render(void* data) {
   SPE_state_t* state = (SPE_state_t*)data;
-  enj_qfont_set_color(0x14, 0xaf, 255); /* Light Blue */
-  enj_font_set_scale(3);
+  enj_qfont_color_set(0x14, 0xaf, 255); /* Light Blue */
+  enj_font_scale_set(3);
   const char* title = "Sound Playback Example";
   int twidth = enj_font_string_width(title, enj_qfont_get_header());
   int textpos_x = (vid_mode->width - twidth) >> 1;
   int textpos_y = 4;
   enj_qfont_write(title, textpos_x, textpos_y, PVR_LIST_PT_POLY);
-  enj_font_set_scale(1);
+  enj_font_scale_set(1);
 
   /* Start drawing the changeable section of the screen */
   textpos_y += 4 * enj_qfont_get_header()->line_height;
 
   /* show pan */
-  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_color_set(255, 255, 255); /* White */
   enj_qfont_write("Current pan:", MARGIN_LEFT, textpos_y, PVR_LIST_PT_POLY);
   textpos_y += enj_qfont_get_header()->line_height;
   char pan_str[7];
@@ -90,23 +88,23 @@ void render(void* data) {
   uint8_t green = signed_pan < 0 ? 0 : 127 + abs(signed_pan);
   uint8_t blue = 255 - ((abs(signed_pan) - 1) << 1);
 
-  enj_qfont_set_color(red, green, blue);
+  enj_qfont_color_set(red, green, blue);
   enj_qfont_write(pan_str, (vid_mode->width >> 1) + (signed_pan << 1),
                   textpos_y, PVR_LIST_PT_POLY);
   textpos_y = (vid_mode->height >> 4) * 4;
 
   /* show menu  */
-  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_color_set(255, 255, 255); /* White */
   textpos_x = MARGIN_LEFT;
 
   for (int i = 0; i < num_sfx_entries; i++) {
     if (state->cursor_pos == i) {
-      enj_qfont_set_color(0, 255, 0); /* green */
+      enj_qfont_color_set(0, 255, 0); /* green */
       enj_qfont_write("->", textpos_x - 20,
                       textpos_y + i * enj_qfont_get_header()->line_height,
                       PVR_LIST_PT_POLY);
     } else {
-      enj_qfont_set_color(255, 255, 255); /* White */
+      enj_qfont_color_set(255, 255, 255); /* White */
     }
     enj_qfont_write(sfx_catalog[i].name, textpos_x,
                     textpos_y + i * enj_qfont_get_header()->line_height,
@@ -115,7 +113,7 @@ void render(void* data) {
   }
   textpos_y = (vid_mode->height >> 4) * 13;
   /* show instructions */
-  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_color_set(255, 255, 255); /* White */
 
   const char* longest_line =
       "Hold X and move stick to set pan, release X to hold pan position";
@@ -135,32 +133,32 @@ void main_mode_updater(void* data) {
     SPE_state_t* state = (SPE_state_t*)data;
     // neeeds to be at least one controller with a rumble pack
     enj_ctrlr_state_t** ctrl_states = enj_ctrl_get_states();
-    int delta = ctrl_states[state->active_controller]->buttons.UP ==
-                        BUTTON_DOWN_THIS_FRAME
+    int delta = ctrl_states[state->active_controller]->button.UP ==
+                        ENJ_BUTTON_DOWN_THIS_FRAME
                     ? -1
-                : ctrl_states[state->active_controller]->buttons.DOWN ==
-                        BUTTON_DOWN_THIS_FRAME
+                : ctrl_states[state->active_controller]->button.DOWN ==
+                        ENJ_BUTTON_DOWN_THIS_FRAME
                     ? 1
                     : 0;
     if (delta) {
       state->cursor_pos = (state->cursor_pos + delta) % num_sfx_entries;
       if (state->cursor_pos < 0) state->cursor_pos = num_sfx_entries - 1;
     }
-    if (ctrl_states[state->active_controller]->buttons.A ==
-        BUTTON_DOWN_THIS_FRAME) {
+    if (ctrl_states[state->active_controller]->button.A ==
+        ENJ_BUTTON_DOWN_THIS_FRAME) {
       sfx_catalog[state->cursor_pos].on_press_A(data);
     }
-    if (ctrl_states[state->active_controller]->buttons.X == BUTTON_DOWN) {
+    if (ctrl_states[state->active_controller]->button.X == ENJ_BUTTON_DOWN) {
       state->pan = (uint8_t)(ctrl_states[state->active_controller]->joyx + 128);
     }
   } while (0);
-  enj_renderlist_add(PVR_LIST_PT_POLY, render, data);
+  enj_render_list_add(PVR_LIST_PT_POLY, render, data);
 }
 
 int main(__unused int argc, __unused char** argv) {
-  enj_state_defaults();
+  enj_state_init_defaults();
 
-  if (enj_startup() != 0) {
+  if (enj_state_startup() != 0) {
     ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
     return -1;
   }
@@ -169,12 +167,12 @@ int main(__unused int argc, __unused char** argv) {
       .pan = 128,
       .sounds =
           {
-              enj_sound_load_dca_blob(wilhelm_adpcm_data),
-              enj_sound_load_dca_blob(wilhelm_pcm8_data),
-              enj_sound_load_dca_blob(wilhelm_pcm16_data),
-              enj_sound_load_dca_blob(clean_test_adpcm),
-              enj_sound_load_dca_blob(clean_test_pcm8),
-              enj_sound_load_dca_blob(clean_test_pcm16),
+              enj_sound_dca_load_blob(wilhelm_adpcm_data),
+              enj_sound_dca_load_blob(wilhelm_pcm8_data),
+              enj_sound_dca_load_blob(wilhelm_pcm16_data),
+              enj_sound_dca_load_blob(clean_test_adpcm),
+              enj_sound_dca_load_blob(clean_test_pcm8),
+              enj_sound_dca_load_blob(clean_test_pcm16),
           },
   };
   enj_mode_t main_mode = {
@@ -184,7 +182,7 @@ int main(__unused int argc, __unused char** argv) {
   };
 
   enj_mode_push(&main_mode);
-  enj_run();
+  enj_state_run();
 
   return 0;
 }

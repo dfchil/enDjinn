@@ -1,31 +1,39 @@
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_sound.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define DCAUDIO_IMPLEMENTATION
 #include <enDjinn/ext/dca_file.h>
 
-sfxhnd_t enj_sound_load_dca_file(const char* filename) {
-  FILE* f = fopen(filename, "rb");
-  if (f) {
-    fseek(f, 0, SEEK_END);
-    size_t filesize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    uint8_t data[filesize];
-    size_t amountread = fread(data, 1, filesize, f);
-    fclose(f);
+sfxhnd_t enj_sound_dca_load_file(const char* filename) {
+  sfxhnd_t handle = SFXHND_INVALID;
+  uint8_t *buffer = NULL;
+  FILE* sndfile = fopen(filename, "rb");
+  if (sndfile) {
+    fseek(sndfile, 0, SEEK_END);
+    size_t filesize = ftell(sndfile);
+    fseek(sndfile, 0, SEEK_SET);
+    
+    buffer = malloc(filesize);
+    size_t amountread = fread(buffer, 1, filesize, sndfile);
+    fclose(sndfile);
     if (amountread == filesize) {
-      return enj_sound_load_dca_blob(data);
+      handle = enj_sound_dca_load_blob(buffer);
     } else {
-      ENJ_DEBUG_PRINT("enj_sound_load_dca_file: could not read entire file %s\n", filename);
+      ENJ_DEBUG_PRINT("enj_sound_dca_load_file: could not read entire file %s\n", filename);
     }
   } else {
-    ENJ_DEBUG_PRINT("enj_sound_load_dca_file: could not open file %s\n", filename);
+    ENJ_DEBUG_PRINT("enj_sound_dca_load_file: could not open file %s\n", filename);
   }
-  return SFXHND_INVALID;
+  if (buffer) {
+    free(buffer);
+  }
+  
+  return handle;
 }
 
-sfxhnd_t enj_sound_load_dca_blob(uint8_t* dca_data) {
+sfxhnd_t enj_sound_dca_load_blob(uint8_t* dca_data) {
   fDcAudioHeader* data = (fDcAudioHeader*)dca_data;
 
   if (fDaValidateHeader(data)) {

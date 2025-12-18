@@ -86,20 +86,20 @@ void main_mode_updater(void* data) {
     enj_ctrlr_state_t** ctrls = enj_ctrl_get_states();
     for (int i = 0; i < 4; i++) {
         if (ctrls[i] != NULL) {
-            if (ctrls[i]->buttons.A == BUTTON_DOWN_THIS_FRAME) {
+            if (ctrls[i]->button.A == ENJ_BUTTON_DOWN_THIS_FRAME) {
                 mdata->spec_color.r = MIN(mdata->spec_color.r + 0x3f, 0xff);
                 mdata->size_bump += 15;
             }
-            if (ctrls[i]->buttons.X == BUTTON_DOWN_THIS_FRAME) {
+            if (ctrls[i]->button.X == ENJ_BUTTON_DOWN_THIS_FRAME) {
                 mdata->spec_color.r = MIN(mdata->spec_color.r + 0x1f, 0xff);
                 mdata->spec_color.g = MIN(mdata->spec_color.g + 0x1f, 0xff);
                 mdata->size_bump += 15;
             }
-            if (ctrls[i]->buttons.Y == BUTTON_DOWN_THIS_FRAME) {
+            if (ctrls[i]->button.Y == ENJ_BUTTON_DOWN_THIS_FRAME) {
                 mdata->spec_color.g = MIN(mdata->spec_color.g + 0x3f, 0xff);
                 mdata->size_bump += 15;
             }
-            if (ctrls[i]->buttons.B == BUTTON_DOWN_THIS_FRAME) {
+            if (ctrls[i]->button.B == ENJ_BUTTON_DOWN_THIS_FRAME) {
                 mdata->spec_color.raw = 0xff000000;
                 mdata->size_bump += 15;
             }
@@ -111,7 +111,7 @@ void main_mode_updater(void* data) {
             }
         }
     }
-    enj_renderlist_add(PVR_LIST_TR_POLY, render, data);
+    enj_render_list_add(PVR_LIST_TR_POLY, render, data);
 }
 
 void setup_textures() {
@@ -137,14 +137,14 @@ void setup_modes(enj_mode_t* main_mode) {
 
 int main(__unused int argc, __unused char** argv) {
     // initialize enDjinn state with default values
-    enj_state_defaults();
+    enj_state_init_defaults();
 
     // default pattern is START + A + B + X + Y
     // lets make it easier, A is offset 0 in bitfield and START is 
     // offset 8<<1 (two bits per button)
-    enj_state_set_soft_reset(BUTTON_DOWN<<(8<<1) | BUTTON_DOWN);
+    enj_state_soft_reset_set(ENJ_BUTTON_DOWN<<(8<<1) | ENJ_BUTTON_DOWN);
 
-    if (enj_startup() != 0) {
+    if (enj_state_startup() != 0) {
         ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
         return -1;
     }
@@ -166,6 +166,6 @@ int main(__unused int argc, __unused char** argv) {
     };
     setup_modes(&main_mode);
     enj_mode_push(&main_mode);
-    enj_run();
+    enj_state_run();
     return 0;
 }

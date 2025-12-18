@@ -9,20 +9,20 @@
  * Set the integer scale for font rendering
  * @param scale The integer scale factor (must be > 0)
  */
-void enj_font_set_scale(uint8_t scale);
+void enj_font_scale_set(uint8_t scale);
 
 /**
 
  * Set the Z value used for font rendering
  * @param zvalue The Z value to use for rendering
  */
-void enj_font_set_zvalue(float zvalue);
+void enj_font_zvalue_set(float zvalue);
 
 /**
  * Set the letter spacing for font rendering
  * @param spacing The number of pixels to add between letters
  */
-void enj_font_set_letter_spacing(uint8_t spacing);
+void enj_font_letter_spacing_set(uint8_t spacing);
 
 /**
  * Load an enDjinn font from a memory blob

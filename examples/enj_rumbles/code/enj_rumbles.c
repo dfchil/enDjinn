@@ -142,8 +142,8 @@ void render(void* data) {
 #define MARGIN_LEFT 10
   char str_buffer[STRBUFSIZE];
 
-  enj_qfont_set_color(0xff, 0xc0, 0x10); /* gold */
-  enj_font_set_scale(3);
+  enj_qfont_color_set(0xff, 0xc0, 0x10); /* gold */
+  enj_font_scale_set(3);
   const char* title = "Rumble Accessory Tester";
   int twidth =
       enj_font_string_width(title, enj_qfont_get_header());
@@ -151,26 +151,26 @@ void render(void* data) {
   int textpos_y = 4;
   enj_qfont_write(title, textpos_x, textpos_y,
                   PVR_LIST_PT_POLY);
-  enj_font_set_scale(1);
+  enj_font_scale_set(1);
 
   /* Start drawing the changeable section of the screen */
   textpos_y += 4 * enj_qfont_get_header()->line_height;
 
   textpos_x = MARGIN_LEFT;
-  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_color_set(255, 255, 255); /* White */
   enj_qfont_write("Effect as hex value:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
-  enj_qfont_set_color(255, 0, 255); /* Magenta */
+  enj_qfont_color_set(255, 0, 255); /* Magenta */
   snprintf(str_buffer, STRBUFSIZE, "0x%08lx", state->effect.raw);
   textpos_x = 170;
   enj_qfont_write(str_buffer, textpos_x, textpos_y, PVR_LIST_PT_POLY);
   textpos_y += enj_qfont_get_header()->line_height *2;
   textpos_x = MARGIN_LEFT;
 
-  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_color_set(255, 255, 255); /* White */
   enj_qfont_write("Effect as fields:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
   textpos_y += enj_qfont_get_header()->line_height;
   
-  enj_qfont_set_color(0x14, 0xaf, 255); /* Light Blue */
+  enj_qfont_color_set(0x14, 0xaf, 255); /* Light Blue */
   for (int i = 0; i < num_fields; i++) {
     enj_qfont_write(fieldnames[i], textpos_x + 60 * i, textpos_y,
                     PVR_LIST_PT_POLY);
@@ -179,9 +179,9 @@ void render(void* data) {
 
   for (int i = 0; i < num_fields; i++) {
     if (state->cursor_pos == i)
-      enj_qfont_set_color(255, 0, 0); /* Red */
+      enj_qfont_color_set(255, 0, 0); /* Red */
     else
-      enj_qfont_set_color(255, 255, 255); /* White */
+      enj_qfont_color_set(255, 255, 255); /* White */
 
     snprintf(str_buffer, STRBUFSIZE, " %u ", offset2field(i, &*state));
     enj_qfont_write(str_buffer, textpos_x + 60 * i, textpos_y,
@@ -192,9 +192,9 @@ void render(void* data) {
 
   textpos_y += enj_qfont_get_header()->line_height;
   textpos_x = MARGIN_LEFT;
-  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_color_set(255, 255, 255); /* White */
   enj_qfont_write("Field description:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
-  enj_qfont_set_color(255, 0, 0); /* RED */
+  enj_qfont_color_set(255, 0, 0); /* RED */
   textpos_x = 170;
   textpos_x += enj_qfont_write(" [", textpos_x, textpos_y, PVR_LIST_PT_POLY);
   textpos_x += enj_qfont_write(fieldnames[state->cursor_pos], textpos_x, textpos_y,
@@ -203,7 +203,7 @@ void render(void* data) {
   textpos_y += enj_qfont_get_header()->line_height;
   textpos_x = MARGIN_LEFT * 3;
 
-  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_color_set(255, 255, 255); /* White */
   const char* field_descriptions[] = {
       // note that each description is 2 lines, some empty
       "Continuous Vibration. When set vibration will "
@@ -255,7 +255,7 @@ void render(void* data) {
     textpos_x = MARGIN_LEFT;
     enj_qfont_write("Loaded baked pattern:", textpos_x, textpos_y,
                     PVR_LIST_PT_POLY);
-    enj_qfont_set_color(0, 255, 0); /* Green */
+    enj_qfont_color_set(0, 255, 0); /* Green */
     textpos_y += enj_qfont_get_header()->line_height;
     enj_qfont_write(catalog[state->loaded_pattern].description, textpos_x, textpos_y,
                     PVR_LIST_PT_POLY);
@@ -266,10 +266,10 @@ void render(void* data) {
   textpos_y = 344;
   textpos_x = MARGIN_LEFT;
 
-  enj_qfont_set_color(0xff, 0xc0, 0x10); /* gold */
+  enj_qfont_color_set(0xff, 0xc0, 0x10); /* gold */
   enj_qfont_write("Instructions:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
   textpos_y += enj_qfont_get_header()->line_height;
-  enj_qfont_set_color(255, 255, 255); /* White */
+  enj_qfont_color_set(255, 255, 255); /* White */
   const char* instructions[] = {"Press left/right to switch field.",
                                 "Press up/down to change values.",
                                 "Press A to send effect to rumblepack.",
@@ -289,7 +289,7 @@ void main_mode_updater(void* data) {
 
     // neeeds to be at least one controller with a rumble pack
     enj_ctrlr_state_t** ctrl_states = enj_ctrl_get_states();
-    maple_device_t** rumble_states = enj_rumble_get_states();
+    maple_device_t** rumble_states = enj_rumble_states_get();
 
     state->no_controller = 1;
     state->no_rumbles = 1;
@@ -310,25 +310,25 @@ void main_mode_updater(void* data) {
       break;
     }
 
-    if (ctrl_states[state->active_controller]->buttons.LEFT ==
-        BUTTON_DOWN_THIS_FRAME) {
+    if (ctrl_states[state->active_controller]->button.LEFT ==
+        ENJ_BUTTON_DOWN_THIS_FRAME) {
       state->cursor_pos = state->cursor_pos - 1;
       if (state->cursor_pos < 0)
         state->cursor_pos = num_fields - 1;
       if (state->cursor_pos == 1) state->cursor_pos = 0;
     }
 
-    if (ctrl_states[state->active_controller]->buttons.RIGHT ==
-        BUTTON_DOWN_THIS_FRAME) {
+    if (ctrl_states[state->active_controller]->button.RIGHT ==
+        ENJ_BUTTON_DOWN_THIS_FRAME) {
       state->cursor_pos = (state->cursor_pos + 1) % num_fields;
       if (state->cursor_pos == 1) state->cursor_pos = 2;
     }
 
-    int delta = ctrl_states[state->active_controller]->buttons.UP ==
-                        BUTTON_DOWN_THIS_FRAME
+    int delta = ctrl_states[state->active_controller]->button.UP ==
+                        ENJ_BUTTON_DOWN_THIS_FRAME
                     ? 1
-                : ctrl_states[state->active_controller]->buttons.DOWN ==
-                        BUTTON_DOWN_THIS_FRAME
+                : ctrl_states[state->active_controller]->button.DOWN ==
+                        ENJ_BUTTON_DOWN_THIS_FRAME
                     ? -1
                     : 0;
 
@@ -337,8 +337,8 @@ void main_mode_updater(void* data) {
       state->loaded_pattern = -1;  // custom pattern, not from catalog
     }
 
-    if (ctrl_states[state->active_controller]->buttons.X ==
-        BUTTON_DOWN_THIS_FRAME) {
+    if (ctrl_states[state->active_controller]->button.X ==
+        ENJ_BUTTON_DOWN_THIS_FRAME) {
       state->effect = catalog[state->catalog_index].effect;
       state->loaded_pattern = state->catalog_index;
       state->catalog_index++;
@@ -347,30 +347,30 @@ void main_mode_updater(void* data) {
         state->catalog_index = 0;
     }
 
-    if (ctrl_states[state->active_controller]->buttons.A ==
-        BUTTON_DOWN_THIS_FRAME) {
+    if (ctrl_states[state->active_controller]->button.A ==
+        ENJ_BUTTON_DOWN_THIS_FRAME) {
       /* We print these out to make it easier to track the options chosen
        */
       ENJ_DEBUG_PRINT("Rumble effect hex code: 0x%lx!\n", state->effect.raw);
-      enj_rumble_set_effect(state->active_controller, state->effect.raw);
+      enj_rumble_effect_set_raw(state->active_controller, state->effect.raw);
     }
-    if (ctrl_states[state->active_controller]->buttons.B ==
-        BUTTON_DOWN_THIS_FRAME) {
-          enj_rumble_set_effect(state->active_controller, rumble_stop.raw);
+    if (ctrl_states[state->active_controller]->button.B ==
+        ENJ_BUTTON_DOWN_THIS_FRAME) {
+          enj_rumble_effect_set_raw(state->active_controller, rumble_stop.raw);
       ENJ_DEBUG_PRINT("Rumble Stopped!\n");
     }
   } while (0);
-  enj_renderlist_add(PVR_LIST_PT_POLY, render, data);
+  enj_render_list_add(PVR_LIST_PT_POLY, render, data);
 }
 
 int main(__unused int argc, __unused char** argv) {
-  enj_state_defaults();
+  enj_state_init_defaults();
   // default soft-reset pattern is START + A + B + X + Y.
   // Lets make it easier with just START
   // START is offset 8<<1 (two bits per button)
-  enj_state_set_soft_reset(BUTTON_DOWN << (8 << 1));
+  enj_state_soft_reset_set(ENJ_BUTTON_DOWN << (8 << 1));
 
-  if (enj_startup() != 0) {
+  if (enj_state_startup() != 0) {
     ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
     return -1;
   }
@@ -386,7 +386,7 @@ enj_mode_t main_mode = {
     .data = &rat_state,
 };
 enj_mode_push(&main_mode);
-enj_run();
+enj_state_run();
 
 return 0;
 }

@@ -25,7 +25,7 @@ KOS_INIT_FLAGS(INIT_DEFAULT);
 alignas(32) static enj_state_t state = {0};
 enj_state_t* enj_state_get(void) { return &state; }
 
-void enj_state_defaults(void) {
+void enj_state_init_defaults(void) {
 #ifdef ENJ_DEBUG
     gdb_init();
     ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
@@ -35,12 +35,12 @@ void enj_state_defaults(void) {
     state.flags.initialized = 1;
     state.flags.soft_reset_enabled = 1;
     state.soft_reset_target_index = -1;
-    state.exit_pattern = ((enj_ctrlr_state_t){.buttons = {.START = BUTTON_DOWN,
-                                                          .A = BUTTON_DOWN,
-                                                          .B = BUTTON_DOWN,
-                                                          .X = BUTTON_DOWN,
-                                                          .Y = BUTTON_DOWN}})
-                             .buttons.raw;
+    state.exit_pattern = ((enj_ctrlr_state_t){.button = {.START = ENJ_BUTTON_DOWN,
+                                                          .A = ENJ_BUTTON_DOWN,
+                                                          .B = ENJ_BUTTON_DOWN,
+                                                          .X = ENJ_BUTTON_DOWN,
+                                                          .Y = ENJ_BUTTON_DOWN}})
+                             .button.raw;
 
     state.video.pvr_params = (pvr_init_params_t){
         {PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16,
@@ -68,22 +68,22 @@ void enj_state_defaults(void) {
     }
 }
 
-void enj_state_set_soft_reset(uint32_t pattern) {
+void enj_state_soft_reset_set(uint32_t pattern) {
     state.exit_pattern = pattern;
 }
 
-void enj_shutdown_flag(void) { state.flags.shut_down = 1; }
+void enj_state_flag_shutdown(void * __unused) { state.flags.shut_down = 1; }
 
 void enj_ctrl_init_local_devices(void);
 void enj_rumble_init_local_devices(void);
 void enj_rumble_update(void);
 
-int enj_startup() {
+int enj_state_startup() {
     enj_state_t* state = enj_state_get();
 
     if (!state->flags.initialized) {
         ENJ_DEBUG_PRINT(
-            "enDjinn not initialized! Call enj_state_defaults() first.\n");
+            "enDjinn not initialized! Call enj_state_init_defaults() first.\n");
         return -1;
     }
 
@@ -116,16 +116,16 @@ int enj_startup() {
     return 0;
 }
 
-void enj_run(void) {
+void enj_state_run(void) {
     if (enj_mode_get_current_index() < 0) {
         ENJ_DEBUG_PRINT(
-            "No mode pushed! Call enj_mode_push() before enj_run().\n");
+            "No mode pushed! Call enj_mode_push() before enj_state_run().\n");
         return;
     }
     enj_state_t* state = enj_state_get();
     if (!state->flags.started) {
         ENJ_DEBUG_PRINT(
-            "enDjinn not started! Call enj_startup() before enj_run().\n");
+            "enDjinn not started! Call enj_state_startup() before enj_state_run().\n");
         return;
     }
     enj_ctrlr_state_t** cstates = enj_ctrl_get_states();
@@ -146,15 +146,15 @@ void enj_run(void) {
             /* check for controller exit patterns */
             for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
                 if (cstates[i] &&
-                    enj_ctrlr_button_combo_raw(cstates[i]->buttons.raw,
+                    enj_ctrlr_button_combo_raw(cstates[i]->button.raw,
                                                state->exit_pattern)) {
                     // prevent re-triggering
-                    cstates[i]->buttons.raw &= ~(state->exit_pattern << 1);
+                    cstates[i]->button.raw &= ~(state->exit_pattern << 1);
 
                     int mode_index = enj_mode_get_current_index();
                     if (mode_index == 0) {
                         // we're at the base mode, just shut down
-                        enj_shutdown_flag();
+                        enj_state_flag_shutdown(NULL);
                         break;
                     }
                     if (state->soft_reset_target_index != -1 &&
@@ -176,7 +176,7 @@ void enj_run(void) {
                 }
             }
         }
-        enj_next_frame(enj_mode_get());
+        enj_render_next_frame(enj_mode_get());
         enj_rumble_update();
     }
 #ifdef DCPROF
