@@ -355,7 +355,6 @@ static inline const char * fDaFormatStringHdr(const fDcAudioHeader *dca) {
 }
 
 #ifdef DCAUDIO_IMPLEMENTATION
-
 #include <math.h>
 
 size_t fDaCalcChannelSizeBytes(const fDcAudioHeader *dca) {

@@ -8,10 +8,10 @@ uint8_t wilhelm_adpcm_data[] = {
 #embed "../embeds/enj_sounds/sfx/ADPCM/Wilhelm_Scream.dca"
 };
 uint8_t wilhelm_pcm8_data[] = {
-#embed "../embeds/enj_sounds/sfx/PCM/8/Wilhelm_Scream.wav"
+#embed "../embeds/enj_sounds/sfx/PCM/8/Wilhelm_Scream.dca"
 };
 uint8_t wilhelm_pcm16_data[] = {
-#embed "../embeds/enj_sounds/sfx/PCM/16/Wilhelm_Scream.wav"
+#embed "../embeds/enj_sounds/sfx/PCM/16/Wilhelm_Scream.dca"
 };
 
 uint8_t clean_test_adpcm[] = {
@@ -19,10 +19,10 @@ uint8_t clean_test_adpcm[] = {
 };
 
 uint8_t clean_test_pcm8[] = {
-#embed "../embeds/enj_sounds/sfx/PCM/8/clean-audio-test-tone.wav"
+#embed "../embeds/enj_sounds/sfx/PCM/8/clean-audio-test-tone.dca"
 };
 uint8_t clean_test_pcm16[] = {
-#embed "../embeds/enj_sounds/sfx/PCM/16/clean-audio-test-tone.wav"
+#embed "../embeds/enj_sounds/sfx/PCM/16/clean-audio-test-tone.dca"
 };
 
 typedef struct {
@@ -56,7 +56,7 @@ static const SFX_entry_t sfx_catalog[] = {
     {.name = "Wilhelm scream, ADPCM encoded", .on_press_A = play_sfx},
     {.name = "Wilhelm scream, PCM 8bit encoded", .on_press_A = play_sfx},
     {.name = "Wilhelm scream, PCM 16bit encoded", .on_press_A = play_sfx},
-    {.name = "Clean test tone, PCM 16bit encoded", .on_press_A = play_sfx},
+    {.name = "Clean test tone, ADPCM encoded", .on_press_A = play_sfx},
     {.name = "Clean test tone, PCM 8bit encoded", .on_press_A = play_sfx},
     {.name = "Clean test tone, PCM 16bit encoded", .on_press_A = play_sfx},
     {.name = "Exit example", .on_press_A = end_program},
@@ -83,8 +83,8 @@ void render(void* data) {
   enj_qfont_set_color(255, 255, 255); /* White */
   enj_qfont_write("Current pan:", MARGIN_LEFT, textpos_y, PVR_LIST_PT_POLY);
   textpos_y += enj_qfont_get_header()->line_height;
-  char pan_str[5];
-  snprintf(pan_str, sizeof(pan_str), "%d", state->pan - 128);
+  char pan_str[7];
+  snprintf(pan_str, sizeof(pan_str), "<%d>", state->pan - 128);
   int8_t signed_pan = (int8_t)(state->pan - 128);
   uint8_t red = signed_pan > 0 ? 0 : 127 + abs(signed_pan);
   uint8_t green = signed_pan < 0 ? 0 : 127 + abs(signed_pan);
@@ -117,14 +117,15 @@ void render(void* data) {
   /* show instructions */
   enj_qfont_set_color(255, 255, 255); /* White */
 
-  const char* longest_line = "Hold X and move stick to set pan, release X to hold pan position";
+  const char* longest_line =
+      "Hold X and move stick to set pan, release X to hold pan position";
   textpos_x = vid_mode->width -
-              (enj_font_string_width(longest_line, enj_qfont_get_header()) + MARGIN_LEFT);
-  enj_qfont_write("Press A to choose", textpos_x, textpos_y,
-                  PVR_LIST_PT_POLY);
-  textpos_y += enj_qfont_get_header()->line_height;
+              (enj_font_string_width(longest_line, enj_qfont_get_header()) +
+               MARGIN_LEFT);
   enj_qfont_write("Use DPAD UP/DOWN to navigate menu", textpos_x, textpos_y,
                   PVR_LIST_PT_POLY);
+  textpos_y += enj_qfont_get_header()->line_height;
+  enj_qfont_write("Press A to choose", textpos_x, textpos_y, PVR_LIST_PT_POLY);
   textpos_y += enj_qfont_get_header()->line_height;
   enj_qfont_write(longest_line, textpos_x, textpos_y, PVR_LIST_PT_POLY);
 }
@@ -169,11 +170,11 @@ int main(__unused int argc, __unused char** argv) {
       .sounds =
           {
               enj_sound_load_dca_blob(wilhelm_adpcm_data),
-              enj_sound_load_wav_blob(wilhelm_pcm8_data),
-              enj_sound_load_wav_blob(wilhelm_pcm16_data),
+              enj_sound_load_dca_blob(wilhelm_pcm8_data),
+              enj_sound_load_dca_blob(wilhelm_pcm16_data),
               enj_sound_load_dca_blob(clean_test_adpcm),
-              enj_sound_load_wav_blob(clean_test_pcm8),
-              enj_sound_load_wav_blob(clean_test_pcm16),
+              enj_sound_load_dca_blob(clean_test_pcm8),
+              enj_sound_load_dca_blob(clean_test_pcm16),
           },
   };
   enj_mode_t main_mode = {
