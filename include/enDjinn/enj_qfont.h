@@ -1,11 +1,14 @@
 #ifndef ENJ_DEBUG_H
 #define ENJ_DEBUG_H
 
+#ifdef ENJ_INJECT_QFONT
+
+
 #include <dc/pvr.h>
 #include <enDjinn/enj_font_types.h>
 
 int enj_qfont_init();
-void enj_debug_shutdown();
+void enj_qfont_shutdown();
 
 /**
  * Writes a string to the screen using a injected font.
@@ -54,5 +57,6 @@ pvr_sprite_hdr_t* enj_qfont_get_sprite_hdr();
  * @note The effect depends on the texture mode and pvr_list_type being used.
  */
 void enj_qfont_color_set(uint8_t r, uint8_t g, uint8_t b);
+#endif  // ENJ_INJECT_QFONT
 
 #endif  // ENJ_DEBUG_H

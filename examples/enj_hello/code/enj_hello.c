@@ -5,7 +5,7 @@ void render_PT(void *__unused) {
   enj_font_scale_set(4);
   enj_qfont_write("Hello, enDjinn!", MARGIN_LEFT, 20, PVR_LIST_PT_POLY);
   enj_font_scale_set(1);
-  enj_qfont_write("Press START+A+B+X+Y to end program.", MARGIN_LEFT, 120,
+  enj_qfont_write("Press A+B+X+Y+START to end program.", MARGIN_LEFT, 120,
                   PVR_LIST_PT_POLY);
 }
 void main_mode_updater(void *__unused) {

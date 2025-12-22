@@ -348,10 +348,7 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t *font, uint8_t *data_4bpp,
           // buffer[i] = 0x7FE0;
         }
     } else {
-        enj_bitmap_t bmap;
-        bmap.width = width;
-        bmap.height = height;
-        bmap.data = data_4bpp;
+        enj_bitmap_t bmap = { .height = height, .width = width, .data = data_4bpp };
         for (int i = 0; i < width * height; i++) {
             buffer[i] = enj_bitmap_get(&bmap, i % width, i / width) << 15 | 0x7fff;
         }
