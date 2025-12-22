@@ -28,7 +28,7 @@ $(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal8/%.dt: $(ENJ_TEXTURE_SRC_DIR)/pal8/%.png
 
 $(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/rgb565_vq_tw/%.dt: $(ENJ_TEXTURE_SRC_DIR)/rgb565_vq_tw/%.png 
 	@mkdir -p $(shell dirname $@)
-	pvrtex -f RGB565 -c -i $< -o $@
+	pvrtex -f RGB565 -c -i $< -o $@ -p $@.png
 
 $(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/argb1555_vq_tw/%.dt: $(ENJ_TEXTURE_SRC_DIR)/argb1555_vq_tw/%.png
 	@mkdir -p $(shell dirname $@)

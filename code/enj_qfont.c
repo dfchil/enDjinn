@@ -67,7 +67,7 @@ int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode) {
     pvr_dr_finish();
     return renderwidth;
 }
-void enj_debug_shutdown() {
+void enj_qfont_shutdown() {
     if (enj_qf_pvr_data){
         pvr_mem_free(enj_qf_pvr_data);
     }
