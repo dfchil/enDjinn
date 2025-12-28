@@ -25,7 +25,7 @@
 #endif
 
 #ifndef ENJ_SUPERSAMPLING
-#define ENJ_SUPERSAMPLING 1
+#define ENJ_SUPERSAMPLING 0
 #endif
 
 #if ENJ_SUPERSAMPLING == 1
