@@ -3,7 +3,7 @@ ENDDJINNPRIMARY =  $(realpath abspath $(lastword $(MAKEFILE_LIST)))
 ENJDIR:= $(dir $(ENDDJINNPRIMARY))
 include $(KOS_BASE)/Makefile.rules
 
-# redefine the following in a file ./Makefile.local.cfg as necessary
+# redefine variables in the following in a file ./Makefile.local.cfg as necessary
 include ${ENJDIR}Makefile.cfg
 ifneq (,$(wildcard ./Makefile.local.cfg))
   include ./Makefile.local.cfg
