@@ -1,7 +1,7 @@
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_sound.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <malloc.h>
 
 #define DCAUDIO_IMPLEMENTATION
 #include <enDjinn/ext/dca_file.h>
@@ -15,7 +15,7 @@ sfxhnd_t enj_sound_dca_load_file(const char* filename) {
     size_t filesize = ftell(sndfile);
     fseek(sndfile, 0, SEEK_SET);
     
-    buffer = malloc(filesize);
+    buffer = memalign(32, filesize);
     size_t amountread = fread(buffer, 1, filesize, sndfile);
     fclose(sndfile);
     if (amountread == filesize) {

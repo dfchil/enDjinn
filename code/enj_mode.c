@@ -43,8 +43,8 @@ enj_mode_t* enj_mode_pop(void) {
     mode_stack[current_mode_index] = NULL;
     current_mode_index--;
 
-    if (mode_stack[current_mode_index]->pop_fun != NULL) {
-        mode_stack[current_mode_index]->pop_fun(
+    if (mode_stack[current_mode_index]->on_activation_fn != NULL) {
+        mode_stack[current_mode_index]->on_activation_fn(
             popped_mode, mode_stack[current_mode_index]);
     }
     return popped_mode;
@@ -62,8 +62,8 @@ void enj_mode_goto_index(int target) {
         mode_stack[current_mode_index--] = NULL;
     }
     enj_mode_t* next = enj_mode_get();
-    if (next != NULL && next->pop_fun != NULL) {
-        next->pop_fun(prev, next);
+    if (next != NULL && next->on_activation_fn != NULL) {
+        next->on_activation_fn(prev, next);
     }
 }
 
