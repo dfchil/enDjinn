@@ -236,7 +236,7 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
     pvr_sprite_compile(&info_mode_data.hdr, &i_cxt);
     info_mode.data = &info_mode_data;
     info_mode.mode_updater = info_updater;
-    info_mode.pop_fun = NULL;
+    info_mode.on_activation_fn = NULL;
 
     // setup the other modes
     main_data_t* main_mode_data = (main_data_t*)main_mode->data;
@@ -251,19 +251,19 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
 
     zoom_mode.data = main_mode->data;
     zoom_mode.mode_updater = zoom_mode_updater;
-    zoom_mode.pop_fun = zoom_mode_initializer;
+    zoom_mode.on_activation_fn = zoom_mode_initializer;
 
     slide_mode_data->mode_data = main_mode_data;
     slide_mode.data = slide_mode_data;
     slide_mode.mode_updater = slide_mode_updater;
-    slide_mode.pop_fun = slide_default_direction;
+    slide_mode.on_activation_fn = slide_default_direction;
 
     enj_mode_push(&slide_mode);
     enj_mode_push(main_mode);
     enj_mode_soft_reset_target_set(enj_mode_get_current_index());
     enj_mode_push(&zoom_mode);
     // pushing doesnt trigger pop function, so call it manually
-    zoom_mode.pop_fun(NULL, &zoom_mode);
+    zoom_mode.on_activation_fn(NULL, &zoom_mode);
 }
 
 int main(__unused int argc, __unused char** argv) {
@@ -291,7 +291,7 @@ int main(__unused int argc, __unused char** argv) {
         .name = "Main Mode",
         .mode_updater = main_mode_updater,
         .data = &main_mode_data,
-        .pop_fun = into_main_indicator,
+        .on_activation_fn = into_main_indicator,
     };
     slide_data_t slide_mode_data;
     setup_modes(&main_mode, &slide_mode_data);
