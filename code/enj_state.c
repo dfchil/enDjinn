@@ -2,6 +2,8 @@
 #include <dc/video.h>
 #include <enDjinn/enj_enDjinn.h>
 #include <kos.h>
+#include <dc/maple/purupuru.h>
+
 
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/enj_qfont.h>
@@ -23,13 +25,30 @@
 KOS_INIT_FLAGS(INIT_DEFAULT);
 
 alignas(32) static enj_state_t state = {0};
-enj_state_t* enj_state_get(void) { return &state; }
+enj_state_t *enj_state_get(void) { return &state; }
 
 void enj_state_init_defaults(void) {
 #ifdef ENJ_DEBUG
   gdb_init();
   ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
 #endif
+  /** set vmu screens */
+  vmufb_t vmufb;
+  vmufb_clear(&vmufb);
+  vmufb_paint_area(&vmufb, 16, 0, 32, 32, enj_logo_bitmap_header);
+  vmufb_print_string_into(&vmufb, NULL, 0, 0, 48, 32, 0, "enDjinn");
+  vmufb_print_string_into(&vmufb, NULL, 8, 5, 48, 32, 0, "r");
+  vmufb_print_string_into(&vmufb, NULL, 7, 11, 48, 32, 0, "i");
+  vmufb_print_string_into(&vmufb, NULL, 8, 15, 48, 32, 0, "v");
+  vmufb_print_string_into(&vmufb, NULL, 8, 20, 48, 32, 0, "e");
+  vmufb_print_string_into(&vmufb, NULL, 8, 25, 48, 32, 0, "n");
+
+  for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+    maple_device_t *vmulcd = enj_maple_port_type(i, MAPLE_FUNC_LCD);
+    if (vmulcd) {
+      vmufb_present(&vmufb, vmulcd);
+    }
+  }
 
   state.flags.raw = 0;
   state.flags.initialized = 1;
@@ -55,32 +74,20 @@ void enj_state_init_defaults(void) {
   state.video.display_mode = DM_640x480;
   state.video.pixel_mode = PM_RGB888P;
   state.video.bg_color.raw = 0x00000000;
-
-  /** set vmu screens */
-  vmufb_t vmufb;
-  vmufb_clear(&vmufb);
-  vmufb_paint_area(&vmufb, 8, 0, 32, 32, enj_logo_bitmap_header);
-  for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
-    maple_device_t* vmulcd = enj_maple_port_type(i, MAPLE_FUNC_LCD);
-    if (vmulcd) {
-      vmufb_present(&vmufb, vmulcd);
-    }
-  }
-  usleep(2000);
 }
 
 void enj_state_soft_reset_set(uint32_t pattern) {
   state.exit_pattern = pattern;
 }
 
-void enj_state_flag_shutdown(void* __unused) { state.flags.shut_down = 1; }
+void enj_state_flag_shutdown(void *__unused) { state.flags.shut_down = 1; }
 
 void enj_ctrl_init_local_devices(void);
 void enj_rumble_init_local_devices(void);
 void enj_rumble_update(void);
 
 int enj_state_startup() {
-  enj_state_t* state = enj_state_get();
+  enj_state_t *state = enj_state_get();
 
   if (!state->flags.initialized) {
     ENJ_DEBUG_PRINT(
@@ -123,14 +130,13 @@ void enj_state_run(void) {
         "No mode pushed! Call enj_mode_push() before enj_state_run().\n");
     return;
   }
-  enj_state_t* state = enj_state_get();
+  enj_state_t *state = enj_state_get();
   if (!state->flags.started) {
-    ENJ_DEBUG_PRINT(
-        "enDjinn not started! Call enj_state_startup() before "
-        "enj_state_run().\n");
+    ENJ_DEBUG_PRINT("enDjinn not started! Call enj_state_startup() before "
+                    "enj_state_run().\n");
     return;
   }
-  enj_ctrlr_state_t** cstates = enj_ctrl_get_states();
+  enj_ctrlr_state_t **cstates = enj_ctrl_get_states();
 
   while (1) {
     if (state->flags.shut_down) {
@@ -163,11 +169,11 @@ void enj_state_run(void) {
             enj_mode_cut_to_soft_reset_target();
           } else {
 #ifdef ENJ_DEBUG
-            enj_mode_t* from_mode = enj_mode_get();
+            enj_mode_t *from_mode = enj_mode_get();
 #endif
             enj_mode_pop();
 #ifdef ENJ_DEBUG
-            enj_mode_t* nxt_mode = enj_mode_get();
+            enj_mode_t *nxt_mode = enj_mode_get();
             ENJ_DEBUG_PRINT("Exiting from mode '%s':%d to mode '%s:%d'\n",
                             from_mode->name, mode_index, nxt_mode->name,
                             enj_mode_get_current_index());
@@ -188,12 +194,29 @@ void enj_state_run(void) {
 #ifdef ENJ_DEBUG
   perf_monitor_print(stdout);
 
-  FILE* stats_out = fopen(ENJ_CBASEPATH "/pstats.txt", "a");
+  FILE *stats_out = fopen(ENJ_CBASEPATH "/pstats.txt", "a");
   if (stats_out != NULL) {
     perf_monitor_print(stats_out);
     fclose(stats_out);
   }
 #endif
+
+  // clear vmu screens and stop rumblers
+  vmufb_t *vmufb = memalign(32, sizeof(vmufb_t));
+  vmufb_clear(vmufb);
+  for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+    maple_device_t *vmulcd = enj_maple_port_type(i, MAPLE_FUNC_LCD);
+    if (vmulcd) {
+      vmufb_present(vmufb, vmulcd);
+    }
+    maple_device_t *rumbler = enj_maple_port_type(i, MAPLE_FUNC_PURUPURU);
+    if (rumbler) {
+      purupuru_rumble_raw(rumbler, (purupuru_effect_t){.motor = 1}.raw);
+    }
+  }
+  free(vmufb);
+  usleep(100000); // allow time for VMU to update
+
 #ifdef RELEASEBUILD
   arch_set_exit_path(ARCH_EXIT_REBOOT);
 #endif
