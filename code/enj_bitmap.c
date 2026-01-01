@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <malloc.h>
+#include <dc/sq.h>
+
 
 #ifndef ENJ_DEBUG_PRINT
 #define ENJ_DEBUG_PRINT(...)        \
@@ -26,7 +29,8 @@ enj_bitmap_t *enj_bitmap_create(int width, int height) {
   }
 
   enj_bitmap_t *bitmap =
-      calloc(sizeof(enj_bitmap_t) + ((width * height) / ENJ_BITS_PER_BYTE), 1);
+      memalign(32, sizeof(enj_bitmap_t) + ((width * height) / ENJ_BITS_PER_BYTE));
+  sq_set32(bitmap, 0, sizeof(enj_bitmap_t) + ((width * height) / ENJ_BITS_PER_BYTE));
   if (bitmap == NULL) {
     return NULL;
   }
