@@ -4,7 +4,7 @@
 typedef struct enj_mode_s {
 	void (*mode_updater)(void* data);
 	void * data;
-	void (*pop_fun)(struct enj_mode_s *prev_mode, struct enj_mode_s *next_mode);
+	void (*on_activation_fn)(struct enj_mode_s *prev_mode, struct enj_mode_s *next_mode);
 	char name[20];
 } enj_mode_t;
 

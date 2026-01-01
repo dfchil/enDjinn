@@ -12,6 +12,8 @@ Go read there for further instruction and updates!*/
 
 #include <kos/thread.h>
 #include <dc/fs_dcload.h>
+#include <malloc.h>
+
 
 static char OUTPUT_FILENAME[128];
 static kthread_t* THREAD;
@@ -50,7 +52,7 @@ static bool write_samples_to_stdout();
 static void clear_samples();
 
 static Arc* new_arc(uint32_t PC, uint32_t PR) {
-    Arc* s = (Arc*) malloc(sizeof(Arc));
+    Arc* s = (Arc*) memalign(32, sizeof(Arc));
     s->count = 1;
     s->pc = PC;
     s->pr = PR;
@@ -221,7 +223,7 @@ static bool write_samples(const char* path) {
 
     /* Histogram data */
     const int BIN_COUNT = ((highest_address - lowest_address) / HISTFRACTION);
-    uint16_t* bins = (uint16_t*) malloc(BIN_COUNT * sizeof(uint16_t));
+    uint16_t* bins = (uint16_t*) memalign(32, BIN_COUNT * sizeof(uint16_t));
     memset(bins, 0, sizeof(uint16_t) * BIN_COUNT);
 
     FILE* out = fopen(path, "a");  /* Append, as init_sample_file would have created the file */
