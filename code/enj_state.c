@@ -59,13 +59,14 @@ void enj_state_init_defaults(void) {
   /** set vmu screens */
   vmufb_t vmufb;
   vmufb_clear(&vmufb);
-  vmufb_paint_area(&vmufb, 0, 0, 48, 32, enj_logo_bitmap_header);
+  vmufb_paint_area(&vmufb, 8, 0, 32, 32, enj_logo_bitmap_header);
   for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
     maple_device_t* vmulcd = enj_maple_port_type(i, MAPLE_FUNC_LCD);
     if (vmulcd) {
       vmufb_present(&vmufb, vmulcd);
     }
   }
+  usleep(2000);
 }
 
 void enj_state_soft_reset_set(uint32_t pattern) {
