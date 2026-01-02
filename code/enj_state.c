@@ -1,9 +1,8 @@
+#include <dc/maple/purupuru.h>
 #include <dc/sound/sound.h>
 #include <dc/video.h>
 #include <enDjinn/enj_enDjinn.h>
 #include <kos.h>
-#include <dc/maple/purupuru.h>
-
 
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/enj_qfont.h>
@@ -202,11 +201,14 @@ void enj_state_run(void) {
 #endif
 
   // clear vmu screens and stop rumblers
-  vmufb_t *vmufb = memalign(32, sizeof(vmufb_t));
-  vmufb_clear(vmufb);
+  vmufb_t *vmufb = NULL;
   for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
     maple_device_t *vmulcd = enj_maple_port_type(i, MAPLE_FUNC_LCD);
     if (vmulcd) {
+      if (vmufb == NULL) {
+        memalign(32, sizeof(vmufb_t));
+        vmufb_clear(vmufb);
+      }
       vmufb_present(vmufb, vmulcd);
     }
     maple_device_t *rumbler = enj_maple_port_type(i, MAPLE_FUNC_PURUPURU);
@@ -214,8 +216,10 @@ void enj_state_run(void) {
       purupuru_rumble_raw(rumbler, (purupuru_effect_t){.motor = 1}.raw);
     }
   }
-  free(vmufb);
-  usleep(100000); // allow time for VMU to update
+  if (vmufb != NULL) {
+    free(vmufb);
+    usleep(100000); // allow time for VMU to update
+  }
 
 #ifdef RELEASEBUILD
   arch_set_exit_path(ARCH_EXIT_REBOOT);
