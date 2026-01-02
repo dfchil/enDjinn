@@ -26,11 +26,7 @@ KOS_INIT_FLAGS(INIT_DEFAULT);
 alignas(32) static enj_state_t state = {0};
 enj_state_t *enj_state_get(void) { return &state; }
 
-void enj_state_init_defaults(void) {
-#ifdef ENJ_DEBUG
-  gdb_init();
-  ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
-#endif
+static inline void _vmu_splash_screen(void) {
   /** set vmu screens */
   vmufb_t vmufb;
   vmufb_clear(&vmufb);
@@ -48,6 +44,16 @@ void enj_state_init_defaults(void) {
       vmufb_present(&vmufb, vmulcd);
     }
   }
+}
+
+
+void enj_state_init_defaults(void) {
+#ifdef ENJ_DEBUG
+  gdb_init();
+  ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
+#endif
+
+  _vmu_splash_screen();
 
   state.flags.raw = 0;
   state.flags.initialized = 1;
