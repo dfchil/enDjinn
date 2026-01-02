@@ -34,9 +34,9 @@ static inline void _vmu_splash_screen(void) {
   vmufb_print_string_into(&vmufb, NULL, 1, 1, 48, 32, 0, "enDjinn");
   vmufb_print_string_into(&vmufb, NULL, 9, 6, 48, 32, 0, "r");
   vmufb_print_string_into(&vmufb, NULL, 8, 12, 48, 32, 0, "i");
-  vmufb_print_string_into(&vmufb, NULL, 9, 16, 48, 32, 0, "v");
-  vmufb_print_string_into(&vmufb, NULL, 9, 21, 48, 32, 0, "e");
-  vmufb_print_string_into(&vmufb, NULL, 9, 26, 48, 32, 0, "n");
+  vmufb_print_string_into(&vmufb, NULL, 9, 17, 48, 32, 0, "v");
+  vmufb_print_string_into(&vmufb, NULL, 9, 22, 48, 32, 0, "e");
+  vmufb_print_string_into(&vmufb, NULL, 9, 27, 48, 32, 0, "n");
 
   for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
     maple_device_t *vmulcd = enj_maple_port_type(i, MAPLE_FUNC_LCD);
@@ -212,7 +212,7 @@ void enj_state_run(void) {
     maple_device_t *vmulcd = enj_maple_port_type(i, MAPLE_FUNC_LCD);
     if (vmulcd) {
       if (vmufb == NULL) {
-        memalign(32, sizeof(vmufb_t));
+        vmufb = memalign(32, sizeof(vmufb_t));
         vmufb_clear(vmufb);
       }
       vmufb_present(vmufb, vmulcd);
