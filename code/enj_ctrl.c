@@ -134,9 +134,9 @@ void enj_ctrl_kos2enj_state(cont_state_t *c_state, enj_ctrlr_state_t *ctrlr) {
 
 enj_ctrlr_state_t **enj_ctrl_get_states(void);
 void enj_read_controller(enj_abstract_ctrlr_t *ctrlref,
-                         enj_ctrlr_state_t *button) {
+                         enj_ctrlr_state_t *cstate) {
   if (ctrlref != NULL && ctrlref->updatefun != NULL) {
-    ctrlref->updatefun(ctrlref->state, button);
+    ctrlref->updatefun(ctrlref->state, cstate);
   }
 }
 

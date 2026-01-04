@@ -2,10 +2,15 @@
 #define ENJ_GAME_MODE_H
 
 typedef struct enj_mode_s {
-	void (*mode_updater)(void* data);
-	void * data;
-	void (*on_activation_fn)(struct enj_mode_s *prev_mode, struct enj_mode_s *next_mode);
-	char name[20];
+  void (*mode_updater)(void *data);
+  void *data;
+  void (*on_activation_fn)(struct enj_mode_s *prev_mode,
+                           struct enj_mode_s *next_mode);
+  struct {
+    uint8_t no_soft_reset : 1;
+	uint8_t : 7;
+  };
+  char name[19];
 } enj_mode_t;
 
 /**
@@ -19,26 +24,26 @@ int enj_mode_push(enj_mode_t *mode);
  * Replace the current active mode with the given mode
  * @param mode Pointer to the mode to set as current
  */
-void enj_mode_set(enj_mode_t* mode);
+void enj_mode_set(enj_mode_t *mode);
 
 /**
  * Get the current active mode
  * @return Pointer to the current mode
  */
-enj_mode_t* enj_mode_get(void);
+enj_mode_t *enj_mode_get(void);
 
 /**
  * Get a mode by its index in the mode stack
  * @param index Index of the mode to retrieve
  * @return Pointer to the mode at the given index, or NULL if out of bounds
  */
-enj_mode_t* enj_mode_get_by_index(int index);
+enj_mode_t *enj_mode_get_by_index(int index);
 
 /**
  * Pop the current mode off the mode stack
  * @return Pointer to the popped mode, or NULL if stack underflow
  */
-enj_mode_t* enj_mode_pop();
+enj_mode_t *enj_mode_pop();
 
 /**
  * Get the current index of the mode stack
@@ -68,6 +73,5 @@ void enj_mode_goto_index(int index);
  * Flag the current mode to end at the next opportunity
  */
 void enj_mode_flag_end_current(void);
-
 
 #endif // ENJ_GAME_MODE_H
