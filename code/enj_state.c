@@ -155,7 +155,7 @@ void enj_state_run(void) {
       state->flags.end_mode = 0;
     }
     enj_ctrl_map_states();
-    if (state->flags.soft_reset_enabled) {
+    if (state->flags.soft_reset_enabled && !(enj_mode_get()->no_soft_reset)) {
       /* check for controller exit patterns */
       for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
         if (cstates[i] && enj_ctrlr_button_combo_raw(cstates[i]->button.raw,
