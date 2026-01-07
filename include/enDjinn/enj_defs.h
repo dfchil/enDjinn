@@ -24,11 +24,11 @@
 #define ENJ_SHOWFRAMETIMES 0
 #endif
 
-#ifndef ENJ_SUPERSAMPLING
-#define ENJ_SUPERSAMPLING 0
+#ifndef ENJ_FSAA
+#define ENJ_FSAA 0
 #endif
 
-#if ENJ_SUPERSAMPLING == 1
+#if ENJ_FSAA == 1
 #define ENJ_XSCALE (int)2
 #else
 #define ENJ_XSCALE (int)1
