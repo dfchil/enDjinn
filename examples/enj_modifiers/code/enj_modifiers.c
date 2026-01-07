@@ -82,7 +82,7 @@ void render_modifier(void *__unused) {
 
 void render_PT(void *__unused) {
   enj_font_scale_set(4);
-  enj_qfont_write("enDjinn Modifiers example", MARGIN_LEFT, 20,
+  enj_qfont_write("Modifier example", MARGIN_LEFT, 20,
                   PVR_LIST_PT_POLY);
   enj_font_scale_set(1);
 
