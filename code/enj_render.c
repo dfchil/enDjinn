@@ -74,7 +74,7 @@ void enj_render_list_add(pvr_list_t renderlist, void (*renderer)(void *data),
 }
 
 void enj_render_next_frame(enj_mode_t *current_updater) {
-  // post_call custom renderlists
+  // clean up renderlists
   for (int i = PVR_LIST_OP_POLY; i <= PVR_LIST_PT_POLY; i++) {
     active_renderlists[i] = first_renderlists[i];
     enj_renderlist_t *list = active_renderlists[i];
@@ -101,9 +101,9 @@ void enj_render_next_frame(enj_mode_t *current_updater) {
   vid_border_color(0, 255, 0);
 #endif
   for (int rlist = PVR_LIST_OP_POLY; rlist <= PVR_LIST_PT_POLY; rlist++) {
-    if (rlist == PVR_LIST_TR_MOD) {
-      continue;
-    }
+    // if (rlist == PVR_LIST_TR_MOD) {
+    //   continue;
+    // }
     pvr_list_begin(rlist);
     if (first_renderlists[rlist] != NULL) {
       enj_renderlist_t *list = first_renderlists[rlist];
