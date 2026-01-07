@@ -72,7 +72,7 @@ void enj_state_init_defaults(void) {
       .vertex_buf_size = 1024 * 1024,
       .dma_enabled = 0,
       .fsaa_enabled = ENJ_FSAA,
-      .autosort_disabled = 1,
+      .autosort_disabled = 0,
       .opb_overflow_count = 2,
       .vbuf_doublebuf_disabled = 0,
   };
