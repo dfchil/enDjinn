@@ -11,7 +11,7 @@ $(SOUNDMACHINE): ${SOUNDMACHINE_DIR}
 
 ENJ_SNDFXFILES:=
 ifneq (,$(wildcard $(ENJ_SOUNDFX_SRC_DIR)))
-	ENJ_SNDFXFILES += $(shell find $(ENJ_SOUNDFX_SRC_DIR) -name '*.wav' -or -name '*.mp3'| sed -e 's,'$(ENJ_SOUNDFX_SRC_DIR)',$(ROMBASEPATH)/$(ROMBASESFXDIR),g' -e 's,\.\(wav\|mp3\),\.dca,g')
+	ENJ_SNDFXFILES += $(shell find $(ENJ_SOUNDFX_SRC_DIR) -name '*.wav' -or -name '*.mp3'| sed -e 's,'$(ENJ_SOUNDFX_SRC_DIR)',$(ROMBASEPATH)/$(ROMBASESFXDIR),g' | sed -E 's,\.(wav|mp3),\.dca,g')
 endif
 
 $(ROMBASEPATH)/$(ROMBASESFXDIR)/ADPCM/%.dca: $(ENJ_SOUNDFX_SRC_DIR)/ADPCM/%.* $(SOUNDMACHINE)
