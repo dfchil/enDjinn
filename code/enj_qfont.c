@@ -53,8 +53,6 @@ int enj_qfont_init() {
 }
 
 int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode) {
-    pvr_dr_state_t state;
-    pvr_dr_init(&state);
 
     if (cur_mode != enj_qf_prev_mode) {
         // rewrite the header if the mode has changed
@@ -63,8 +61,7 @@ int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode) {
     }
 
     int renderwidth = enj_font_string_render(str, enj_qf_hdr, x, y,
-                                       &enj_qf_sprite_hdr, &state);
-    pvr_dr_finish();
+                                       &enj_qf_sprite_hdr);
     return renderwidth;
 }
 void enj_qfont_shutdown() {

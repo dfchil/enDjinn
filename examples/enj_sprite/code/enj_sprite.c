@@ -40,7 +40,7 @@ void render(void *data) {
     corners[i][0] += mdata->center_x;
     corners[i][1] += mdata->center_y;
   }
-  enj_draw_sprite(corners, NULL, &mdata->hdr, NULL);
+  enj_draw_sprite(corners, &mdata->hdr, NULL);
 }
 void main_mode_updater(void *data) {
   main_data_t *mdata = (main_data_t *)data;
