@@ -101,9 +101,6 @@ void enj_render_next_frame(enj_mode_t *current_updater) {
   vid_border_color(0, 255, 0);
 #endif
   for (int rlist = PVR_LIST_OP_POLY; rlist <= PVR_LIST_PT_POLY; rlist++) {
-    // if (rlist == PVR_LIST_TR_MOD) {
-    //   continue;
-    // }
     pvr_list_begin(rlist);
     if (first_renderlists[rlist] != NULL) {
       enj_renderlist_t *list = first_renderlists[rlist];
