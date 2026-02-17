@@ -53,7 +53,7 @@ void enj_state_init_defaults(void) {
   ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
 #endif
 
-  _vmu_splash_screen();
+  // _vmu_splash_screen();
 
   state.flags.raw = 0;
   state.flags.initialized = 1;
