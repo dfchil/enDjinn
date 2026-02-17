@@ -215,7 +215,7 @@ static inline int enj_font_space_width(enj_font_header_t *font) {
 }
 
 int enj_font_render_glyph(char glyph, enj_font_header_t *font, int16_t x,
-                          int16_t y, pvr_dr_state_t *state_ptr) {
+                          int16_t y) {
   if (glyph < ' ' || glyph > '~') {
     ENJ_DEBUG_PRINT("Glyph '%c' out of range for font\n", glyph);
     return -1;
@@ -240,7 +240,7 @@ int enj_font_render_glyph(char glyph, enj_font_header_t *font, int16_t x,
   uint32_t texcoords[3];
   enj_font_glyph_uv_coords(font, glyph, &texcoords[0], &texcoords[1],
                            &texcoords[2]);
-  enj_draw_sprite(corners, state_ptr, NULL, texcoords);
+  enj_draw_sprite(corners, NULL, texcoords);
   return width;
 }
 
@@ -269,15 +269,9 @@ int enj_font_string_width(const char *text, enj_font_header_t *font) {
 
 int enj_font_string_render(const char *text, enj_font_header_t *font,
                            int16_t x, int16_t y,
-                           pvr_sprite_hdr_t *sprite_header,
-                           pvr_dr_state_t *state_ptr) {
-  static pvr_dr_state_t static_dr_state;
-  if (state_ptr == NULL) {
-    pvr_dr_init(&static_dr_state);
-    state_ptr = &static_dr_state;
-  }
+                           pvr_sprite_hdr_t *sprite_header) {
   if (sprite_header != NULL) {
-    pvr_sprite_hdr_t *hdr_ptr = (pvr_sprite_hdr_t *)pvr_dr_target(*state_ptr);
+    pvr_sprite_hdr_t *hdr_ptr = (pvr_sprite_hdr_t *)pvr_dr_target();
     *hdr_ptr = *sprite_header;
     pvr_dr_commit(hdr_ptr);
   }
@@ -285,11 +279,8 @@ int enj_font_string_render(const char *text, enj_font_header_t *font,
   int x_pos = x;
   while (*text != '\0') {
     x_pos += (enj_font_letter_spacing * enj_font_scale) +
-             enj_font_render_glyph(*text, font, x_pos, y, state_ptr);
+             enj_font_render_glyph(*text, font, x_pos, y);
     text++;
-  }
-  if (state_ptr == &static_dr_state) {
-    pvr_dr_finish();
   }
   return x_pos - x;
 }

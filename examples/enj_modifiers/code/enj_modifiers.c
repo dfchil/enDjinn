@@ -11,17 +11,14 @@ static int v_x_off = -1; // modifier volume offset X
 static int v_y_off = -1; // modifier volume offset Y
 
 void render_modifiable(void *__unused) {
-  pvr_dr_state_t dr_state;
-  pvr_dr_init(&dr_state);
-
   pvr_poly_cxt_t cxt;
   pvr_poly_cxt_col_mod(&cxt, testlist);
   cxt.gen.culling = PVR_CULLING_NONE;
-  pvr_poly_mod_hdr_t *hdr = (pvr_poly_mod_hdr_t *)pvr_dr_target(dr_state);
+  pvr_poly_mod_hdr_t *hdr = (pvr_poly_mod_hdr_t *)pvr_dr_target();
   pvr_poly_mod_compile(hdr, &cxt);
   pvr_dr_commit(hdr);
 
-  shz_vec3_t verts[4] = {
+  const shz_vec3_t verts[4] = {
       {.x = 0.0f, .y = 240.0f, .z = 5.5f},
       {.x = 0.0f, .y = 0.0f, .z = 5.5f},
       {.x = 320.0f, .y = 240.0f, .z = 5.5f},
@@ -29,7 +26,7 @@ void render_modifiable(void *__unused) {
   };
 
   for (int i = 0; i < 4; i++) {
-    pvr_vertex_pcm_t *vert = (pvr_vertex_pcm_t *)pvr_dr_target(dr_state);
+    pvr_vertex_pcm_t *vert = (pvr_vertex_pcm_t *)pvr_dr_target();
     vert->flags = i == 3 ? PVR_CMD_VERTEX_EOL : PVR_CMD_VERTEX;
     vert->x = verts[i].x + p_x_off;
     vert->y = verts[i].y + p_y_off;
@@ -38,52 +35,45 @@ void render_modifiable(void *__unused) {
     vert->argb1 = 0x7f00ff00; // Green inside
     pvr_dr_commit(vert);
   }
-  pvr_dr_finish();
 }
 
 void render_modifier(void *__unused) {
-  pvr_dr_state_t dr_state;
-  pvr_dr_init(&dr_state);
-
-  shz_vec3_t verts[4] = {
+  const shz_vec3_t verts[4] = {
       {.x = 80.0f, .y = 60.0f, .z = 6.6f},
       {.x = 240.0f, .y = 60.0f, .z = 6.6f},
       {.x = 240.0f, .y = 180.0f, .z = 6.6f},
       {.x = 80.0f, .y = 180.0f, .z = 6.6f},
   };
-  unsigned char indexes[2][3] = {
+  const unsigned char indexes[2][3] = {
       {0, 1, 2},
       {0, 2, 3},
   };
+  pvr_mod_hdr_t *hdr = (pvr_mod_hdr_t *)pvr_dr_target();
+  pvr_mod_compile(hdr, testlist + 1, PVR_MODIFIER_INCLUDE_LAST_POLY,
+                  PVR_CULLING_NONE);
+  pvr_dr_commit(hdr);
+  pvr_modifier_vol_t *modvol_p1, *modvol_p2;
+  enj_draw_pvr_dr64_init((void **)&modvol_p1, (void **)&modvol_p2);
   for (int i = 0; i < 2; i++) {
-    pvr_mod_hdr_t *hdr = (pvr_mod_hdr_t *)pvr_dr_target(dr_state);
-    pvr_mod_compile(hdr, testlist + 1, PVR_MODIFIER_INCLUDE_LAST_POLY,
-                    PVR_CULLING_NONE);
-    pvr_dr_commit(hdr);
-
-    pvr_modifier_vol_t *modvol = (pvr_modifier_vol_t *)pvr_dr_target(dr_state);
-    modvol->flags = PVR_CMD_VERTEX_EOL;
-    modvol->ax = verts[indexes[i][0]].x + v_x_off;
-    modvol->ay = verts[indexes[i][0]].y + v_y_off;
-    modvol->az = verts[indexes[i][0]].z;
-    modvol->bx = verts[indexes[i][1]].x + v_x_off;
-    modvol->by = verts[indexes[i][1]].y + v_y_off;
-    modvol->bz = verts[indexes[i][1]].z;
-    modvol->cx = verts[indexes[i][2]].x + v_x_off;
-    pvr_dr_commit(modvol);
-    modvol = (pvr_modifier_vol_t *)pvr_dr_target(dr_state);
-    pvr_modifier_vol_t *modvol_p2 = (pvr_modifier_vol_t *)((int)modvol - 32);
+    modvol_p1->flags = PVR_CMD_VERTEX_EOL;
+    modvol_p1->ax = verts[indexes[i][0]].x + v_x_off;
+    modvol_p1->ay = verts[indexes[i][0]].y + v_y_off;
+    modvol_p1->az = verts[indexes[i][0]].z;
+    modvol_p1->bx = verts[indexes[i][1]].x + v_x_off;
+    modvol_p1->by = verts[indexes[i][1]].y + v_y_off;
+    modvol_p1->bz = verts[indexes[i][1]].z;
+    modvol_p1->cx = verts[indexes[i][2]].x + v_x_off;
+    enj_draw_pvr_dr64_commit_1st();
     modvol_p2->cy = verts[indexes[i][2]].y + v_y_off;
     modvol_p2->cz = verts[indexes[i][2]].z;
-    pvr_dr_commit(modvol);
+    enj_draw_pvr_dr64_commit_2nd();
+    enj_draw_pvr_dr64_reset();
   }
-  pvr_dr_finish();
 }
 
 void render_PT(void *__unused) {
   enj_font_scale_set(4);
-  enj_qfont_write("Modifier example", MARGIN_LEFT, 20,
-                  PVR_LIST_PT_POLY);
+  enj_qfont_write("Modifier example", MARGIN_LEFT, 20, PVR_LIST_PT_POLY);
   enj_font_scale_set(1);
 
   enj_qfont_write("Press A to toggle between OP and TR lists", MARGIN_LEFT, 120,
