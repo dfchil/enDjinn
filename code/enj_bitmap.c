@@ -1,9 +1,14 @@
 #include <enDjinn/enj_bitmap.h>
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+#if defined(__APPLE__) || defined(__MACH__)
+#include <malloc/malloc.h>
+#define memalign(a, s) malloc(s)
+#else
 #include <malloc.h>
+#endif
 
 #ifndef ENJ_DEBUG_PRINT
 #define ENJ_DEBUG_PRINT(...)        \
@@ -79,10 +84,10 @@ void enj_bitmap_clear(enj_bitmap_t *bmap, int x, int y) {
   if (x < 0 || x >= bmap->width || y < 0 || y >= bmap->height) {
     return;
   }
-  int bit_offset = (x * bmap->width + y) * ENJ_BITS_PER_BYTE;
+  int bit_offset = (y * bmap->width) + x;
   int byte_index = BYTE_OFFSET(bit_offset);
   int bit_index = BIT_OFFSET(bit_offset);
-  bmap->data[byte_index] &= ~(1 << bit_index);
+  bmap->data[byte_index] &= ~(1 << (7 - bit_index));
 }
 
 void enj_bitmap_write_line(enj_bitmap_t *bmap, enj_bitmap_line_t line) {

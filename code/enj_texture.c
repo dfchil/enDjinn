@@ -194,7 +194,8 @@ int enj_texture_load_palette_file(const char *filename, int fmt,
     if (fread((char *)raw_data + sizeof(palette_hdr),
               palette_hdr.colors * sizeof(uint32_t), 1, file) != 1) {
       printf("Error reading palette colors from file %s\n", filename);
-      free(raw_data);
+      success = 0;
+      break;
     }
     success = enj_texture_load_palette_blob(raw_data, fmt, offset);
   } while (0);

@@ -34,7 +34,7 @@ void enj_ctrl_init_local_devices(void) {
 }
 
 size_t enj_ctrl_states_length(void) {
-  return sizeof(enj_abstract_ctrlr_t *) * MAPLE_PORT_COUNT;
+  return MAPLE_PORT_COUNT;
 }
 
 size_t enj_ctrl_map_states(void) {
@@ -132,7 +132,6 @@ void enj_ctrl_kos2enj_state(cont_state_t *c_state, enj_ctrlr_state_t *ctrlr) {
   ctrlr->rtrigger = c_state->rtrig;
 }
 
-enj_ctrlr_state_t **enj_ctrl_get_states(void);
 void enj_read_controller(enj_abstract_ctrlr_t *ctrlref,
                          enj_ctrlr_state_t *cstate) {
   if (ctrlref != NULL && ctrlref->updatefun != NULL) {

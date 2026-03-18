@@ -34,6 +34,8 @@ void enj_rumble_init_local_devices(void) {
   maple_detach_callback(MAPLE_FUNC_PURUPURU, scan_local_rumblers);
 }
 
+size_t enj_rumble_states_length(void) { return MAPLE_PORT_COUNT; }
+
 void enj_rumble_rate_limit_set(int frames) { enj_rumble_rate_limit = frames; }
 
 enj_rumble_reply_e enj_rumble_effect_set_raw(enj_ctrl_port_name_e ctrloffset,
