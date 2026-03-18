@@ -313,7 +313,12 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t *font, uint8_t *data_4bpp,
     return NULL;
   }
 
-  uint16_t buffer[width * height * sizeof(uint16_t)];
+  uint16_t *buffer = memalign(32, width * height * sizeof(uint16_t));
+  if (!buffer) {
+    printf("Error allocating memory for font buffer\n");
+    pvr_mem_free(pvr_data);
+    return NULL;
+  }
   int dr, dg, db;
 
   switch (mode) {
@@ -331,12 +336,6 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t *font, uint8_t *data_4bpp,
         for (int i = 0; i < width * height; i++) {
           uint8_t pixel_4bpp = extr_4bpp_pixel(data_4bpp, i);
           buffer[i] = (pixel_4bpp > 0) << 15 | 0x7fff;
-    
-          // (((back_color.r + dr) * pixel_4bpp) & 0x1F) << 6 |
-          //             (((back_color.g + dg) * pixel_4bpp) & 0x1F) << 1
-          //             |
-          //             (((back_color.b + db) * pixel_4bpp) & 0x1F) >> 3;
-          // buffer[i] = 0x7FE0;
         }
     } else {
         enj_bitmap_t bmap = { .height = height, .width = width, .data = data_4bpp };
@@ -357,9 +356,11 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t *font, uint8_t *data_4bpp,
     }
     break;
   default:
+    free(buffer);
     return NULL;
   }
   pvr_txr_load_ex((uint8_t *)buffer, pvr_data, width, height,
                   PVR_TXRLOAD_16BPP);
+  free(buffer);
   return pvr_data;
 }

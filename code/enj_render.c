@@ -50,6 +50,10 @@ void enj_render_list_add(pvr_list_t renderlist, void (*renderer)(void *data),
 
   if (list == NULL) {
     list = memalign(32, sizeof(enj_renderlist_t));
+    if (!list) {
+      ENJ_DEBUG_PRINT("Error: renderlist allocation failed\n");
+      return;
+    }
     list->next_list = NULL;
     list->count = 0;
     list->next_list = NULL;
@@ -59,6 +63,10 @@ void enj_render_list_add(pvr_list_t renderlist, void (*renderer)(void *data),
   if (list->count == RENDERLIST_SEGMENT_SIZE) {
     if (list->next_list == NULL) {
       list->next_list = (void *)memalign(32, sizeof(enj_renderlist_t));
+      if (!list->next_list) {
+        ENJ_DEBUG_PRINT("Error: renderlist next allocation failed\n");
+        return;
+      }
       list = list->next_list;
       list->next_list = NULL;
       num_allocations[renderlist]++;
@@ -132,8 +140,8 @@ void enj_render_next_frame(enj_mode_t *current_updater) {
 void enj_render_print_list_sizes(void) {
   size_t total_bytes = 0;
   for (int i = PVR_LIST_OP_POLY; i <= PVR_LIST_PT_POLY; i++) {
-    total_bytes += num_allocations[i] * RENDERLIST_SEGMENT_SIZE;
-    ENJ_DEBUG_PRINT("Renderlist %d, entries: %d: %d, bytes: \n", i,
+    total_bytes += num_allocations[i] * sizeof(enj_renderlist_t);
+    ENJ_DEBUG_PRINT("Renderlist %d, entries: %zu, bytes: %zu\n", i,
                     num_allocations[i] * RENDERLIST_SEGMENT_SIZE,
                     num_allocations[i] * sizeof(enj_renderlist_t));
   }
