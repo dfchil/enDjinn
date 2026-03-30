@@ -1,1 +1,1 @@
-../../Makefile.prime
+../../base_link.mk

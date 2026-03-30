@@ -1,25 +1,31 @@
+# Intended use of this file is to symlink to it from the project directory you want to build, and then run make from that directory. This allows you to keep your project files separate from the enDjinn source files, and also allows you to easily update enDjinn without having to copy files around.
+
 ENDDJINNPRIMARY =  $(realpath abspath $(lastword $(MAKEFILE_LIST)))
 
 ENJDIR:= $(dir $(ENDDJINNPRIMARY))
 include $(KOS_BASE)/Makefile.rules
 
-# redefine variables in the following in a file ./Makefile.local.cfg as necessary
-include ${ENJDIR}Makefile.cfg
-ifneq (,$(wildcard ./Makefile.local.cfg))
-  include ./Makefile.local.cfg
+# redefine variables in the following in a file ./local.cfg.mk as necessary
+include ${ENJDIR}cfg.mk
+ifneq (,$(wildcard ./local.cfg.mk))
+  include ./local.cfg.mk
 endif
 ifndef ROMBASEPATH
 	ROMBASEPATH:=$(ENJ_ROMDIR)/${ENJ_BASENAME}
 endif
 
-OBJS := $(shell find ${ENJDIR}code/ -name '*.c' -not -path "${ENJDIR}.git/*" |sed -e 's,${ENJDIR}\(.*\).c,$(ENJ_BUILDDIR)/enDjinn/\1.o,g')	
+ifndef OBJS  # this allows OBJS to be be started in local.cfg.mk
+	OBJS :=
+endif
+
+OBJS += $(shell find ${ENJDIR}code/ -name '*.c' -not -path "${ENJDIR}.git/*" |sed -e 's,${ENJDIR}\(.*\).c,$(ENJ_BUILDDIR)/enDjinn/\1.o,g')	
 OBJS += $(shell find ${ENJ_CODEDIR} -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(ENJ_BUILDDIR)\1.o,g')
 
-include ${ENJDIR}Makefile.texture
-include ${ENJDIR}Makefile.sfx
-include ${ENJDIR}Makefile.fonts
+include ${ENJDIR}texture.mk
+include ${ENJDIR}sfx.mk
+include ${ENJDIR}fonts.mk
 
-include ${ENJDIR}Makefile.defines
+include ${ENJDIR}defines.mk
 
 all: $(ENJ_BINDIR)/$(ENJ_BASENAME).elf
 .DEFAULT: all
@@ -68,4 +74,4 @@ mrproper: clean
 .PRECIOUS: $(ENJ_TEXTURES) $(ENJ_SNDFXFILES) $(ENJ_FONTFILES)
 .PHONY: list help info
 
-include ${ENJDIR}Makefile.info
+include ${ENJDIR}info.mk
