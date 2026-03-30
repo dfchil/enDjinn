@@ -3,7 +3,7 @@ list:
 
 
 cfg_info:
-	@echo "Makefile configurable variables (redefine in $(shell pwd)/Makefile.local.cfg as necessary):"
+	@echo "Makefile configurable variables (redefine in $(shell pwd)/local.cfg.mk as necessary):"
 	@echo "enDjinn directory: $(ENJDIR)"
 	@echo "ENJ_MAKEFILE = ${ENJ_MAKEFILE}"
 	@echo "ENJ_BASEDIR = ${ENJ_BASEDIR}"
