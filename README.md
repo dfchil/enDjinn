@@ -45,7 +45,7 @@ Gives you a functional program on the Dreamcast with this single screen:
 
 ![Screenshot of the simplest enDjinn program, enj_hello.c](docs/img/hello.png)
 
-Notice that the **Makefile** for this program is just a symlink to the [enDjinn/base_link.mk](base_link.mk) that is amended with one line in the [local.cfg.mk](./examples//enj_hello/local.cfg.mk) for injecting enDjinns built in qfont. So one symlink and two files in total and a bit of adherence to how enDjinn expects things to be arranged and you're off to make things run on the Dreamcast!
+Notice that the **Makefile** for this program is just a symlink to the [enDjinn/base_link.mk](base_link.mk) that is amended with one line in the [local.cfg.mk](./examples/enj_hello/local.cfg.mk) for injecting enDjinns built in qfont. So one symlink and two files in total and a bit of adherence to how enDjinn expects things to be arranged and you're off to make things run on the Dreamcast!
 
 The complete setup can be found in the examples folder in this repository: [enj_hello](./examples/enj_hello/)
 
