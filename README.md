@@ -45,7 +45,7 @@ Gives you a functional program on the Dreamcast with this single screen:
 
 ![Screenshot of the simplest enDjinn program, enj_hello.c](docs/img/hello.png)
 
-Notice that the **Makefile** for this program is just a symlink to the [enDjinn/Makefile.prime](Makefile.prime) that is amended with one line in the [Makefile.local.cfg](./examples//enj_hello/Makefile.local.cfg) for injecting enDjinns built in qfont. So one symlink and two files in total and a bit of adherence to how enDjinn expects things to be arranged and you're off to make things run on the Dreamcast!
+Notice that the **Makefile** for this program is just a symlink to the [enDjinn/base_link.mk](base_link.mk) that is amended with one line in the [local.cfg.mk](./examples//enj_hello/local.cfg.mk) for injecting enDjinns built in qfont. So one symlink and two files in total and a bit of adherence to how enDjinn expects things to be arranged and you're off to make things run on the Dreamcast!
 
 The complete setup can be found in the examples folder in this repository: [enj_hello](./examples/enj_hello/)
 
@@ -115,7 +115,7 @@ enDjinn simplifies Dreamcast hardware interaction:
 - **VMU Support:** Integrated hooks for LCD icon management and simple state serialization.
 
 ## Build System
-The enDjinn build system is built on GNU Make but stripped of the usual complexity. It is primarily driven by `Makefile.prime`.
+The enDjinn build system is built on GNU Make but stripped of the usual complexity. It is primarily driven by `base_link.mk`.
 
 ### Automagic 
 If you follow the directory structure (assets in `assets/`, code in `code/`), the engine handles the heavy lifting:
@@ -124,7 +124,7 @@ If you follow the directory structure (assets in `assets/`, code in `code/`), th
 3. **Optimized Compilation:** Defaults to `-O2` with SH-4 specific flags (`-ml`, `-m4-single-only`) and 32-byte alignment.
 
 ### Configuration
-You can customize the build per-project using a `Makefile.local.cfg` file. This lets you:
+You can customize the build per-project using a `local.cfg.mk` file. This lets you:
 - `ENJ_EXTRA_LIBS`: Link additional KOS libraries.
 - `ENJ_ASSET_DIRS`: Add custom search paths for assets.
 - `ENJ_FLAGS`: Override standard compiler flags for specific optimization needs.
