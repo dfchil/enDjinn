@@ -2,6 +2,9 @@
 
 ENDDJINNPRIMARY =  $(realpath abspath $(lastword $(MAKEFILE_LIST)))
 
+ENJ_MAKEFILE := $(abspath $(lastword $(MAKEFILE_LIST)))
+ENJ_BASEDIR := $(dir $(ENJ_MAKEFILE))
+
 ENJDIR:= $(dir $(ENDDJINNPRIMARY))
 include $(KOS_BASE)/Makefile.rules
 
@@ -38,12 +41,12 @@ $(ENJ_BUILDDIR)/enDjinn/%.o: ${ENJDIR}%.c Makefile
 $(ENJ_BUILDDIR)/%.o: %.c Makefile $(ENJ_TEXTURES) $(ENJ_SNDFXFILES) $(ENJ_FONTFILES)
 	@mkdir -p $(shell dirname $@)
 	@echo "Building $@ from $<..."
-	@$(ENJ_CC) $(ENJ_INCLUDES) $(ENJ_CFLAGS) $(DEFINES) -c $< -o $@
+	$(ENJ_CC) $(ENJ_INCLUDES) $(ENJ_CFLAGS) $(DEFINES) -c $< -o $@
 
 $(ENJ_BINDIR)/${ENJ_BASENAME}.elf: $(OBJS)
 	@mkdir -p $(shell dirname $@)
 	@echo "Linking $@..."
-	@$(ENJ_CC) $(ENJ_INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(ENJ_LDLIBS) 
+	$(ENJ_CC) $(ENJ_INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(ENJ_LDLIBS) 
 
 $(ENJ_BINDIR)/${ENJ_BASENAME}.cdi: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf
 	mkdcdisc \
