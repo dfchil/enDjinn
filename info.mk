@@ -5,6 +5,8 @@ list:
 cfg_info:
 	@echo "Makefile configurable variables (redefine in $(shell pwd)/Makefile.local.cfg as necessary):"
 	@echo "enDjinn directory: $(ENJDIR)"
+	@echo "ENJ_MAKEFILE = ${ENJ_MAKEFILE}"
+	@echo "ENJ_BASEDIR = ${ENJ_BASEDIR}"
 	@echo "ENJ_BASENAME      = ${ENJ_BASENAME}"
 	@echo "                  # Basename of the target that other names are built from,"
 	@echo "                  # defaults to the current directory name."
@@ -29,6 +31,8 @@ cfg_info:
 
 	@echo "ENJ_CFLAGS        = ${ENJ_CFLAGS}"
 	@echo ""
+	@echo ""
+
 
 auto_variables:
 	@echo "Make automatic variables for target ${ENJ_BASENAME}.elf:"
