@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <enDjinn/enj_draw.h>
+#include <stdint.h>
 
 static void **_dr64_1st_half = NULL;
 static void **_dr64_2nd_half = NULL;
@@ -17,11 +18,11 @@ void enj_draw_pvr_dr64_init(void **first_half, void **second_half) {
 
 void enj_draw_pvr_dr64_commit_1st(void) {
   pvr_dr_commit(*_dr64_1st_half);
-  *_dr64_2nd_half = (void *)(((int)pvr_dr_target()) - 32);
+  *_dr64_2nd_half = (void *)(((intptr_t)pvr_dr_target()) - 32);
 }
 
 void enj_draw_pvr_dr64_commit_2nd(void) {
-  pvr_dr_commit((void *)(((int)(*_dr64_2nd_half)) + 32));
+  pvr_dr_commit((void *)(((intptr_t)(*_dr64_2nd_half)) + 32));
 }
 
 void enj_draw_sprite(float corners[4][3], pvr_sprite_hdr_t *hdr,

@@ -1,7 +1,7 @@
 #ifndef ENJ_FONTS_H
 #define ENJ_FONTS_H
 
-#include <dc/pvr.h>
+#include <enDjinn/enj_platform.h>
 #include <enDjinn/enj_font_types.h>
 #include <enDjinn/enj_types.h>
 
