@@ -1,5 +1,9 @@
 #include <enDjinn/enj_ctrl.h>
 
+#ifdef ENJ_TARGET_PC_ENDJINN
+#include <SDL.h>
+#endif
+
 // Note improved callback based state handling inspired by this code by
 // darcagn/Eric Fradella
 // https://gist.github.com/darcagn/eaf50e4b13ef9da7a8029dfaeafb75aa
@@ -8,6 +12,128 @@ alignas(32) static enj_ctrlr_state_t ctrlr_states_storage[MAPLE_PORT_COUNT] = {
     0};
 alignas(32) static enj_ctrlr_state_t *ctrlr_states_refs[MAPLE_PORT_COUNT] = {0};
 alignas(32) static maple_device_t *local_controllers[MAPLE_PORT_COUNT] = {0};
+
+static inline uint8_t enj_update_button_state(uint8_t prev_btnstate,
+                                              int input) {
+  switch (prev_btnstate) {
+  case ENJ_BUTTON_UP:
+    return input ? ENJ_BUTTON_DOWN_THIS_FRAME : ENJ_BUTTON_UP;
+    break;
+  case ENJ_BUTTON_DOWN:
+    return input ? ENJ_BUTTON_DOWN : ENJ_BUTTON_UP_THIS_FRAME;
+    break;
+  case ENJ_BUTTON_DOWN_THIS_FRAME:
+    return input ? ENJ_BUTTON_DOWN : ENJ_BUTTON_UP_THIS_FRAME;
+    break;
+  case ENJ_BUTTON_UP_THIS_FRAME:
+    return input ? ENJ_BUTTON_DOWN_THIS_FRAME : ENJ_BUTTON_UP;
+    break;
+  default:
+    return ENJ_BUTTON_UP;
+    break;
+  }
+}
+
+void enj_ctrl_kos2enj_state(cont_state_t *c_state, enj_ctrlr_state_t *ctrlr) {
+  if (c_state->a != ctrlr->button.A) {
+    ctrlr->button.A = enj_update_button_state(ctrlr->button.A, c_state->a);
+  }
+  if (c_state->b != ctrlr->button.B) {
+    ctrlr->button.B = enj_update_button_state(ctrlr->button.B, c_state->b);
+  }
+  if (c_state->x != ctrlr->button.X) {
+    ctrlr->button.X = enj_update_button_state(ctrlr->button.X, c_state->x);
+  }
+  if (c_state->y != ctrlr->button.Y) {
+    ctrlr->button.Y = enj_update_button_state(ctrlr->button.Y, c_state->y);
+  }
+  if (c_state->dpad_up != ctrlr->button.UP) {
+    ctrlr->button.UP =
+        enj_update_button_state(ctrlr->button.UP, c_state->dpad_up);
+  }
+  if (c_state->dpad_down != ctrlr->button.DOWN) {
+    ctrlr->button.DOWN =
+        enj_update_button_state(ctrlr->button.DOWN, c_state->dpad_down);
+  }
+  if (c_state->dpad_left != ctrlr->button.LEFT) {
+    ctrlr->button.LEFT =
+        enj_update_button_state(ctrlr->button.LEFT, c_state->dpad_left);
+  }
+  if (c_state->dpad_right != ctrlr->button.RIGHT) {
+    ctrlr->button.RIGHT =
+        enj_update_button_state(ctrlr->button.RIGHT, c_state->dpad_right);
+  }
+  if (c_state->start != ctrlr->button.START) {
+    ctrlr->button.START =
+        enj_update_button_state(ctrlr->button.START, c_state->start);
+  }
+  ctrlr->joyx = c_state->joyx;
+  ctrlr->joyy = c_state->joyy;
+  ctrlr->ltrigger = c_state->ltrig;
+  ctrlr->rtrigger = c_state->rtrig;
+}
+
+#ifdef ENJ_TARGET_PC_ENDJINN
+
+void scan_local_controllers(maple_device_t *__unused) {}
+
+void enj_ctrl_init_local_devices(void) {
+  static maple_device_t keyboard_device = {
+      .port = 0,
+      .unit = 0,
+      .valid = true,
+      .info = {.functions = MAPLE_FUNC_CONTROLLER},
+  };
+  local_controllers[0] = &keyboard_device;
+  ctrlr_states_refs[0] = ctrlr_states_storage;
+  ctrlr_states_storage[0].portnum = 0;
+}
+
+size_t enj_ctrl_states_length(void) {
+  return MAPLE_PORT_COUNT;
+}
+
+size_t enj_ctrl_map_states(void) {
+  SDL_PumpEvents();
+  const uint8_t *keys = SDL_GetKeyboardState(NULL);
+  if (keys == NULL) {
+    ctrlr_states_refs[0] = NULL;
+    return 0u;
+  }
+
+  ctrlr_states_refs[0] = ctrlr_states_storage;
+  cont_state_t state = {0};
+  state.a = keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_W];
+  state.b = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_S];
+  state.x = keys[SDL_SCANCODE_X];
+  state.y = keys[SDL_SCANCODE_Y];
+  state.start = keys[SDL_SCANCODE_RETURN];
+  state.dpad_up = keys[SDL_SCANCODE_UP];
+  state.dpad_down = keys[SDL_SCANCODE_DOWN];
+  state.dpad_left = keys[SDL_SCANCODE_LEFT];
+  state.dpad_right = keys[SDL_SCANCODE_RIGHT];
+  state.joyx = keys[SDL_SCANCODE_A] ? -127 : (keys[SDL_SCANCODE_D] ? 127 : 0);
+  state.joyy = keys[SDL_SCANCODE_W] ? -127 : (keys[SDL_SCANCODE_S] ? 127 : 0);
+  state.rtrig = state.a ? 255u : 0u;
+  state.ltrig = state.b ? 255u : 0u;
+  enj_ctrl_kos2enj_state(&state, ctrlr_states_refs[0]);
+  ctrlr_states_refs[0]->portnum = 0;
+
+  for (int i = 1; i < MAPLE_PORT_COUNT; i++) {
+    ctrlr_states_refs[i] = NULL;
+  }
+  return 1u;
+}
+
+maple_device_t *enj_maple_port_type(int p, uint32 func) {
+  if (p == 0 && local_controllers[0] != NULL &&
+      (local_controllers[0]->info.functions & func)) {
+    return local_controllers[0];
+  }
+  return NULL;
+}
+
+#else
 
 /* Called at init and then only as a callback when controller
    devices are connected or disconnected */
@@ -70,67 +196,9 @@ maple_device_t *enj_maple_port_type(int p, uint32 func) {
   return NULL;
 }
 
+#endif
+
 enj_ctrlr_state_t **enj_ctrl_get_states(void) { return ctrlr_states_refs; }
-
-static inline uint8_t enj_update_button_state(uint8_t prev_btnstate,
-                                              int input) {
-  switch (prev_btnstate) {
-  case ENJ_BUTTON_UP:
-    return input ? ENJ_BUTTON_DOWN_THIS_FRAME : ENJ_BUTTON_UP;
-    break;
-  case ENJ_BUTTON_DOWN:
-    return input ? ENJ_BUTTON_DOWN : ENJ_BUTTON_UP_THIS_FRAME;
-    break;
-  case ENJ_BUTTON_DOWN_THIS_FRAME:
-    return input ? ENJ_BUTTON_DOWN : ENJ_BUTTON_UP_THIS_FRAME;
-    break;
-  case ENJ_BUTTON_UP_THIS_FRAME:
-    return input ? ENJ_BUTTON_DOWN_THIS_FRAME : ENJ_BUTTON_UP;
-    break;
-  default:
-    return ENJ_BUTTON_UP;
-    break;
-  }
-}
-
-void enj_ctrl_kos2enj_state(cont_state_t *c_state, enj_ctrlr_state_t *ctrlr) {
-  if (c_state->a != ctrlr->button.A) {
-    ctrlr->button.A = enj_update_button_state(ctrlr->button.A, c_state->a);
-  }
-  if (c_state->b != ctrlr->button.B) {
-    ctrlr->button.B = enj_update_button_state(ctrlr->button.B, c_state->b);
-  }
-  if (c_state->x != ctrlr->button.X) {
-    ctrlr->button.X = enj_update_button_state(ctrlr->button.X, c_state->x);
-  }
-  if (c_state->y != ctrlr->button.Y) {
-    ctrlr->button.Y = enj_update_button_state(ctrlr->button.Y, c_state->y);
-  }
-  if (c_state->dpad_up != ctrlr->button.UP) {
-    ctrlr->button.UP =
-        enj_update_button_state(ctrlr->button.UP, c_state->dpad_up);
-  }
-  if (c_state->dpad_down != ctrlr->button.DOWN) {
-    ctrlr->button.DOWN =
-        enj_update_button_state(ctrlr->button.DOWN, c_state->dpad_down);
-  }
-  if (c_state->dpad_left != ctrlr->button.LEFT) {
-    ctrlr->button.LEFT =
-        enj_update_button_state(ctrlr->button.LEFT, c_state->dpad_left);
-  }
-  if (c_state->dpad_right != ctrlr->button.RIGHT) {
-    ctrlr->button.RIGHT =
-        enj_update_button_state(ctrlr->button.RIGHT, c_state->dpad_right);
-  }
-  if (c_state->start != ctrlr->button.START) {
-    ctrlr->button.START =
-        enj_update_button_state(ctrlr->button.START, c_state->start);
-  }
-  ctrlr->joyx = c_state->joyx;
-  ctrlr->joyy = c_state->joyy;
-  ctrlr->ltrigger = c_state->ltrig;
-  ctrlr->rtrigger = c_state->rtrig;
-}
 
 void enj_read_controller(enj_abstract_ctrlr_t *ctrlref,
                          enj_ctrlr_state_t *cstate) {

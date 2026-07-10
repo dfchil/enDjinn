@@ -1,32 +1,45 @@
+#include <enDjinn/enj_enDjinn.h>
+#if ENJ_TARGET_PC_ENDJINN
+#include <SDL.h>
+#else
 #include <dc/maple/purupuru.h>
 #include <dc/sound/sound.h>
 #include <dc/video.h>
-#include <enDjinn/enj_enDjinn.h>
 #include <kos.h>
+#endif
 
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/enj_qfont.h>
 #endif
 
 #ifdef ENJ_DEBUG
+#if !ENJ_TARGET_PC_ENDJINN
 #include <arch/gdb.h>
+#endif
 #endif
 
 #ifdef DCPROF
 #include "../enDjinn/profilers/dcprof/profiler.h"
 #endif
 #ifdef ENJ_DEBUG
+#if !ENJ_TARGET_PC_ENDJINN
 #include <dc/perf_monitor.h>
+#endif
 #endif
 
 #include <enDjinn/embeds/enj_logo_header.h>
 
+#if !ENJ_TARGET_PC_ENDJINN
 KOS_INIT_FLAGS(INIT_DEFAULT);
+#endif
 
 alignas(32) static enj_state_t state = {0};
 enj_state_t *enj_state_get(void) { return &state; }
 
 static inline void _vmu_splash_screen(void) {
+#if ENJ_TARGET_PC_ENDJINN
+  return;
+#else
   /** set vmu screens */
   vmufb_t vmufb;
   vmufb_clear(&vmufb);
@@ -44,12 +57,15 @@ static inline void _vmu_splash_screen(void) {
       vmufb_present(&vmufb, vmulcd);
     }
   }
+#endif
 }
 
 
 void enj_state_init_defaults(void) {
 #ifdef ENJ_DEBUG
+#if !ENJ_TARGET_PC_ENDJINN
   gdb_init();
+#endif
   ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
 #endif
 
@@ -107,8 +123,10 @@ int enj_state_startup() {
                    state->video.bg_color.b / 255.0f);
 
 #ifdef ENJ_DEBUG
+#if !ENJ_TARGET_PC_ENDJINN
   perf_monitor_init(PMCR_OPERAND_CACHE_READ_MISS_MODE,
                     PMCR_INSTRUCTION_CACHE_MISS_MODE);
+#endif
 #endif
 
 #ifdef DCPROF
@@ -124,7 +142,9 @@ int enj_state_startup() {
 
   enj_ctrl_init_local_devices();
   enj_rumble_init_local_devices();
+#if !ENJ_TARGET_PC_ENDJINN
   snd_init();
+#endif
 
   return 0;
 }
@@ -144,6 +164,17 @@ void enj_state_run(void) {
   enj_ctrlr_state_t **cstates = enj_ctrl_get_states();
 
   while (1) {
+#if ENJ_TARGET_PC_ENDJINN
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_QUIT) {
+        enj_state_flag_shutdown(NULL);
+      } else if (event.type == SDL_KEYDOWN &&
+                 event.key.keysym.sym == SDLK_ESCAPE) {
+        enj_state_flag_shutdown(NULL);
+      }
+    }
+#endif
     if (state->flags.shut_down) {
       break;
     }
@@ -197,6 +228,7 @@ void enj_state_run(void) {
   pvr_shutdown();
 
 #ifdef ENJ_DEBUG
+#if !ENJ_TARGET_PC_ENDJINN
   perf_monitor_print(stdout);
 
   FILE *stats_out = fopen(ENJ_CBASEPATH "/pstats.txt", "a");
@@ -205,7 +237,11 @@ void enj_state_run(void) {
     fclose(stats_out);
   }
 #endif
+#endif
 
+#if ENJ_TARGET_PC_ENDJINN
+  SDL_Quit();
+#else
   // clear vmu screens and stop rumblers
   vmufb_t *vmufb = NULL;
   for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
@@ -229,5 +265,6 @@ void enj_state_run(void) {
 
 #ifdef RELEASEBUILD
   arch_set_exit_path(ARCH_EXIT_REBOOT);
+#endif
 #endif
 }

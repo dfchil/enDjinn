@@ -1,8 +1,31 @@
 
-
-#include <dc/maple/purupuru.h>
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_rumble.h>
+
+#if ENJ_TARGET_PC_ENDJINN
+
+void enj_rumble_init_local_devices(void) {}
+size_t enj_rumble_states_length(void) { return MAPLE_PORT_COUNT; }
+void enj_rumble_rate_limit_set(int frames) { (void)frames; }
+
+enj_rumble_reply_e enj_rumble_effect_set_raw(enj_ctrl_port_name_e ctrloffset,
+                                             uint32_t raw) {
+  (void)ctrloffset;
+  (void)raw;
+  return enj_rumble_no_device;
+}
+
+enj_rumble_reply_e enj_rumble_effect_set(enj_ctrl_port_name_e ctrloffset,
+                                         purupuru_effect_t effect) {
+  return enj_rumble_effect_set_raw(ctrloffset, effect.raw);
+}
+
+maple_device_t **enj_rumble_states_get() { return NULL; }
+void enj_rumble_update(void) {}
+
+#else
+
+#include <dc/maple/purupuru.h>
 
 static int enj_rumble_rate_limit =
     1; // frames of cooldown between rumble commands
@@ -90,3 +113,4 @@ void enj_rumble_update(void) {
     }
   }
 }
+#endif

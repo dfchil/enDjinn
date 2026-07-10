@@ -1,9 +1,7 @@
 #ifndef ENJ_CTRLR_H
 #define ENJ_CTRLR_H
 
-#include <dc/maple.h>
-#include <dc/maple/controller.h>
-#include <dc/maple/vmu.h>
+#include <enDjinn/enj_platform.h>
 #include <stdint.h>
 
 /**

@@ -1,7 +1,9 @@
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_sound.h>
 #include <stdio.h>
+#if !ENJ_TARGET_PC_ENDJINN
 #include <malloc.h>
+#endif
 
 #define DCAUDIO_IMPLEMENTATION
 #include <enDjinn/ext/dca_file.h>
@@ -34,6 +36,10 @@ sfxhnd_t enj_sound_dca_load_file(const char* filename) {
 }
 
 sfxhnd_t enj_sound_dca_load_blob(uint8_t* dca_data) {
+#if ENJ_TARGET_PC_ENDJINN
+  (void)dca_data;
+  return SFXHND_INVALID;
+#else
   fDcAudioHeader* data = (fDcAudioHeader*)dca_data;
 
   if (fDaValidateHeader(data)) {
@@ -49,13 +55,27 @@ sfxhnd_t enj_sound_dca_load_blob(uint8_t* dca_data) {
                                 fDaCalcSampleRateHz(data), bitsize, 1);
   }
   return SFXHND_INVALID;
+#endif
 }
 
-void enj_sound_unload(sfxhnd_t handle) { snd_sfx_unload(handle); }
+void enj_sound_unload(sfxhnd_t handle) {
+#if ENJ_TARGET_PC_ENDJINN
+  (void)handle;
+#else
+  snd_sfx_unload(handle);
+#endif
+}
 
 int enj_sound_play(sfxhnd_t handle, uint8_t volume, uint8_t pan) {
+#if ENJ_TARGET_PC_ENDJINN
+  (void)handle;
+  (void)volume;
+  (void)pan;
+  return -1;
+#else
   if (handle == SFXHND_INVALID) {
     return -1;
   }
   return snd_sfx_play(handle, volume, pan);
+#endif
 }
