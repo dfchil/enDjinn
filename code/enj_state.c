@@ -3,6 +3,7 @@
 #include <dc/video.h>
 #include <enDjinn/enj_enDjinn.h>
 #include <kos.h>
+#include <malloc.h>
 
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/enj_qfont.h>

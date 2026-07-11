@@ -28,13 +28,4 @@ PC_ENDJINN_BEGIN_DECLS
 void arch_set_exit_path(int path);
 PC_ENDJINN_END_DECLS
 
-static inline void *pc_kos_memalign(size_t alignment, size_t size) {
-  void *ptr = NULL;
-  return posix_memalign(&ptr, alignment, size) == 0 ? ptr : NULL;
-}
-
-#ifndef memalign
-#define memalign(alignment, size) pc_kos_memalign((alignment), (size))
-#endif
-
 #endif
