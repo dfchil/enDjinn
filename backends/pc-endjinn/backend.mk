@@ -21,6 +21,7 @@ SDL_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags sdl2)
 SDL_LIBS ?= $(shell $(PKG_CONFIG) --libs sdl2)
 VULKAN_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags vulkan)
 VULKAN_LIBS ?= $(shell $(PKG_CONFIG) --libs vulkan)
+PC_ENDJINN_SYSTEM_LIBS ?= -lm
 else
 $(error Unsupported pc-enDjinn host '$(PC_ENDJINN_HOST_OS)')
 endif
@@ -38,7 +39,7 @@ PC_ENDJINN_KOS_ABI_CONTRACT := \
 	$(PC_ENDJINN_BACKEND_DIR)include/pc_endjinn/kos_abi_contract.generated.h
 PC_ENDJINN_CPPFLAGS := -I$(PC_ENDJINN_BACKEND_DIR)include \
 	-DENJ_TARGET_PC_ENDJINN=1 $(SDL_CFLAGS) $(VULKAN_CFLAGS)
-PC_ENDJINN_LDFLAGS := $(SDL_LIBS) $(VULKAN_LIBS)
+PC_ENDJINN_LDFLAGS := $(SDL_LIBS) $(VULKAN_LIBS) $(PC_ENDJINN_SYSTEM_LIBS)
 
 pc-endjinn-kos-abi-contract:
 	$(PC_ENDJINN_BACKEND_DIR)tools/generate_kos_abi_contract.sh \
