@@ -4,6 +4,15 @@
 
 extern "C" {
 
+ void* memalign(size_t alignment, size_t size) {
+    void *ptr = malloc(size + alignment - 1 + sizeof(void*));
+
+    if (ptr == NULL) {
+        return NULL; // Allocation failed
+    }
+    return ptr;
+}
+
 vid_mode_t *vid_mode = pc_endjinn::video_mode();
 
 uint64_t timer_ns_gettime64(void) {

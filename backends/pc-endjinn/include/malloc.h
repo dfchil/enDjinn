@@ -3,4 +3,8 @@
 
 #include <stdlib.h>
 
+#ifndef memalign
+void *memalign(size_t alignment, size_t size);
+#endif
+
 #endif
