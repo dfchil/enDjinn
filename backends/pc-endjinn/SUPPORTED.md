@@ -46,12 +46,12 @@ render state is not decoded yet.
 - arrow-key D-pad mapping
 - left-stick steering, A/right-trigger acceleration, and B/left-trigger braking
 - controller D-pad camera selection, X recenter, Y course switch, and Start
-- platform-neutral application input actions with held and pressed states
-- abstract B, E, M, R, and F1-F4 key sources for current host applications
+- R mapped to X for recentering
+- F1-F4 mapped to D-pad camera selection
+- B, M, and E mapped to Y for course cycling
 
-SDL scancodes remain inside enDjinn's pc-enDjinn input implementation. Games
-bind their own action IDs and query `enj_input_action_down()` or
-`enj_input_action_pressed()`.
+Host keyboard shortcuts are translated into the same `cont_state_t` buttons
+that a Dreamcast controller would report.
 
 ## Accepted But Placeholder Behavior
 

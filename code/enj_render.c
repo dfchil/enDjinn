@@ -2,7 +2,6 @@
 #if !ENJ_TARGET_PC_ENDJINN
 #include <malloc.h>
 #endif
-
 #define RENDERLIST_SEGMENT_SIZE 64
 #define NUM_RENDERLISTS PVR_LIST_PT_POLY - PVR_LIST_OP_POLY + 1
 

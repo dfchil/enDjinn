@@ -55,8 +55,8 @@ ENJ_HOST_CORE_SRCS ?= \
 ENJ_HOST_APP_SRCS ?= $(shell find $(ENJ_CODEDIR) -name '*.c' -not -path "./.git/*")
 ENJ_HOST_CORE_OBJS := $(patsubst ${ENJDIR}%.c,$(ENJ_HOST_BUILD_DIR)/enDjinn/%.o,$(ENJ_HOST_CORE_SRCS))
 ENJ_HOST_APP_OBJS := $(patsubst %.c,$(ENJ_HOST_BUILD_DIR)/%.o,$(ENJ_HOST_APP_SRCS))
-ENJ_HOST_BACKEND_OBJ := $(ENJ_HOST_BUILD_DIR)/enDjinn/backends/pc-endjinn/enj_platform_pc_endjinn.o
-ENJ_HOST_OBJS := $(ENJ_HOST_CORE_OBJS) $(ENJ_HOST_APP_OBJS) $(ENJ_HOST_BACKEND_OBJ) $(ENJ_HOST_EXTRA_OBJS)
+ENJ_HOST_BACKEND_OBJS := $(addprefix $(ENJ_HOST_BUILD_DIR)/enDjinn/backends/pc-endjinn/,$(notdir $(PC_ENDJINN_PLATFORM_SRCS:.cpp=.o)))
+ENJ_HOST_OBJS := $(ENJ_HOST_CORE_OBJS) $(ENJ_HOST_APP_OBJS) $(ENJ_HOST_BACKEND_OBJS) $(ENJ_HOST_EXTRA_OBJS)
 
 all: pc-endjinn
 .DEFAULT: all
@@ -75,7 +75,7 @@ $(ENJ_HOST_BUILD_DIR)/%.o: %.c $(ENJ_MAKEFILE) | $(ENJ_HOST_BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(ENJ_CC) $(ENJ_HOST_CFLAGS) $(ENJ_HOST_CPPFLAGS) $(ENJ_HOST_APP_CPPFLAGS) $(DEFINES) -c $< -o $@
 
-$(ENJ_HOST_BACKEND_OBJ): $(PC_ENDJINN_PLATFORM_SRC) ${ENJDIR}include/enDjinn/enj_platform.h | $(ENJ_HOST_BUILD_DIR)
+$(ENJ_HOST_BUILD_DIR)/enDjinn/backends/pc-endjinn/%.o: $(PC_ENDJINN_BACKEND_DIR)%.cpp $(PC_ENDJINN_KOS_HEADER) $(PC_ENDJINN_KOS_ABI_CONTRACT) | $(ENJ_HOST_BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(ENJ_CXX) $(ENJ_HOST_CXXFLAGS) $(ENJ_HOST_CPPFLAGS) $(DEFINES) -c $< -o $@
 

@@ -1,7 +1,7 @@
 #ifndef ENDJINN_RENDER_H
 #define ENDJINN_RENDER_H
 
-#include <enDjinn/enj_platform.h>
+#include <kos.h>
 #include <enDjinn/enj_mode.h>
 
 /**
