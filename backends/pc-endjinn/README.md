@@ -13,7 +13,10 @@ explicitly listed in `SUPPORTED.md`.
   flags, backend source paths, and backend-owned shader compilation.
 - `shaders/`: renderer shaders compiled automatically for every pc-enDjinn
   application.
-- `include/`: KOS-shaped compatibility headers selected only by PC builds.
+- `include/kos.h`: small KOS umbrella matching normal application includes.
+- `include/arch/` and `include/dc/`: domain-owned compatibility declarations
+  for timers, PVR, Maple, video, sound, and related KOS systems.
+- `include/pc_endjinn/`: backend support types and the generated ABI contract.
 - `enj_platform_pc_endjinn.cpp`: SDL/Vulkan implementations of the PVR and
   video symbols used by enDjinn.
 - `pc_endjinn_input.cpp`: SDL implementations of Maple, sound, rumble, and
