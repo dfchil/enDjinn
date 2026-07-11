@@ -92,6 +92,24 @@ void enj_ctrl_init_local_devices(void);
 void enj_rumble_init_local_devices(void);
 void enj_rumble_update(void);
 
+#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
+static void enj_state_wait_for_frame_deadline(uint64_t *deadline_ns) {
+  const uint64_t frame_ns = 1000000000ull / ENJ_FRAME_RATE;
+  uint64_t now_ns = timer_ns_gettime64();
+
+  if (*deadline_ns == 0 || now_ns >= *deadline_ns + frame_ns) {
+    *deadline_ns = now_ns + frame_ns;
+  } else {
+    *deadline_ns += frame_ns;
+  }
+
+  now_ns = timer_ns_gettime64();
+  if (now_ns < *deadline_ns) {
+    usleep((useconds_t)((*deadline_ns - now_ns) / 1000ull));
+  }
+}
+#endif
+
 int enj_state_startup() {
   enj_state_t *state = enj_state_get();
 
@@ -143,6 +161,9 @@ void enj_state_run(void) {
     return;
   }
   enj_ctrlr_state_t **cstates = enj_ctrl_get_states();
+#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
+  uint64_t frame_deadline_ns = 0;
+#endif
 
   while (1) {
     if (state->flags.shut_down) {
@@ -190,6 +211,9 @@ void enj_state_run(void) {
     }
     enj_render_next_frame(enj_mode_get());
     enj_rumble_update();
+#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
+    enj_state_wait_for_frame_deadline(&frame_deadline_ns);
+#endif
   }
 #ifdef DCPROF
   profiler_stop();
