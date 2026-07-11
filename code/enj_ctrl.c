@@ -2,6 +2,7 @@
 
 #ifdef ENJ_TARGET_PC_ENDJINN
 #include <SDL.h>
+#include <stdio.h>
 #endif
 
 // Note improved callback based state handling inspired by this code by
@@ -12,6 +13,11 @@ alignas(32) static enj_ctrlr_state_t ctrlr_states_storage[MAPLE_PORT_COUNT] = {
     0};
 alignas(32) static enj_ctrlr_state_t *ctrlr_states_refs[MAPLE_PORT_COUNT] = {0};
 alignas(32) static maple_device_t *local_controllers[MAPLE_PORT_COUNT] = {0};
+#ifdef ENJ_TARGET_PC_ENDJINN
+static enj_input_source_e input_action_sources[ENJ_INPUT_ACTION_CAPACITY] = {0};
+static uint8_t input_action_states[ENJ_INPUT_ACTION_CAPACITY] = {0};
+static SDL_GameController *host_game_controller = NULL;
+#endif
 
 static inline uint8_t enj_update_button_state(uint8_t prev_btnstate,
                                               int input) {
@@ -33,6 +39,100 @@ static inline uint8_t enj_update_button_state(uint8_t prev_btnstate,
     break;
   }
 }
+
+#ifdef ENJ_TARGET_PC_ENDJINN
+
+static void enj_host_refresh_game_controller(void) {
+  if (host_game_controller != NULL &&
+      !SDL_GameControllerGetAttached(host_game_controller)) {
+    SDL_GameControllerClose(host_game_controller);
+    host_game_controller = NULL;
+  }
+  if (host_game_controller != NULL) {
+    return;
+  }
+  for (int i = 0; i < SDL_NumJoysticks(); i++) {
+    if (!SDL_IsGameController(i)) {
+      continue;
+    }
+    host_game_controller = SDL_GameControllerOpen(i);
+    if (host_game_controller != NULL) {
+      fprintf(stderr, "pc-enDjinn: controller connected: %s\n",
+              SDL_GameControllerName(host_game_controller));
+      return;
+    }
+  }
+}
+
+static int8_t enj_host_axis_to_i8(Sint16 axis) {
+  const int deadzone = 6000;
+  if (axis > -deadzone && axis < deadzone) {
+    return 0;
+  }
+  int value = axis / 256;
+  if (value < -127) {
+    value = -127;
+  } else if (value > 127) {
+    value = 127;
+  }
+  return (int8_t)value;
+}
+
+static uint8_t enj_host_trigger_to_u8(Sint16 axis) {
+  if (axis <= 0) {
+    return 0u;
+  }
+  const int value = axis / 128;
+  return (uint8_t)(value > 255 ? 255 : value);
+}
+static int enj_input_source_down(enj_input_source_e source) {
+  const uint8_t *keys = SDL_GetKeyboardState(NULL);
+  if (keys == NULL) {
+    return 0;
+  }
+  switch (source) {
+  case ENJ_INPUT_SOURCE_KEY_B: return keys[SDL_SCANCODE_B] != 0u;
+  case ENJ_INPUT_SOURCE_KEY_E: return keys[SDL_SCANCODE_E] != 0u;
+  case ENJ_INPUT_SOURCE_KEY_M: return keys[SDL_SCANCODE_M] != 0u;
+  case ENJ_INPUT_SOURCE_KEY_R: return keys[SDL_SCANCODE_R] != 0u;
+  case ENJ_INPUT_SOURCE_KEY_F1: return keys[SDL_SCANCODE_F1] != 0u;
+  case ENJ_INPUT_SOURCE_KEY_F2: return keys[SDL_SCANCODE_F2] != 0u;
+  case ENJ_INPUT_SOURCE_KEY_F3: return keys[SDL_SCANCODE_F3] != 0u;
+  case ENJ_INPUT_SOURCE_KEY_F4: return keys[SDL_SCANCODE_F4] != 0u;
+  default: return 0;
+  }
+}
+
+static void enj_input_actions_update(void) {
+  for (size_t i = 0u; i < ENJ_INPUT_ACTION_CAPACITY; i++) {
+    input_action_states[i] = enj_update_button_state(
+        input_action_states[i],
+        enj_input_source_down(input_action_sources[i]));
+  }
+}
+
+void enj_input_action_bind(enj_input_action_t action,
+                           enj_input_source_e source) {
+  if (action >= ENJ_INPUT_ACTION_CAPACITY) {
+    return;
+  }
+  input_action_sources[action] = source;
+  input_action_states[action] = ENJ_BUTTON_UP;
+}
+
+int enj_input_action_down(enj_input_action_t action) {
+  if (action >= ENJ_INPUT_ACTION_CAPACITY) {
+    return 0;
+  }
+  return input_action_states[action] == ENJ_BUTTON_DOWN ||
+         input_action_states[action] == ENJ_BUTTON_DOWN_THIS_FRAME;
+}
+
+int enj_input_action_pressed(enj_input_action_t action) {
+  return action < ENJ_INPUT_ACTION_CAPACITY &&
+         input_action_states[action] == ENJ_BUTTON_DOWN_THIS_FRAME;
+}
+#endif
 
 void enj_ctrl_kos2enj_state(cont_state_t *c_state, enj_ctrlr_state_t *ctrlr) {
   if (c_state->a != ctrlr->button.A) {
@@ -87,6 +187,13 @@ void enj_ctrl_init_local_devices(void) {
   local_controllers[0] = &keyboard_device;
   ctrlr_states_refs[0] = ctrlr_states_storage;
   ctrlr_states_storage[0].portnum = 0;
+  if (SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) != 0) {
+    fprintf(stderr, "pc-enDjinn: SDL controller initialization failed: %s\n",
+            SDL_GetError());
+  } else {
+    SDL_GameControllerEventState(SDL_ENABLE);
+    enj_host_refresh_game_controller();
+  }
 }
 
 size_t enj_ctrl_states_length(void) {
@@ -95,6 +202,7 @@ size_t enj_ctrl_states_length(void) {
 
 size_t enj_ctrl_map_states(void) {
   SDL_PumpEvents();
+  enj_host_refresh_game_controller();
   const uint8_t *keys = SDL_GetKeyboardState(NULL);
   if (keys == NULL) {
     ctrlr_states_refs[0] = NULL;
@@ -103,21 +211,53 @@ size_t enj_ctrl_map_states(void) {
 
   ctrlr_states_refs[0] = ctrlr_states_storage;
   cont_state_t state = {0};
-  state.a = keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_W];
-  state.b = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_S];
-  state.x = keys[SDL_SCANCODE_X];
-  state.y = keys[SDL_SCANCODE_Y];
-  state.start = keys[SDL_SCANCODE_RETURN];
-  state.dpad_up = keys[SDL_SCANCODE_UP];
-  state.dpad_down = keys[SDL_SCANCODE_DOWN];
-  state.dpad_left = keys[SDL_SCANCODE_LEFT];
-  state.dpad_right = keys[SDL_SCANCODE_RIGHT];
-  state.joyx = keys[SDL_SCANCODE_A] ? -127 : (keys[SDL_SCANCODE_D] ? 127 : 0);
-  state.joyy = keys[SDL_SCANCODE_W] ? -127 : (keys[SDL_SCANCODE_S] ? 127 : 0);
-  state.rtrig = state.a ? 255u : 0u;
-  state.ltrig = state.b ? 255u : 0u;
+  const bool has_pad = host_game_controller != NULL;
+  const uint8_t pad_rtrigger = has_pad ? enj_host_trigger_to_u8(
+      SDL_GameControllerGetAxis(host_game_controller,
+                                SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) : 0u;
+  const uint8_t pad_ltrigger = has_pad ? enj_host_trigger_to_u8(
+      SDL_GameControllerGetAxis(host_game_controller,
+                                SDL_CONTROLLER_AXIS_TRIGGERLEFT)) : 0u;
+  state.rtrig = keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_W]
+      ? 255u : pad_rtrigger;
+  state.ltrig = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_S]
+      ? 255u : pad_ltrigger;
+  state.a = keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_W] ||
+      (has_pad && SDL_GameControllerGetButton(
+          host_game_controller, SDL_CONTROLLER_BUTTON_A)) || state.rtrig > 16u;
+  state.b = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_S] ||
+      (has_pad && SDL_GameControllerGetButton(
+          host_game_controller, SDL_CONTROLLER_BUTTON_B)) || state.ltrig > 16u;
+  state.x = keys[SDL_SCANCODE_X] || (has_pad && SDL_GameControllerGetButton(
+      host_game_controller, SDL_CONTROLLER_BUTTON_X));
+  state.y = keys[SDL_SCANCODE_Y] || (has_pad && SDL_GameControllerGetButton(
+      host_game_controller, SDL_CONTROLLER_BUTTON_Y));
+  state.start = keys[SDL_SCANCODE_RETURN] ||
+      (has_pad && SDL_GameControllerGetButton(
+          host_game_controller, SDL_CONTROLLER_BUTTON_START));
+  state.dpad_up = keys[SDL_SCANCODE_UP] ||
+      (has_pad && SDL_GameControllerGetButton(
+          host_game_controller, SDL_CONTROLLER_BUTTON_DPAD_UP));
+  state.dpad_down = keys[SDL_SCANCODE_DOWN] ||
+      (has_pad && SDL_GameControllerGetButton(
+          host_game_controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN));
+  state.dpad_left = keys[SDL_SCANCODE_LEFT] ||
+      (has_pad && SDL_GameControllerGetButton(
+          host_game_controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT));
+  state.dpad_right = keys[SDL_SCANCODE_RIGHT] ||
+      (has_pad && SDL_GameControllerGetButton(
+          host_game_controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT));
+  state.joyx = keys[SDL_SCANCODE_A] ? -127 :
+      (keys[SDL_SCANCODE_D] ? 127 :
+       (has_pad ? enj_host_axis_to_i8(SDL_GameControllerGetAxis(
+           host_game_controller, SDL_CONTROLLER_AXIS_LEFTX)) : 0));
+  state.joyy = keys[SDL_SCANCODE_W] ? -127 :
+      (keys[SDL_SCANCODE_S] ? 127 :
+       (has_pad ? enj_host_axis_to_i8(SDL_GameControllerGetAxis(
+           host_game_controller, SDL_CONTROLLER_AXIS_LEFTY)) : 0));
   enj_ctrl_kos2enj_state(&state, ctrlr_states_refs[0]);
   ctrlr_states_refs[0]->portnum = 0;
+  enj_input_actions_update();
 
   for (int i = 1; i < MAPLE_PORT_COUNT; i++) {
     ctrlr_states_refs[i] = NULL;

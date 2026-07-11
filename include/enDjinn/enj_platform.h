@@ -265,6 +265,31 @@ void *pvr_dr_target(void);
 void pvr_dr_commit(void *ptr);
 
 void pc_endjinn_platform_set_video_size(uint32_t width, uint32_t height);
+#if ENJ_TARGET_PC_ENDJINN
+void pc_endjinn_platform_set_path_debug(
+    uint16_t index,
+    uint16_t cursor_index,
+    uint16_t count,
+    uint32_t offset,
+    uint32_t address,
+    uint16_t route);
+#else
+static inline void pc_endjinn_platform_set_path_debug(
+    uint16_t index,
+    uint16_t cursor_index,
+    uint16_t count,
+    uint32_t offset,
+    uint32_t address,
+    uint16_t route)
+{
+  (void)index;
+  (void)cursor_index;
+  (void)count;
+  (void)offset;
+  (void)address;
+  (void)route;
+}
+#endif
 
 #ifdef __cplusplus
 }

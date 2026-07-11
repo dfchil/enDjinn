@@ -10,7 +10,9 @@ explicitly listed in `SUPPORTED.md`.
 ## Backend Files
 
 - `backend.mk`: Make variables for SDL2, Vulkan/MoltenVK, compile flags, link
-  flags, and backend source paths.
+  flags, backend source paths, and backend-owned shader compilation.
+- `shaders/`: renderer shaders compiled automatically for every pc-enDjinn
+  application.
 - `enj_platform_pc_endjinn.cpp`: Host implementations and stubs for the current
   `enj_platform.h` API surface.
 - `SUPPORTED.md`: Coverage matrix for implemented, stubbed, and unsupported
