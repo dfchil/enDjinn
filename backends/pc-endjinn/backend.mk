@@ -1,16 +1,29 @@
 PC_ENDJINN_BACKEND_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 ENJ_HOST_BUILD_DIR ?= build/pc-endjinn
-QSB ?= /opt/homebrew/bin/qsb
+PC_ENDJINN_HOST_OS ?= $(shell uname -s)
+PKG_CONFIG ?= pkg-config
 
+ifeq ($(PC_ENDJINN_HOST_OS),Darwin)
 HOMEBREW_PREFIX ?= /opt/homebrew
-MOLTENVK_PREFIX ?= $(HOMEBREW_PREFIX)/Cellar/molten-vk/1.4.1
+QSB ?= $(HOMEBREW_PREFIX)/bin/qsb
+SDL_PREFIX ?= $(HOMEBREW_PREFIX)/opt/sdl2
+MOLTENVK_PREFIX ?= $(HOMEBREW_PREFIX)/opt/molten-vk
 
-SDL_CFLAGS ?= -I$(HOMEBREW_PREFIX)/include/SDL2 -D_THREAD_SAFE
-SDL_LIBS ?= -L$(HOMEBREW_PREFIX)/lib -lSDL2
+SDL_CFLAGS ?= -I$(SDL_PREFIX)/include/SDL2 -D_THREAD_SAFE
+SDL_LIBS ?= -L$(SDL_PREFIX)/lib -lSDL2
 VULKAN_CFLAGS ?= -I$(MOLTENVK_PREFIX)/libexec/include
-VULKAN_LIBS ?= -L$(HOMEBREW_PREFIX)/lib -lMoltenVK \
+VULKAN_LIBS ?= -L$(MOLTENVK_PREFIX)/lib -lMoltenVK \
 	-framework Metal -framework IOSurface -framework QuartzCore \
 	-framework IOKit -framework Foundation
+else ifeq ($(PC_ENDJINN_HOST_OS),Linux)
+QSB ?= qsb
+SDL_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags sdl2)
+SDL_LIBS ?= $(shell $(PKG_CONFIG) --libs sdl2)
+VULKAN_CFLAGS ?= $(shell $(PKG_CONFIG) --cflags vulkan)
+VULKAN_LIBS ?= $(shell $(PKG_CONFIG) --libs vulkan)
+else
+$(error Unsupported pc-enDjinn host '$(PC_ENDJINN_HOST_OS)')
+endif
 
 PC_ENDJINN_PLATFORM_SRCS := \
 	$(PC_ENDJINN_BACKEND_DIR)kos_abi_compat.cpp \

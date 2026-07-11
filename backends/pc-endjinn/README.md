@@ -46,6 +46,17 @@ entry point with `ENJ_TARGET=pc-endjinn`. The host branch builds only the
 currently supported core: state, modes, render lists, keyboard controller
 mapping, draw helpers, no-op rumble/sound, and the pc-enDjinn platform backend.
 
+## Host Dependencies
+
+On macOS, the backend uses SDL2 and MoltenVK from Homebrew's `opt` prefixes and
+links the required Apple frameworks. On Linux, SDL2 and the native Vulkan
+loader are discovered with `pkg-config`. `QSB`, `PKG_CONFIG`, `SDL_CFLAGS`,
+`SDL_LIBS`, `VULKAN_CFLAGS`, and `VULKAN_LIBS` remain overridable.
+
+Typical Debian/Ubuntu package requirements are SDL2 development headers, the
+Vulkan loader and headers, Vulkan drivers for the installed GPU, and Qt's
+Shader Tools package providing `qsb`.
+
 ## KOS ABI Contract
 
 `include/pc_endjinn/kos_abi_contract.generated.h` records authoritative KOS
