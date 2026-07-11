@@ -1,4 +1,6 @@
 PC_ENDJINN_BACKEND_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+ENJ_HOST_BUILD_DIR ?= build/pc-endjinn
+QSB ?= /opt/homebrew/bin/qsb
 
 HOMEBREW_PREFIX ?= /opt/homebrew
 MOLTENVK_PREFIX ?= $(HOMEBREW_PREFIX)/Cellar/molten-vk/1.4.1
@@ -13,3 +15,17 @@ VULKAN_LIBS ?= -L$(HOMEBREW_PREFIX)/lib -lMoltenVK \
 PC_ENDJINN_PLATFORM_SRC := $(PC_ENDJINN_BACKEND_DIR)enj_platform_pc_endjinn.cpp
 PC_ENDJINN_CPPFLAGS := -DENJ_TARGET_PC_ENDJINN=1 $(SDL_CFLAGS) $(VULKAN_CFLAGS)
 PC_ENDJINN_LDFLAGS := $(SDL_LIBS) $(VULKAN_LIBS)
+ENJ_HOST_EXTRA_DEPS += \
+	$(ENJ_HOST_BUILD_DIR)/flat.vert.spv \
+	$(ENJ_HOST_BUILD_DIR)/flat.frag.spv \
+	$(ENJ_HOST_BUILD_DIR)/flat_punch.frag.spv
+
+$(ENJ_HOST_BUILD_DIR)/%.vert.spv: $(PC_ENDJINN_BACKEND_DIR)shaders/%.vert | $(ENJ_HOST_BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(QSB) $< -o $@.qsb
+	$(QSB) -x spirv,100 $@.qsb -o $@
+
+$(ENJ_HOST_BUILD_DIR)/%.frag.spv: $(PC_ENDJINN_BACKEND_DIR)shaders/%.frag | $(ENJ_HOST_BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(QSB) $< -o $@.qsb
+	$(QSB) -x spirv,100 $@.qsb -o $@

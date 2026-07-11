@@ -40,6 +40,23 @@ typedef enum {
   ENJ_BUTTON_DOWN_THIS_FRAME = 0b11,
 } enj_button_state_e;
 
+/** Application-defined input actions are bound to platform-neutral sources. */
+typedef uint8_t enj_input_action_t;
+
+typedef enum {
+  ENJ_INPUT_SOURCE_NONE = 0,
+  ENJ_INPUT_SOURCE_KEY_B,
+  ENJ_INPUT_SOURCE_KEY_E,
+  ENJ_INPUT_SOURCE_KEY_M,
+  ENJ_INPUT_SOURCE_KEY_R,
+  ENJ_INPUT_SOURCE_KEY_F1,
+  ENJ_INPUT_SOURCE_KEY_F2,
+  ENJ_INPUT_SOURCE_KEY_F3,
+  ENJ_INPUT_SOURCE_KEY_F4,
+} enj_input_source_e;
+
+#define ENJ_INPUT_ACTION_CAPACITY 32u
+
 /**
  * Controller state structure used by enDjinn, 16bytes total, or half a cache
  * line.
@@ -126,6 +143,34 @@ maple_device_t *enj_maple_port_type(int p, uint32 func);
  * @note NULL pointers in list represent disconnected controllers
  */
 enj_ctrlr_state_t **enj_ctrl_get_states(void);
+
+#ifdef ENJ_TARGET_PC_ENDJINN
+/** Bind an application action slot to an abstract platform input source. */
+void enj_input_action_bind(enj_input_action_t action,
+                           enj_input_source_e source);
+
+/** Return nonzero while an action's bound source is held. */
+int enj_input_action_down(enj_input_action_t action);
+
+/** Return nonzero only on the frame an action's source becomes held. */
+int enj_input_action_pressed(enj_input_action_t action);
+#else
+static inline void enj_input_action_bind(enj_input_action_t action,
+                                         enj_input_source_e source) {
+  (void)action;
+  (void)source;
+}
+
+static inline int enj_input_action_down(enj_input_action_t action) {
+  (void)action;
+  return 0;
+}
+
+static inline int enj_input_action_pressed(enj_input_action_t action) {
+  (void)action;
+  return 0;
+}
+#endif
 
 /**
  * Maps the state of a locally attached Dreamcast controller to an

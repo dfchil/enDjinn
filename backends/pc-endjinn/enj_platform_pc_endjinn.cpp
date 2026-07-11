@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <vector>
 
@@ -33,6 +34,7 @@ uint32_t g_graphics_queue_family = 0u;
 VkSwapchainKHR g_swapchain = VK_NULL_HANDLE;
 VkFormat g_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
 VkExtent2D g_extent{1280u, 960u};
+VkRect2D g_content_rect{{0, 0}, {1280u, 960u}};
 std::vector<VkImage> g_swapchain_images;
 std::vector<VkImageView> g_swapchain_views;
 VkImage g_depth_image = VK_NULL_HANDLE;
@@ -41,7 +43,9 @@ VkImageView g_depth_view = VK_NULL_HANDLE;
 VkRenderPass g_render_pass = VK_NULL_HANDLE;
 std::vector<VkFramebuffer> g_framebuffers;
 VkPipelineLayout g_pipeline_layout = VK_NULL_HANDLE;
-VkPipeline g_pipeline = VK_NULL_HANDLE;
+VkPipeline g_opaque_pipeline = VK_NULL_HANDLE;
+VkPipeline g_punch_through_pipeline = VK_NULL_HANDLE;
+VkPipeline g_translucent_pipeline = VK_NULL_HANDLE;
 VkCommandPool g_command_pool = VK_NULL_HANDLE;
 std::vector<VkCommandBuffer> g_command_buffers;
 VkSemaphore g_image_available = VK_NULL_HANDLE;
@@ -51,6 +55,16 @@ VkBuffer g_vertex_buffer = VK_NULL_HANDLE;
 VkDeviceMemory g_vertex_memory = VK_NULL_HANDLE;
 size_t g_vertex_capacity = 0u;
 uint64_t g_presented_frames = 0u;
+bool g_translucent_autosort = true;
+uint16_t g_path_index = 0u;
+uint16_t g_path_cursor_index = 0u;
+uint16_t g_path_count = 0u;
+uint16_t g_path_route = 0u;
+uint32_t g_path_offset = 0u;
+uint32_t g_path_address = 0u;
+bool g_fullscreen_toggle_requested = false;
+int g_last_window_width = 1280;
+int g_last_window_height = 960;
 
 struct PcVertex {
     float position[3];
@@ -66,9 +80,86 @@ struct QueuedPrimitive {
     pvr_list_t list;
 };
 
+struct DrawRange {
+    uint32_t first_vertex;
+    uint32_t vertex_count;
+};
+
+struct FrameDrawData {
+    std::vector<PcVertex> vertices;
+    DrawRange opaque{};
+    DrawRange punch_through{};
+    DrawRange translucent{};
+};
+
 std::vector<QueuedPrimitive> g_primitives;
 
 bool create_draw_resources();
+
+int SDLCALL pc_endjinn_event_watch(void *, SDL_Event *event)
+{
+    if (event != nullptr && event->type == SDL_KEYDOWN && event->key.repeat == 0) {
+        const bool alt_enter = event->key.keysym.sym == SDLK_RETURN &&
+            (event->key.keysym.mod & KMOD_ALT) != 0;
+        if (event->key.keysym.sym == SDLK_F11 || alt_enter) {
+            g_fullscreen_toggle_requested = true;
+        }
+    }
+    return 1;
+}
+
+void update_content_rect()
+{
+    const uint64_t width = g_extent.width;
+    const uint64_t height = g_extent.height;
+    uint32_t content_width = g_extent.width;
+    uint32_t content_height = g_extent.height;
+    if (width * 3u > height * 4u) {
+        content_width = static_cast<uint32_t>(height * 4u / 3u);
+    } else if (width * 3u < height * 4u) {
+        content_height = static_cast<uint32_t>(width * 3u / 4u);
+    }
+    g_content_rect.offset.x = static_cast<int32_t>((g_extent.width - content_width) / 2u);
+    g_content_rect.offset.y = static_cast<int32_t>((g_extent.height - content_height) / 2u);
+    g_content_rect.extent = {content_width, content_height};
+}
+
+void update_window_mode()
+{
+    if (g_window == nullptr) {
+        return;
+    }
+    if (g_fullscreen_toggle_requested) {
+        const Uint32 flags = SDL_GetWindowFlags(g_window);
+        const bool fullscreen = (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0u;
+        (void)SDL_SetWindowFullscreen(
+            g_window, fullscreen ? 0u : SDL_WINDOW_FULLSCREEN_DESKTOP);
+        g_fullscreen_toggle_requested = false;
+        return;
+    }
+    if ((SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0u) {
+        return;
+    }
+
+    int width = 0;
+    int height = 0;
+    SDL_GetWindowSize(g_window, &width, &height);
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+    if (std::abs(width * 3 - height * 4) > 4) {
+        const int width_delta = std::abs(width - g_last_window_width);
+        const int height_delta = std::abs(height - g_last_window_height);
+        if (width_delta >= height_delta) {
+            height = std::max(1, width * 3 / 4);
+        } else {
+            width = std::max(1, height * 4 / 3);
+        }
+        SDL_SetWindowSize(g_window, width, height);
+    }
+    g_last_window_width = width;
+    g_last_window_height = height;
+}
 
 void set_window_title(const char *title)
 {
@@ -96,7 +187,7 @@ std::vector<char> read_file(const char *path)
 std::vector<char> read_shader_file(const char *name)
 {
     const char *roots[] = {
-        "integrations/dream_driving/build/pc-endjinn/",
+        "",
         "build/pc-endjinn/",
     };
     for (const char *root : roots) {
@@ -207,9 +298,17 @@ void destroy_frame_resources()
         vkDestroyCommandPool(g_device, g_command_pool, nullptr);
         g_command_pool = VK_NULL_HANDLE;
     }
-    if (g_pipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(g_device, g_pipeline, nullptr);
-        g_pipeline = VK_NULL_HANDLE;
+    if (g_opaque_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_opaque_pipeline, nullptr);
+        g_opaque_pipeline = VK_NULL_HANDLE;
+    }
+    if (g_punch_through_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_punch_through_pipeline, nullptr);
+        g_punch_through_pipeline = VK_NULL_HANDLE;
+    }
+    if (g_translucent_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_translucent_pipeline, nullptr);
+        g_translucent_pipeline = VK_NULL_HANDLE;
     }
     if (g_pipeline_layout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(g_device, g_pipeline_layout, nullptr);
@@ -443,9 +542,12 @@ bool create_render_pipeline()
 
     std::vector<char> vert = read_shader_file("flat.vert.spv");
     std::vector<char> frag = read_shader_file("flat.frag.spv");
+    std::vector<char> punch_frag = read_shader_file("flat_punch.frag.spv");
     VkShaderModule vert_module = create_shader_module(vert);
     VkShaderModule frag_module = create_shader_module(frag);
-    if (vert_module == VK_NULL_HANDLE || frag_module == VK_NULL_HANDLE) {
+    VkShaderModule punch_frag_module = create_shader_module(punch_frag);
+    if (vert_module == VK_NULL_HANDLE || frag_module == VK_NULL_HANDLE ||
+        punch_frag_module == VK_NULL_HANDLE) {
         std::fprintf(stderr, "pc-enDjinn: missing pc-endjinn flat shaders\n");
         return false;
     }
@@ -474,8 +576,15 @@ bool create_render_pipeline()
     VkPipelineInputAssemblyStateCreateInfo assembly{};
     assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    VkViewport viewport{0.0f, 0.0f, (float)g_extent.width, (float)g_extent.height, 0.0f, 1.0f};
-    VkRect2D scissor{{0, 0}, g_extent};
+    update_content_rect();
+    VkViewport viewport{
+        static_cast<float>(g_content_rect.offset.x),
+        static_cast<float>(g_content_rect.offset.y),
+        static_cast<float>(g_content_rect.extent.width),
+        static_cast<float>(g_content_rect.extent.height),
+        0.0f,
+        1.0f};
+    VkRect2D scissor = g_content_rect;
     VkPipelineViewportStateCreateInfo viewport_state{};
     viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewport_state.viewportCount = 1u;
@@ -521,8 +630,26 @@ bool create_render_pipeline()
     pipe.pColorBlendState = &blend;
     pipe.layout = g_pipeline_layout;
     pipe.renderPass = g_render_pass;
-    const bool ok = vkCreateGraphicsPipelines(
-        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_pipeline) == VK_SUCCESS;
+    bool ok = vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_opaque_pipeline) == VK_SUCCESS;
+
+    stages[1].module = punch_frag_module;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_punch_through_pipeline) == VK_SUCCESS;
+
+    stages[1].module = frag_module;
+    depth_state.depthWriteEnable = VK_FALSE;
+    blend_att.blendEnable = VK_TRUE;
+    blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend_att.colorBlendOp = VK_BLEND_OP_ADD;
+    blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend_att.alphaBlendOp = VK_BLEND_OP_ADD;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_translucent_pipeline) == VK_SUCCESS;
+
+    vkDestroyShaderModule(g_device, punch_frag_module, nullptr);
     vkDestroyShaderModule(g_device, frag_module, nullptr);
     vkDestroyShaderModule(g_device, vert_module, nullptr);
     return ok;
@@ -613,28 +740,69 @@ PcVertex make_vertex(float x, float y, float z, uint32_t argb)
     return vertex;
 }
 
-std::vector<PcVertex> build_vertices()
+void emit_primitive(std::vector<PcVertex> &out, const QueuedPrimitive &p)
 {
-    std::vector<PcVertex> out;
-    out.reserve(g_primitives.size() * 6u);
-    const auto emit = [&](const QueuedPrimitive &p, uint32_t i) {
+    const auto emit = [&](uint32_t i) {
         out.push_back(make_vertex(p.x[i], p.y[i], p.z[i], p.argb));
     };
-    for (const QueuedPrimitive &p : g_primitives) {
-        if (p.count == 3u) {
-            emit(p, 0u); emit(p, 1u); emit(p, 2u);
-        } else if (p.count == 4u) {
-            emit(p, 0u); emit(p, 1u); emit(p, 2u);
-            emit(p, 0u); emit(p, 2u); emit(p, 3u);
-        }
+    if (p.count == 3u) {
+        emit(0u); emit(1u); emit(2u);
+    } else if (p.count == 4u) {
+        emit(0u); emit(1u); emit(2u);
+        emit(0u); emit(2u); emit(3u);
     }
-    return out;
 }
 
-bool draw_frame(const std::vector<PcVertex> &vertices)
+float primitive_average_z(const QueuedPrimitive &primitive)
+{
+    float z = 0.0f;
+    for (uint32_t i = 0u; i < primitive.count; i++) {
+        z += primitive.z[i];
+    }
+    return primitive.count > 0u ? z / static_cast<float>(primitive.count) : 0.0f;
+}
+
+FrameDrawData build_frame_draw_data()
+{
+    FrameDrawData frame;
+    frame.vertices.reserve(g_primitives.size() * 6u);
+
+    const auto append_list = [&](pvr_list_t list, DrawRange &range, bool sort_back_to_front) {
+        std::vector<const QueuedPrimitive *> primitives;
+        primitives.reserve(g_primitives.size());
+        for (const QueuedPrimitive &primitive : g_primitives) {
+            if (primitive.list == list) {
+                primitives.push_back(&primitive);
+            }
+        }
+        if (sort_back_to_front) {
+            std::stable_sort(
+                primitives.begin(),
+                primitives.end(),
+                [](const QueuedPrimitive *a, const QueuedPrimitive *b) {
+                    // PVR screen-space Z is inverse depth: smaller values are farther away.
+                    return primitive_average_z(*a) < primitive_average_z(*b);
+                });
+        }
+        range.first_vertex = static_cast<uint32_t>(frame.vertices.size());
+        for (const QueuedPrimitive *primitive : primitives) {
+            emit_primitive(frame.vertices, *primitive);
+        }
+        range.vertex_count = static_cast<uint32_t>(frame.vertices.size()) - range.first_vertex;
+    };
+
+    append_list(PVR_LIST_OP_POLY, frame.opaque, false);
+    append_list(PVR_LIST_PT_POLY, frame.punch_through, false);
+    append_list(PVR_LIST_TR_POLY, frame.translucent, g_translucent_autosort);
+    return frame;
+}
+
+bool draw_frame(const FrameDrawData &frame)
 {
     if (g_device == VK_NULL_HANDLE || g_swapchain == VK_NULL_HANDLE ||
-        g_pipeline == VK_NULL_HANDLE || g_command_buffers.empty()) {
+        g_opaque_pipeline == VK_NULL_HANDLE ||
+        g_punch_through_pipeline == VK_NULL_HANDLE ||
+        g_translucent_pipeline == VK_NULL_HANDLE || g_command_buffers.empty()) {
         set_window_title("pc-enDjinn - draw unavailable");
         return false;
     }
@@ -652,18 +820,19 @@ bool draw_frame(const std::vector<PcVertex> &vertices)
         return false;
     }
 
-    if (!ensure_vertex_buffer(vertices.size())) {
+    if (!ensure_vertex_buffer(frame.vertices.size())) {
         set_window_title("pc-enDjinn - vertex buffer failed");
         return false;
     }
-    if (!vertices.empty()) {
+    if (!frame.vertices.empty()) {
         void *mapped = nullptr;
-        const VkDeviceSize bytes = static_cast<VkDeviceSize>(vertices.size() * sizeof(PcVertex));
+        const VkDeviceSize bytes =
+            static_cast<VkDeviceSize>(frame.vertices.size() * sizeof(PcVertex));
         if (vkMapMemory(g_device, g_vertex_memory, 0u, bytes, 0u, &mapped) != VK_SUCCESS) {
             set_window_title("pc-enDjinn - vertex map failed");
             return false;
         }
-        std::memcpy(mapped, vertices.data(), static_cast<size_t>(bytes));
+        std::memcpy(mapped, frame.vertices.data(), static_cast<size_t>(bytes));
         vkUnmapMemory(g_device, g_vertex_memory);
     }
 
@@ -676,9 +845,9 @@ bool draw_frame(const std::vector<PcVertex> &vertices)
         return false;
     }
     VkClearValue clears[2]{};
-    clears[0].color.float32[0] = g_bg_color[0];
-    clears[0].color.float32[1] = g_bg_color[1];
-    clears[0].color.float32[2] = g_bg_color[2];
+    clears[0].color.float32[0] = 0.0f;
+    clears[0].color.float32[1] = 0.0f;
+    clears[0].color.float32[2] = 0.0f;
     clears[0].color.float32[3] = 1.0f;
     clears[1].depthStencil = {0.0f, 0u};
     VkRenderPassBeginInfo pass{};
@@ -689,11 +858,30 @@ bool draw_frame(const std::vector<PcVertex> &vertices)
     pass.clearValueCount = 2u;
     pass.pClearValues = clears;
     vkCmdBeginRenderPass(cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipeline);
-    if (!vertices.empty()) {
+    VkClearAttachment content_clear{};
+    content_clear.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    content_clear.colorAttachment = 0u;
+    content_clear.clearValue.color.float32[0] = g_bg_color[0];
+    content_clear.clearValue.color.float32[1] = g_bg_color[1];
+    content_clear.clearValue.color.float32[2] = g_bg_color[2];
+    content_clear.clearValue.color.float32[3] = 1.0f;
+    VkClearRect content_clear_rect{};
+    content_clear_rect.rect = g_content_rect;
+    content_clear_rect.layerCount = 1u;
+    vkCmdClearAttachments(cmd, 1u, &content_clear, 1u, &content_clear_rect);
+    if (!frame.vertices.empty()) {
         VkDeviceSize offset = 0u;
         vkCmdBindVertexBuffers(cmd, 0u, 1u, &g_vertex_buffer, &offset);
-        vkCmdDraw(cmd, static_cast<uint32_t>(vertices.size()), 1u, 0u, 0u);
+        const auto draw_range = [&](VkPipeline pipeline, const DrawRange &range) {
+            if (range.vertex_count == 0u) {
+                return;
+            }
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+            vkCmdDraw(cmd, range.vertex_count, 1u, range.first_vertex, 0u);
+        };
+        draw_range(g_opaque_pipeline, frame.opaque);
+        draw_range(g_punch_through_pipeline, frame.punch_through);
+        draw_range(g_translucent_pipeline, frame.translucent);
     }
     vkCmdEndRenderPass(cmd);
     if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
@@ -888,6 +1076,7 @@ bool create_vulkan_context()
         std::fprintf(stderr, "pc-enDjinn: SDL_CreateWindow failed: %s\n", SDL_GetError());
         return false;
     }
+    SDL_AddEventWatch(pc_endjinn_event_watch, nullptr);
     set_window_title("pc-enDjinn - creating Vulkan instance");
 
     unsigned int sdl_extension_count = 0u;
@@ -988,7 +1177,7 @@ void vid_set_mode(vid_display_mode_generic_t display_mode, vid_pixel_mode_t pixe
 
 void pvr_init(const pvr_init_params_t *params)
 {
-    (void)params;
+    g_translucent_autosort = params == nullptr || params->autosort_disabled == 0u;
     if (!create_vulkan_context()) {
         std::fprintf(stderr, "pc-enDjinn: pvr_init failed\n");
     }
@@ -1013,6 +1202,7 @@ void pvr_shutdown(void)
         g_instance = VK_NULL_HANDLE;
     }
     if (g_window != nullptr) {
+        SDL_DelEventWatch(pc_endjinn_event_watch, nullptr);
         SDL_DestroyWindow(g_window);
         g_window = nullptr;
     }
@@ -1035,20 +1225,27 @@ void pvr_scene_begin(void)
 
 void pvr_scene_finish(void)
 {
+    update_window_mode();
     if (g_device == VK_NULL_HANDLE) {
         return;
     }
-    const std::vector<PcVertex> vertices = build_vertices();
-    (void)draw_frame(vertices);
+    const FrameDrawData frame = build_frame_draw_data();
+    (void)draw_frame(frame);
     g_presented_frames++;
     if (g_window != nullptr && (g_presented_frames <= 3u || (g_presented_frames % 30u) == 0u)) {
         char title[192];
         std::snprintf(
             title,
             sizeof(title),
-            "pc-enDjinn - pvr primitives %zu - vk verts %zu",
+            "pc-enDjinn - path near %u/%u cursor %u +0x%04x @0x%08x route %04x - pvr %zu - vk %zu",
+            static_cast<unsigned>(g_path_index),
+            static_cast<unsigned>(g_path_count),
+            static_cast<unsigned>(g_path_cursor_index),
+            static_cast<unsigned>(g_path_offset),
+            static_cast<unsigned>(g_path_address),
+            static_cast<unsigned>(g_path_route),
             g_primitives.size(),
-            vertices.size());
+            frame.vertices.size());
         SDL_SetWindowTitle(g_window, title);
     }
 }
@@ -1126,6 +1323,22 @@ void pc_endjinn_platform_set_video_size(uint32_t width, uint32_t height)
 {
     g_vid_mode.width = width > 0u ? static_cast<int>(width) : 1;
     g_vid_mode.height = height > 0u ? static_cast<int>(height) : 1;
+}
+
+void pc_endjinn_platform_set_path_debug(
+    uint16_t index,
+    uint16_t cursor_index,
+    uint16_t count,
+    uint32_t offset,
+    uint32_t address,
+    uint16_t route)
+{
+    g_path_index = index;
+    g_path_cursor_index = cursor_index;
+    g_path_count = count;
+    g_path_offset = offset;
+    g_path_address = address;
+    g_path_route = route;
 }
 
 }  // extern "C"
