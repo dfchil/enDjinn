@@ -1,9 +1,8 @@
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_sound.h>
 #include <stdio.h>
-#if !ENJ_TARGET_PC_ENDJINN
 #include <malloc.h>
-#endif
+
 #define DCAUDIO_IMPLEMENTATION
 #include <enDjinn/ext/dca_file.h>
 
@@ -52,9 +51,7 @@ sfxhnd_t enj_sound_dca_load_blob(uint8_t* dca_data) {
   return SFXHND_INVALID;
 }
 
-void enj_sound_unload(sfxhnd_t handle) {
-  snd_sfx_unload(handle);
-}
+void enj_sound_unload(sfxhnd_t handle) { snd_sfx_unload(handle); }
 
 int enj_sound_play(sfxhnd_t handle, uint8_t volume, uint8_t pan) {
   if (handle == SFXHND_INVALID) {
