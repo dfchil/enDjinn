@@ -17,8 +17,11 @@ explicitly listed in `SUPPORTED.md`.
 - `include/arch/` and `include/dc/`: domain-owned compatibility declarations
   for timers, PVR, Maple, video, sound, and related KOS systems.
 - `include/pc_endjinn/`: backend support types and the generated ABI contract.
-- `enj_platform_pc_endjinn.cpp`: SDL/Vulkan implementations of the PVR and
-  video symbols used by enDjinn.
+- `enj_platform_pc_endjinn.cpp`: thin KOS symbol adapter used by enDjinn.
+- `pc_endjinn_pvr.cpp`: PVR direct-render packet decoding, render lists, and
+  renderer-neutral primitive queues.
+- `pc_endjinn_vulkan.cpp`: SDL window management, Vulkan resources, pipelines,
+  frame construction, and presentation.
 - `pc_endjinn_input.cpp`: SDL implementations of Maple, sound, rumble, and
   other currently required KOS symbols.
 - `SUPPORTED.md`: Coverage matrix for implemented, stubbed, and unsupported
