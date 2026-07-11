@@ -16,7 +16,8 @@ PC_ENDJINN_PLATFORM_SRCS := \
 	$(PC_ENDJINN_BACKEND_DIR)kos_abi_compat.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)enj_platform_pc_endjinn.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_input.cpp
-PC_ENDJINN_KOS_HEADER := $(PC_ENDJINN_BACKEND_DIR)include/kos.h
+PC_ENDJINN_KOS_HEADERS := $(shell find $(PC_ENDJINN_BACKEND_DIR)include \
+	-type f -name '*.h')
 PC_ENDJINN_KOS_ABI_CONTRACT := \
 	$(PC_ENDJINN_BACKEND_DIR)include/pc_endjinn/kos_abi_contract.generated.h
 PC_ENDJINN_CPPFLAGS := -I$(PC_ENDJINN_BACKEND_DIR)include \

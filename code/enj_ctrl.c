@@ -9,6 +9,73 @@ alignas(32) static enj_ctrlr_state_t ctrlr_states_storage[MAPLE_PORT_COUNT] = {
 alignas(32) static enj_ctrlr_state_t *ctrlr_states_refs[MAPLE_PORT_COUNT] = {0};
 alignas(32) static maple_device_t *local_controllers[MAPLE_PORT_COUNT] = {0};
 
+/* Called at init and then only as a callback when controller
+   devices are connected or disconnected */
+void scan_local_controllers(maple_device_t *__unused, void *user_data) {
+  (void)user_data;
+
+  /* Clear existing controller status */
+  for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+    local_controllers[i] = NULL;
+  }
+
+  /* Loop through all available controllers
+     and assign them to the proper ports */
+  int i = 0;
+  maple_device_t *cont;
+  while ((cont = maple_enum_type(i, MAPLE_FUNC_CONTROLLER))) {
+    local_controllers[cont->port] = cont;
+    i++;
+  }
+}
+
+void enj_ctrl_init_local_devices(void) {
+  scan_local_controllers(NULL, NULL);
+  maple_attach_callback(MAPLE_FUNC_CONTROLLER, scan_local_controllers, NULL);
+  maple_detach_callback(MAPLE_FUNC_CONTROLLER, scan_local_controllers, NULL);
+}
+
+size_t enj_ctrl_states_length(void) {
+  return MAPLE_PORT_COUNT;
+}
+
+size_t enj_ctrl_map_states(void) {
+  size_t count = 0;
+  for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+    maple_device_t *device = local_controllers[i];
+    if (device && device->valid == true) {
+      cont_state_t *new_state = (cont_state_t *)maple_dev_status(device);
+      if (new_state) {
+        ctrlr_states_refs[i] = ctrlr_states_storage + i;
+        ctrlr_states_refs[i]->state = new_state;
+        // Map the cont_state_t onto enj_ctrlr_state_t
+        enj_ctrl_kos2enj_state(new_state, ctrlr_states_refs[i]);
+        ctrlr_states_refs[i]->portnum = i;
+        count++;
+      } else {
+        ctrlr_states_refs[i] = NULL;
+      }
+    } else {
+      ctrlr_states_refs[i] = NULL;
+    }
+  }
+  return count;
+}
+
+/* Return the first device of the requested type on port p */
+maple_device_t *enj_maple_port_type(int p, uint32 func) {
+  maple_device_t *dev;
+  for (int u = 0; u < MAPLE_UNIT_COUNT; u++) {
+    dev = maple_enum_dev(p, u);
+    if (dev != NULL && (dev->info.functions & func)) {
+      return dev;
+    }
+  }
+  return NULL;
+}
+
+enj_ctrlr_state_t **enj_ctrl_get_states(void) { return ctrlr_states_refs; }
+
 static inline uint8_t enj_update_button_state(uint8_t prev_btnstate,
                                               int input) {
   switch (prev_btnstate) {
@@ -50,64 +117,6 @@ void enj_ctrl_kos2enj_state(cont_state_t *c_state, enj_ctrlr_state_t *ctrlr) {
   ctrlr->ltrigger = c_state->ltrig;
   ctrlr->rtrigger = c_state->rtrig;
 }
-
-static void scan_local_controllers(maple_device_t *unused, void *user_data) {
-  (void)unused;
-  (void)user_data;
-  for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
-    local_controllers[i] = NULL;
-  }
-  int i = 0;
-  maple_device_t *controller;
-  while ((controller = maple_enum_type(i, MAPLE_FUNC_CONTROLLER))) {
-    local_controllers[controller->port] = controller;
-    i++;
-  }
-}
-
-void enj_ctrl_init_local_devices(void) {
-  scan_local_controllers(NULL, NULL);
-  maple_attach_callback(MAPLE_FUNC_CONTROLLER, scan_local_controllers, NULL);
-  maple_detach_callback(MAPLE_FUNC_CONTROLLER, scan_local_controllers, NULL);
-}
-
-size_t enj_ctrl_states_length(void) {
-  return MAPLE_PORT_COUNT;
-}
-
-size_t enj_ctrl_map_states(void) {
-  size_t count = 0u;
-  for (size_t i = 0u; i < MAPLE_PORT_COUNT; i++) {
-    maple_device_t *device = local_controllers[i];
-    if (device == NULL || !device->valid) {
-      ctrlr_states_refs[i] = NULL;
-      continue;
-    }
-    cont_state_t *state = (cont_state_t *)maple_dev_status(device);
-    if (state == NULL) {
-      ctrlr_states_refs[i] = NULL;
-      continue;
-    }
-    ctrlr_states_refs[i] = &ctrlr_states_storage[i];
-    ctrlr_states_refs[i]->state = state;
-    enj_ctrl_kos2enj_state(state, ctrlr_states_refs[i]);
-    ctrlr_states_refs[i]->portnum = (uint32_t)i;
-    count++;
-  }
-  return count;
-}
-
-maple_device_t *enj_maple_port_type(int p, uint32 func) {
-  for (int unit = 0; unit < MAPLE_UNIT_COUNT; unit++) {
-    maple_device_t *device = maple_enum_dev(p, unit);
-    if (device != NULL && (device->info.functions & func)) {
-      return device;
-    }
-  }
-  return NULL;
-}
-
-enj_ctrlr_state_t **enj_ctrl_get_states(void) { return ctrlr_states_refs; }
 
 void enj_read_controller(enj_abstract_ctrlr_t *ctrlref,
                          enj_ctrlr_state_t *cstate) {
