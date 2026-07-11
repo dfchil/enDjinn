@@ -1,4 +1,4 @@
-#include <enDjinn/enj_platform.h>
+#include <kos.h>
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
@@ -14,9 +14,12 @@
 #include <fstream>
 #include <vector>
 
+extern "C" void pc_endjinn_input_request_quit(void);
+extern "C" void pc_endjinn_input_shutdown(void);
+
 namespace {
 
-enj_host_vid_mode_t g_vid_mode{1280, 960};
+vid_mode_t g_vid_mode{1280, 960};
 std::array<uint8_t, 256> g_dr_packet{};
 uint32_t g_current_argb = 0xffffffffu;
 pvr_list_t g_current_list = PVR_LIST_OP_POLY;
@@ -56,12 +59,6 @@ VkDeviceMemory g_vertex_memory = VK_NULL_HANDLE;
 size_t g_vertex_capacity = 0u;
 uint64_t g_presented_frames = 0u;
 bool g_translucent_autosort = true;
-uint16_t g_path_index = 0u;
-uint16_t g_path_cursor_index = 0u;
-uint16_t g_path_count = 0u;
-uint16_t g_path_route = 0u;
-uint32_t g_path_offset = 0u;
-uint32_t g_path_address = 0u;
 bool g_fullscreen_toggle_requested = false;
 int g_last_window_width = 1280;
 int g_last_window_height = 960;
@@ -98,6 +95,11 @@ bool create_draw_resources();
 
 int SDLCALL pc_endjinn_event_watch(void *, SDL_Event *event)
 {
+    if (event != nullptr &&
+        (event->type == SDL_QUIT ||
+         (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))) {
+        pc_endjinn_input_request_quit();
+    }
     if (event != nullptr && event->type == SDL_KEYDOWN && event->key.repeat == 0) {
         const bool alt_enter = event->key.keysym.sym == SDLK_RETURN &&
             (event->key.keysym.mod & KMOD_ALT) != 0;
@@ -1148,7 +1150,7 @@ bool create_vulkan_context()
 
 extern "C" {
 
-enj_host_vid_mode_t *vid_mode = &g_vid_mode;
+vid_mode_t *vid_mode = &g_vid_mode;
 
 uint64_t timer_ns_gettime64(void)
 {
@@ -1206,6 +1208,7 @@ void pvr_shutdown(void)
         SDL_DestroyWindow(g_window);
         g_window = nullptr;
     }
+    pc_endjinn_input_shutdown();
 }
 
 void pvr_set_bg_color(float r, float g, float b)
@@ -1233,17 +1236,11 @@ void pvr_scene_finish(void)
     (void)draw_frame(frame);
     g_presented_frames++;
     if (g_window != nullptr && (g_presented_frames <= 3u || (g_presented_frames % 30u) == 0u)) {
-        char title[192];
+        char title[128];
         std::snprintf(
             title,
             sizeof(title),
-            "pc-enDjinn - path near %u/%u cursor %u +0x%04x @0x%08x route %04x - pvr %zu - vk %zu",
-            static_cast<unsigned>(g_path_index),
-            static_cast<unsigned>(g_path_count),
-            static_cast<unsigned>(g_path_cursor_index),
-            static_cast<unsigned>(g_path_offset),
-            static_cast<unsigned>(g_path_address),
-            static_cast<unsigned>(g_path_route),
+            "pc-enDjinn - pvr primitives %zu - vk verts %zu",
             g_primitives.size(),
             frame.vertices.size());
         SDL_SetWindowTitle(g_window, title);
@@ -1317,28 +1314,6 @@ void pvr_dr_commit(void *ptr)
     if (header->argb != 0u) {
         g_current_argb = header->argb;
     }
-}
-
-void pc_endjinn_platform_set_video_size(uint32_t width, uint32_t height)
-{
-    g_vid_mode.width = width > 0u ? static_cast<int>(width) : 1;
-    g_vid_mode.height = height > 0u ? static_cast<int>(height) : 1;
-}
-
-void pc_endjinn_platform_set_path_debug(
-    uint16_t index,
-    uint16_t cursor_index,
-    uint16_t count,
-    uint32_t offset,
-    uint32_t address,
-    uint16_t route)
-{
-    g_path_index = index;
-    g_path_cursor_index = cursor_index;
-    g_path_count = count;
-    g_path_offset = offset;
-    g_path_address = address;
-    g_path_route = route;
 }
 
 }  // extern "C"

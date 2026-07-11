@@ -1,8 +1,8 @@
 #ifndef ENJ_TEXTURE_H 
 #define ENJ_TEXTURE_H
 
-#include <enDjinn/enj_platform.h>
-#if ENJ_PLATFORM_DREAMCAST
+#include <kos.h>
+#ifdef __DREAMCAST__
 #include <pvrtex/file_dctex.h>
 #endif
 #include <stdint.h>

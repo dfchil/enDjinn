@@ -1,7 +1,7 @@
 #ifndef ENJ_SOUND_H
 #define ENJ_SOUND_H
 
-#include <enDjinn/enj_platform.h>
+#include <kos.h>
 #include <stdint.h>
 
 /**

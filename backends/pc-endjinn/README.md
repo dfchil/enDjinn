@@ -13,8 +13,11 @@ explicitly listed in `SUPPORTED.md`.
   flags, backend source paths, and backend-owned shader compilation.
 - `shaders/`: renderer shaders compiled automatically for every pc-enDjinn
   application.
-- `enj_platform_pc_endjinn.cpp`: Host implementations and stubs for the current
-  `enj_platform.h` API surface.
+- `include/`: KOS-shaped compatibility headers selected only by PC builds.
+- `enj_platform_pc_endjinn.cpp`: SDL/Vulkan implementations of the PVR and
+  video symbols used by enDjinn.
+- `pc_endjinn_input.cpp`: SDL implementations of Maple, sound, rumble, and
+  other currently required KOS symbols.
 - `SUPPORTED.md`: Coverage matrix for implemented, stubbed, and unsupported
   KOS/enDjinn behavior.
 
@@ -28,10 +31,30 @@ the backend objects instead of KOS.
 normal `pvr_init()` call creates the SDL window and Vulkan instance/surface/device
 owned by the backend.
 
-Dreamcast builds continue to include real KOS headers through
-`enDjinn/enj_platform.h`.
+Dreamcast builds resolve normal KOS includes to the real toolchain headers.
+PC builds prepend `backends/pc-endjinn/include`, resolving those same includes
+to the compatibility declarations supplied by this backend.
 
 For a generic host build, use the normal `integrations/enDJinn/base_link.mk`
 entry point with `ENJ_TARGET=pc-endjinn`. The host branch builds only the
 currently supported core: state, modes, render lists, keyboard controller
 mapping, draw helpers, no-op rumble/sound, and the pc-enDjinn platform backend.
+
+## KOS ABI Contract
+
+`include/pc_endjinn/kos_abi_contract.generated.h` records authoritative KOS
+constants, structure sizes, alignments, and offsets. The generator extracts
+them from assembly produced by the Dreamcast compiler, so the probe itself
+does not need to run. `kos_abi_compat.cpp` validates the PC replicas with
+`static_assert` during every PC build.
+
+After updating KOS, activate its environment and regenerate the contract from
+an enDjinn game directory:
+
+```sh
+source /opt/toolchains/dc/kos/environ.sh
+make ENJ_TARGET=pc-endjinn pc-endjinn-kos-abi-contract
+```
+
+The generated header is committed. Ordinary PC builds consume it without
+requiring an active Dreamcast toolchain.

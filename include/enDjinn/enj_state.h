@@ -1,7 +1,7 @@
 #ifndef ENJ_STATE_H
 #define ENJ_STATE_H
 
-#include <enDjinn/enj_platform.h>
+#include <kos.h>
 #include <enDjinn/enj_ctrl.h>
 #include <enDjinn/enj_mode.h>
 #include <enDjinn/enj_types.h>

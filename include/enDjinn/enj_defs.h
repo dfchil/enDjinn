@@ -10,7 +10,7 @@
  *  \author    2025 Daniel Fairchild
  */
 
-#include <enDjinn/enj_platform.h>
+#include <kos.h>
 #include <stdio.h>
 
 #ifndef ENJ_MODE_STACK_SIZE
