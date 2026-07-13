@@ -232,7 +232,7 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
     pvr_sprite_cxt_txr(&i_cxt, PVR_LIST_PT_POLY, help_texture_info.pvrformat,
                        help_texture_info.width, help_texture_info.height,
                        help_texture_info.ptr, PVR_FILTER_NEAREST);
-    i_cxt.gen.culling = PVR_CULLING_NONE;
+    i_cxt.gen.culling = PVR_CULLING_CCW;
     pvr_sprite_compile(&info_mode_data.hdr, &i_cxt);
     info_mode.data = &info_mode_data;
     info_mode.mode_updater = info_updater;
@@ -244,7 +244,7 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
     pvr_sprite_cxt_txr(&f_cxt, PVR_LIST_TR_POLY, figure_texture_info.pvrformat,
                        figure_texture_info.width, figure_texture_info.height,
                        figure_texture_info.ptr, PVR_FILTER_BILINEAR);
-    f_cxt.gen.culling = PVR_CULLING_NONE;
+    f_cxt.gen.culling = PVR_CULLING_CCW;
     f_cxt.gen.specular = PVR_SPECULAR_ENABLE;
     pvr_sprite_compile(&main_mode_data->hdr, &f_cxt);
     main_mode_data->hdr.argb = 0xffffffff;

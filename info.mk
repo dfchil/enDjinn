@@ -65,3 +65,4 @@ help:
 	@echo "  list         						List all make targets"
 	@echo "  cfg_info         					Show redefineable makefile variables"
 	@echo "  cmdline_info          				Alias for ${ENJ_BASENAME}.elf"
+	@echo "  auto_variables         				Show automatic make variables"

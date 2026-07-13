@@ -42,10 +42,10 @@ void enj_render_list_add(pvr_list_t renderlist, void (*renderer)(void *data),
     return;
   }
 #endif
-  //   if (renderlist == PVR_LIST_OP_POLY) {
-  //     renderer(data);
-  //     return;
-  //   }
+  // if (renderlist == PVR_LIST_OP_POLY) {
+  //   renderer(data);
+  //   return;
+  // }
   enj_renderlist_t *list = active_renderlists[renderlist];
 
   if (list == NULL) {

@@ -4,9 +4,9 @@
 pwd=$(pwd)
 
 SLEEPTIME=1
-DCIP=10.0.0.248
+DCIP=192.168.2.8
 OUTDIR=${pwd}/profilers/profiles
-BINARY=bin/dRxLaX.elf
+BINARY=bin/
 CDROMDIR=${pwd}/cdrom
 
 mkdir -p ${OUTDIR}
@@ -17,8 +17,8 @@ run_dcprof() {
 
 	cd ${pwd}
 	TRACENAME=new
-	DCPROF=1 DCTRACE=1 make clean
-	SINGLEDEMO=11 DCPROF=1 OPTLEVEL=${OPTLEVEL} ENJ_CBASEPATH=/pc/dRxLaX make -j 44 ${BINARY}
+	ENJ_DCPROF=1 DCTRACE=1 make clean
+	SINGLEDEMO=11 ENJ_DCPROF=1 OPTLEVEL=${OPTLEVEL} ENJ_CBASEPATH=/pc/endjinn_vr_colored_quads make -j 44 ${BINARY}
 	dc-tool-ip -t ${DCIP} -x ${BINARY} -m ${CDROMDIR}
 	sh-elf-gprof ${pwd}/${BINARY}  ${CDROMDIR}/gmon.out > ${OUTDIR}/${TRACENAME}_0${OPTLEVEL}.txt
 }
