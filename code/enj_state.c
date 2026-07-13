@@ -13,8 +13,8 @@
 #include <arch/gdb.h>
 #endif
 
-#ifdef DCPROF
-#include "../enDjinn/profilers/dcprof/profiler.h"
+#ifdef ENJ_DCPROF
+#include "../../enDjinn/profilers/dcprof/profiler.h"
 #endif
 #ifdef ENJ_DEBUG
 #include <dc/perf_monitor.h>
@@ -130,7 +130,7 @@ int enj_state_startup() {
                     PMCR_INSTRUCTION_CACHE_MISS_MODE);
 #endif
 
-#ifdef DCPROF
+#ifdef ENJ_DCPROF
   profiler_init("/pc/gmon.out");
   profiler_start();
 #endif
@@ -215,7 +215,7 @@ void enj_state_run(void) {
     enj_state_wait_for_frame_deadline(&frame_deadline_ns);
 #endif
   }
-#ifdef DCPROF
+#ifdef ENJ_DCPROF
   profiler_stop();
   profiler_clean_up();
 #endif
