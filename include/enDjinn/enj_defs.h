@@ -10,11 +10,8 @@
  *  \author    2025 Daniel Fairchild
  */
 
+#include <kos.h>
 #include <stdio.h>
-
-#ifdef ENJ_DEBUG
-#include <dc/perf_monitor.h>
-#endif
 
 #ifndef ENJ_MODE_STACK_SIZE
 #define ENJ_MODE_STACK_SIZE 16

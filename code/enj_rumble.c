@@ -1,25 +1,21 @@
-
-
-#include <dc/maple/purupuru.h>
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_rumble.h>
 
-static int enj_rumble_rate_limit =
-    1; // frames of cooldown between rumble commands
+#ifdef __DREAMCAST__
+#include <dc/maple/purupuru.h>
+#endif
+
+static int enj_rumble_rate_limit = 1;
 static maple_device_t *local_rumbles[MAPLE_PORT_COUNT] = {0};
 static int rumble_rate_limits[MAPLE_PORT_COUNT] = {0};
 static uint32_t pending_rumble_effects[MAPLE_PORT_COUNT] = {0};
 
-/* Called at init and then only as a callback when purupuru
-   devices are connected or disconnected */
-static inline void scan_local_rumblers(maple_device_t *__unused) {
-  /* Clear existing rumble info */
+static inline void scan_local_rumblers(maple_device_t *__unused,
+                                       void *user_data) {
+  (void)user_data;
   for (int i = 0; i < 4; i++) {
     local_rumbles[i] = NULL;
   }
-
-  /* Loop through all available purupuru packs
-     and assign them to the proper ports  */
   int i = 0;
   maple_device_t *purupuru;
   while ((purupuru = maple_enum_type(i, MAPLE_FUNC_PURUPURU))) {
@@ -29,18 +25,16 @@ static inline void scan_local_rumblers(maple_device_t *__unused) {
 }
 
 void enj_rumble_init_local_devices(void) {
-  scan_local_rumblers(NULL);
-  maple_attach_callback(MAPLE_FUNC_PURUPURU, scan_local_rumblers);
-  maple_detach_callback(MAPLE_FUNC_PURUPURU, scan_local_rumblers);
+  scan_local_rumblers(NULL, NULL);
+  maple_attach_callback(MAPLE_FUNC_PURUPURU, scan_local_rumblers, NULL);
+  maple_detach_callback(MAPLE_FUNC_PURUPURU, scan_local_rumblers, NULL);
 }
 
 size_t enj_rumble_states_length(void) { return MAPLE_PORT_COUNT; }
-
 void enj_rumble_rate_limit_set(int frames) { enj_rumble_rate_limit = frames; }
 
 enj_rumble_reply_e enj_rumble_effect_set_raw(enj_ctrl_port_name_e ctrloffset,
                                              uint32_t raw) {
-
   if (ctrloffset > MAPLE_PORT_COUNT) {
     return enj_rumble_no_device;
   }
@@ -50,13 +44,11 @@ enj_rumble_reply_e enj_rumble_effect_set_raw(enj_ctrl_port_name_e ctrloffset,
   }
   enj_rumble_reply_e reply = enj_rumble_set;
   if (pending_rumble_effects[ctrloffset] != 0) {
-    // there's a pending effect to send
     reply |= enj_rumble_overwrote_previous;
   }
   if (rumble_rate_limits[ctrloffset] > 0) {
     reply |= enj_rumble_rate_limited;
   }
-
   pending_rumble_effects[ctrloffset] = raw;
   return reply;
 }
@@ -74,11 +66,6 @@ void enj_rumble_update(void) {
       rumble_rate_limits[i]--;
     }
     if (local_rumbles[i] == NULL) {
-      // no rumble device on this port
-      if (pending_rumble_effects[i] != 0 || rumble_rate_limits[i] != 0) {
-        ENJ_DEBUG_PRINT("Rumble effect pending for port %d but no device!\n",
-                        i);
-      }
       pending_rumble_effects[i] = 0;
       rumble_rate_limits[i] = 0;
       continue;

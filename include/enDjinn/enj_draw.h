@@ -1,6 +1,6 @@
 #ifndef ENJ_DRAW_H
 #define ENJ_DRAW_H
-#include <dc/pvr.h>
+#include <kos.h>
 
 /** Initialize the store queue system for 64 byte PVR structs, like
  * sprites and modifier volumes headers.

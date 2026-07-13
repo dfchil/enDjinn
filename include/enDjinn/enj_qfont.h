@@ -4,7 +4,7 @@
 #ifdef ENJ_INJECT_QFONT
 
 
-#include <dc/pvr.h>
+#include <kos.h>
 #include <enDjinn/enj_font_types.h>
 
 int enj_qfont_init();

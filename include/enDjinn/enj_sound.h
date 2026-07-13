@@ -1,7 +1,8 @@
 #ifndef ENJ_SOUND_H
 #define ENJ_SOUND_H
 
-#include <dc/sound/sfxmgr.h>
+#include <kos.h>
+#include <stdint.h>
 
 /**
  * Load a DCA sound effect from a memory blob

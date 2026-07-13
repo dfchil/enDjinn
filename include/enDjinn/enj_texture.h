@@ -1,8 +1,10 @@
 #ifndef ENJ_TEXTURE_H 
 #define ENJ_TEXTURE_H
 
-#include <dc/pvr.h>
+#include <kos.h>
+#ifdef __DREAMCAST__
 #include <pvrtex/file_dctex.h>
+#endif
 #include <stdint.h>
 
 typedef fDtHeader dt_header_t;

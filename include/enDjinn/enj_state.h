@@ -1,8 +1,7 @@
 #ifndef ENJ_STATE_H
 #define ENJ_STATE_H
 
-#include <dc/pvr.h>
-#include <dc/video.h>
+#include <kos.h>
 #include <enDjinn/enj_ctrl.h>
 #include <enDjinn/enj_mode.h>
 #include <enDjinn/enj_types.h>
