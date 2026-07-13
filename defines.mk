@@ -29,13 +29,13 @@ ifdef ENJ_FSAA
 	DEFINES += -DENJ_FSAA=${ENJ_FSAA}
 endif
 
-ifdef DCTRACE
-DEFINES += -finstrument-functions -DDCTRACE
+ifdef ENJ_DCTRACE
+DEFINES += -finstrument-functions -DENJ_p
 OBJS += $(ENJ_BUILDDIR)/enDjinn/profilers/dcprofiler.o
 endif 
 
-ifdef DCPROF
-DEFINES += -DDCPROF
+ifdef ENJ_DCPROF
+DEFINES += -DENJ_DCPROF
 OBJS += $(ENJ_BUILDDIR)/enDjinn/profilers/dcprof/profiler.o
 endif
 
