@@ -13,7 +13,7 @@ static int v_y_off = -1; // modifier volume offset Y
 void render_modifiable(void *__unused) {
   pvr_poly_cxt_t cxt;
   pvr_poly_cxt_col_mod(&cxt, testlist);
-  cxt.gen.culling = PVR_CULLING_NONE;
+  cxt.gen.culling = PVR_CULLING_CCW;
   pvr_poly_mod_hdr_t *hdr = (pvr_poly_mod_hdr_t *)pvr_dr_target();
   pvr_poly_mod_compile(hdr, &cxt);
   pvr_dr_commit(hdr);
@@ -50,7 +50,7 @@ void render_modifier(void *__unused) {
   };
   pvr_mod_hdr_t *hdr = (pvr_mod_hdr_t *)pvr_dr_target();
   pvr_mod_compile(hdr, testlist + 1, PVR_MODIFIER_INCLUDE_LAST_POLY,
-                  PVR_CULLING_NONE);
+                  PVR_CULLING_CCW);
   pvr_dr_commit(hdr);
   pvr_modifier_vol_t *modvol_p1, *modvol_p2;
   enj_draw_pvr_dr64_init((void **)&modvol_p1, (void **)&modvol_p2);
