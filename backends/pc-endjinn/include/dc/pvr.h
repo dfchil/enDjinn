@@ -180,6 +180,8 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
   return (up.i & 0xffff0000u) | (vp.i >> 16u);
 }
 #define PC_ENDJINN_PVR_HEADER_SPRITE 0x10000000u
+#define PC_ENDJINN_PVR_HEADER_CULL_SHIFT 26u
+#define PC_ENDJINN_PVR_HEADER_CULL_MASK (0x3u << PC_ENDJINN_PVR_HEADER_CULL_SHIFT)
 
 #define PVR_TXRFMT_MIPMAP (1u << 31)
 #define PVR_TXRFMT_VQ_DISABLE (0u << 30)
@@ -296,7 +298,8 @@ static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
   memset(hdr, 0, sizeof(*hdr));
   hdr->cmd = 0x80000000u;
   hdr->mode1 = PC_ENDJINN_PVR_HEADER_SPRITE | (uint32_t)cxt->list_type |
-      (cxt->txr.enable ? 0x80000000u : 0u);
+      (cxt->txr.enable ? 0x80000000u : 0u) |
+      (((uint32_t)cxt->gen.culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   hdr->mode2 = (uint32_t)cxt->txr.format;
   hdr->mode3 = (uint32_t)cxt->txr.width | ((uint32_t)cxt->txr.height << 16u);
   hdr->argb = 0xffffffffu;
@@ -329,10 +332,10 @@ static inline void pvr_poly_mod_compile(pvr_poly_mod_hdr_t *hdr,
 
 static inline void pvr_mod_compile(pvr_mod_hdr_t *hdr, pvr_list_t list,
                                    uint32_t mode, uint32_t culling) {
-  (void)culling;
   memset(hdr, 0, sizeof(*hdr));
   hdr->cmd = 0x80000000u;
-  hdr->mode1 = (uint32_t)list | 0x20000000u;
+  hdr->mode1 = (uint32_t)list | 0x20000000u |
+      ((culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   hdr->oargb = mode;
   hdr->argb = 0xffffffffu;
 }

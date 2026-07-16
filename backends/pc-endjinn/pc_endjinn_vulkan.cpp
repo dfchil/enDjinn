@@ -1257,6 +1257,20 @@ PcVertex make_vertex(float x, float y, float z, uint32_t argb, float u, float v)
     return vertex;
 }
 
+bool triangle_is_culled(const QueuedPrimitive &p, uint32_t a, uint32_t b,
+                        uint32_t c)
+{
+    if (p.culling != PVR_CULLING_CCW && p.culling != PVR_CULLING_CW) {
+        return false;
+    }
+    const float signed_area = (p.x[b] - p.x[a]) * (p.y[c] - p.y[a]) -
+                              (p.y[b] - p.y[a]) * (p.x[c] - p.x[a]);
+    // PVR vertices use framebuffer coordinates, where Y grows downward.
+    // This reverses the usual Y-up signed-area winding convention.
+    return p.culling == PVR_CULLING_CCW ? signed_area < 0.0f
+                                         : signed_area > 0.0f;
+}
+
 void emit_primitive(std::vector<PcVertex> &out, const QueuedPrimitive &p)
 {
     const auto emit = [&](uint32_t i) {
@@ -1264,10 +1278,16 @@ void emit_primitive(std::vector<PcVertex> &out, const QueuedPrimitive &p)
                                   p.u[i], p.v[i]));
     };
     if (p.count == 3u) {
-        emit(0u); emit(1u); emit(2u);
+        if (!triangle_is_culled(p, 0u, 1u, 2u)) {
+            emit(0u); emit(1u); emit(2u);
+        }
     } else if (p.count == 4u) {
-        emit(0u); emit(1u); emit(2u);
-        emit(0u); emit(2u); emit(3u);
+        if (!triangle_is_culled(p, 0u, 1u, 2u)) {
+            emit(0u); emit(1u); emit(2u);
+        }
+        if (!triangle_is_culled(p, 0u, 2u, 3u)) {
+            emit(0u); emit(2u); emit(3u);
+        }
     }
 }
 

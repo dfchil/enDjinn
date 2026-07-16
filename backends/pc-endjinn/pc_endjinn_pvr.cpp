@@ -34,6 +34,7 @@ struct HeaderState {
   uint32_t modifier_mode{};
   bool modifier_textured{};
   pvr_context_txr_t modifier_texture{};
+  pvr_cull_mode_t culling{PVR_CULLING_NONE};
 };
 
 std::array<uint8_t, 256> g_dr_packet{};
@@ -69,6 +70,7 @@ void unpack_uv_pair(uint32_t packed, float &u, float &v) {
 void copy_header_state(pc_endjinn_pvr::QueuedPrimitive &primitive) {
   primitive.argb = g_header.argb;
   primitive.list = g_current_list;
+  primitive.culling = g_header.culling;
   primitive.textured = g_header.textured;
   primitive.texture = g_header.texture;
   primitive.texture_format = g_header.format;
@@ -177,6 +179,7 @@ void queue_modifier_volume(const pvr_modifier_vol_t &first, const void *tail) {
   pc_endjinn_pvr::QueuedPrimitive primitive{};
   primitive.count = 3u;
   primitive.list = g_current_list;
+  primitive.culling = g_header.culling;
   primitive.modifier_volume = true;
   primitive.modifier_mode = g_header.modifier_mode;
   primitive.x[0] = first.ax;
@@ -561,6 +564,9 @@ void dr_commit(void *ptr) {
   g_header.sprite = (header->mode1 & PC_ENDJINN_PVR_HEADER_SPRITE) != 0u;
   g_header.modifier = (header->mode1 & 0x40000000u) != 0u;
   g_header.modifier_volume = (header->mode1 & 0x20000000u) != 0u;
+  g_header.culling = static_cast<pvr_cull_mode_t>(
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_CULL_MASK) >>
+      PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   g_header.modifier_mode = g_header.modifier_volume ? header->oargb : 0u;
   const auto modifier_texture = g_modifier_textures.find(header->cmd & 0x0fffffffu);
   g_header.modifier_textured = modifier_texture != g_modifier_textures.end();
