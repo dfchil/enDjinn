@@ -20,7 +20,7 @@ extern "C" void pc_endjinn_input_shutdown(void);
 
 namespace {
 
-vid_mode_t g_vid_mode{1280, 960};
+vid_mode_t g_vid_mode{640, 480};
 float g_bg_color[3] = {0.0f, 0.0f, 0.0f};
 SDL_Window *g_window = nullptr;
 VkInstance g_instance = VK_NULL_HANDLE;
@@ -44,6 +44,8 @@ VkPipelineLayout g_pipeline_layout = VK_NULL_HANDLE;
 VkPipeline g_opaque_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_pipeline = VK_NULL_HANDLE;
 VkPipeline g_translucent_pipeline = VK_NULL_HANDLE;
+VkDescriptorSetLayout g_texture_set_layout = VK_NULL_HANDLE;
+VkDescriptorPool g_descriptor_pool = VK_NULL_HANDLE;
 VkCommandPool g_command_pool = VK_NULL_HANDLE;
 std::vector<VkCommandBuffer> g_command_buffers;
 VkSemaphore g_image_available = VK_NULL_HANDLE;
@@ -54,6 +56,7 @@ VkDeviceMemory g_vertex_memory = VK_NULL_HANDLE;
 size_t g_vertex_capacity = 0u;
 uint64_t g_presented_frames = 0u;
 bool g_translucent_autosort = true;
+bool g_fsaa_enabled = false;
 bool g_fullscreen_toggle_requested = false;
 int g_last_window_width = 1280;
 int g_last_window_height = 960;
@@ -61,21 +64,66 @@ int g_last_window_height = 960;
 struct PcVertex {
     float position[3];
     float color[4];
+    float uv[2];
 };
 
 using pc_endjinn_pvr::QueuedPrimitive;
 
-struct DrawRange {
+struct TexturePush {
+    uint32_t indexed;
+    uint32_t palette_base;
+    uint32_t filter_mode;
+    uint32_t unused;
+};
+
+struct DrawBatch {
+    pvr_list_t list;
     uint32_t first_vertex;
     uint32_t vertex_count;
+    bool textured;
+    pvr_ptr_t texture;
+    uint32_t texture_format;
+    uint32_t texture_width;
+    uint32_t texture_height;
+    pvr_filter_mode_t texture_filter;
+    uint32_t palette_base;
 };
 
 struct FrameDrawData {
     std::vector<PcVertex> vertices;
-    DrawRange opaque{};
-    DrawRange punch_through{};
-    DrawRange translucent{};
+    std::vector<DrawBatch> batches;
 };
+
+struct GpuImage {
+    VkImage image{VK_NULL_HANDLE};
+    VkDeviceMemory memory{VK_NULL_HANDLE};
+    VkImageView view{VK_NULL_HANDLE};
+    VkSampler sampler{VK_NULL_HANDLE};
+    uint32_t width{};
+    uint32_t height{};
+    uint32_t mip_count{};
+    VkFormat format{VK_FORMAT_UNDEFINED};
+};
+
+struct GpuTexture {
+    pvr_ptr_t source{};
+    uint32_t source_format{};
+    uint32_t width{};
+    uint32_t height{};
+    pvr_filter_mode_t filter{PVR_FILTER_NEAREST};
+    uint64_t revision{};
+    bool indexed{};
+    uint32_t palette_base{};
+    GpuImage image;
+    VkDescriptorSet descriptor{VK_NULL_HANDLE};
+};
+
+GpuImage g_white_texture;
+GpuImage g_default_index_texture;
+GpuImage g_palette_texture;
+std::vector<GpuTexture> g_texture_cache;
+VkDescriptorSet g_default_texture_descriptor = VK_NULL_HANDLE;
+uint64_t g_uploaded_palette_revision = 0u;
 
 bool create_draw_resources();
 
@@ -251,8 +299,384 @@ VkShaderModule create_shader_module(const std::vector<char> &bytes)
     return module;
 }
 
+void destroy_gpu_image(GpuImage &texture)
+{
+    if (texture.sampler != VK_NULL_HANDLE) {
+        vkDestroySampler(g_device, texture.sampler, nullptr);
+    }
+    if (texture.view != VK_NULL_HANDLE) {
+        vkDestroyImageView(g_device, texture.view, nullptr);
+    }
+    if (texture.image != VK_NULL_HANDLE) {
+        vkDestroyImage(g_device, texture.image, nullptr);
+    }
+    if (texture.memory != VK_NULL_HANDLE) {
+        vkFreeMemory(g_device, texture.memory, nullptr);
+    }
+    texture = {};
+}
+
+void destroy_texture_resources()
+{
+    for (GpuTexture &texture : g_texture_cache) {
+        destroy_gpu_image(texture.image);
+    }
+    g_texture_cache.clear();
+    g_default_texture_descriptor = VK_NULL_HANDLE;
+    destroy_gpu_image(g_white_texture);
+    destroy_gpu_image(g_default_index_texture);
+    destroy_gpu_image(g_palette_texture);
+    g_uploaded_palette_revision = 0u;
+    if (g_descriptor_pool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(g_device, g_descriptor_pool, nullptr);
+        g_descriptor_pool = VK_NULL_HANDLE;
+    }
+}
+
+bool create_staging_buffer(VkDeviceSize size, VkBuffer &buffer,
+                           VkDeviceMemory &memory)
+{
+    VkBufferCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = size;
+    info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(g_device, &info, nullptr, &buffer) != VK_SUCCESS) {
+        return false;
+    }
+    VkMemoryRequirements req{};
+    vkGetBufferMemoryRequirements(g_device, buffer, &req);
+    VkMemoryAllocateInfo alloc{};
+    alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc.allocationSize = req.size;
+    alloc.memoryTypeIndex = find_memory_type(
+        req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (vkAllocateMemory(g_device, &alloc, nullptr, &memory) != VK_SUCCESS) {
+        vkDestroyBuffer(g_device, buffer, nullptr);
+        buffer = VK_NULL_HANDLE;
+        return false;
+    }
+    return vkBindBufferMemory(g_device, buffer, memory, 0u) == VK_SUCCESS;
+}
+
+bool upload_gpu_image(GpuImage &texture, VkFormat format,
+                      const std::vector<pc_endjinn_pvr::DecodedMip> &mips,
+                      pvr_filter_mode_t filter)
+{
+    if (mips.empty() || mips[0].pixels.empty()) {
+        return false;
+    }
+    size_t byte_count = 0u;
+    for (const auto &mip : mips) {
+        byte_count += mip.pixels.size();
+    }
+    VkBuffer staging = VK_NULL_HANDLE;
+    VkDeviceMemory staging_memory = VK_NULL_HANDLE;
+    if (!create_staging_buffer(byte_count, staging, staging_memory)) {
+        return false;
+    }
+    void *mapped = nullptr;
+    if (vkMapMemory(g_device, staging_memory, 0u, byte_count, 0u, &mapped) != VK_SUCCESS) {
+        vkDestroyBuffer(g_device, staging, nullptr);
+        vkFreeMemory(g_device, staging_memory, nullptr);
+        return false;
+    }
+    size_t offset = 0u;
+    std::vector<VkBufferImageCopy> regions;
+    regions.reserve(mips.size());
+    for (size_t level = 0u; level < mips.size(); level++) {
+        const auto &mip = mips[level];
+        std::memcpy(static_cast<uint8_t *>(mapped) + offset,
+                    mip.pixels.data(), mip.pixels.size());
+        VkBufferImageCopy region{};
+        region.bufferOffset = offset;
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel = static_cast<uint32_t>(level);
+        region.imageSubresource.layerCount = 1u;
+        region.imageExtent = {mip.width, mip.height, 1u};
+        regions.push_back(region);
+        offset += mip.pixels.size();
+    }
+    vkUnmapMemory(g_device, staging_memory);
+
+    const bool existing = texture.image != VK_NULL_HANDLE;
+    if (!existing) {
+        VkImageCreateInfo image{};
+        image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        image.imageType = VK_IMAGE_TYPE_2D;
+        image.extent = {mips[0].width, mips[0].height, 1u};
+        image.mipLevels = static_cast<uint32_t>(mips.size());
+        image.arrayLayers = 1u;
+        image.format = format;
+        image.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        image.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        image.samples = VK_SAMPLE_COUNT_1_BIT;
+        image.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        if (vkCreateImage(g_device, &image, nullptr, &texture.image) != VK_SUCCESS) {
+            vkDestroyBuffer(g_device, staging, nullptr);
+            vkFreeMemory(g_device, staging_memory, nullptr);
+            return false;
+        }
+        VkMemoryRequirements req{};
+        vkGetImageMemoryRequirements(g_device, texture.image, &req);
+        VkMemoryAllocateInfo alloc{};
+        alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        alloc.allocationSize = req.size;
+        alloc.memoryTypeIndex = find_memory_type(
+            req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        if (vkAllocateMemory(g_device, &alloc, nullptr, &texture.memory) != VK_SUCCESS ||
+            vkBindImageMemory(g_device, texture.image, texture.memory, 0u) != VK_SUCCESS) {
+            vkDestroyBuffer(g_device, staging, nullptr);
+            vkFreeMemory(g_device, staging_memory, nullptr);
+            destroy_gpu_image(texture);
+            return false;
+        }
+        texture.width = mips[0].width;
+        texture.height = mips[0].height;
+        texture.mip_count = static_cast<uint32_t>(mips.size());
+        texture.format = format;
+    }
+
+    VkCommandBufferAllocateInfo command_alloc{};
+    command_alloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    command_alloc.commandPool = g_command_pool;
+    command_alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    command_alloc.commandBufferCount = 1u;
+    VkCommandBuffer command = VK_NULL_HANDLE;
+    if (vkAllocateCommandBuffers(g_device, &command_alloc, &command) != VK_SUCCESS) {
+        vkDestroyBuffer(g_device, staging, nullptr);
+        vkFreeMemory(g_device, staging_memory, nullptr);
+        return false;
+    }
+    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(command, &begin);
+    VkImageMemoryBarrier to_transfer{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    to_transfer.oldLayout = existing ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                                     : VK_IMAGE_LAYOUT_UNDEFINED;
+    to_transfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    to_transfer.srcAccessMask = existing ? VK_ACCESS_SHADER_READ_BIT : 0u;
+    to_transfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    to_transfer.image = texture.image;
+    to_transfer.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    to_transfer.subresourceRange.levelCount = texture.mip_count;
+    to_transfer.subresourceRange.layerCount = 1u;
+    vkCmdPipelineBarrier(
+        command,
+        existing ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, 0u, 0u, nullptr, 0u, nullptr, 1u, &to_transfer);
+    vkCmdCopyBufferToImage(command, staging, texture.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           static_cast<uint32_t>(regions.size()), regions.data());
+    VkImageMemoryBarrier to_shader = to_transfer;
+    to_shader.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    to_shader.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    to_shader.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    to_shader.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0u, 0u, nullptr,
+                         0u, nullptr, 1u, &to_shader);
+    vkEndCommandBuffer(command);
+    VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submit.commandBufferCount = 1u;
+    submit.pCommandBuffers = &command;
+    const bool submitted =
+        vkQueueSubmit(g_graphics_queue, 1u, &submit, VK_NULL_HANDLE) == VK_SUCCESS;
+    if (submitted) {
+        vkQueueWaitIdle(g_graphics_queue);
+    }
+    vkFreeCommandBuffers(g_device, g_command_pool, 1u, &command);
+    vkDestroyBuffer(g_device, staging, nullptr);
+    vkFreeMemory(g_device, staging_memory, nullptr);
+    if (!submitted) {
+        return false;
+    }
+
+    if (!existing) {
+        VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        view.image = texture.image;
+        view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view.format = format;
+        view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        view.subresourceRange.levelCount = texture.mip_count;
+        view.subresourceRange.layerCount = 1u;
+        if (vkCreateImageView(g_device, &view, nullptr, &texture.view) != VK_SUCCESS) {
+            destroy_gpu_image(texture);
+            return false;
+        }
+        const bool nearest = filter == PVR_FILTER_NEAREST;
+        VkSamplerCreateInfo sampler{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        sampler.magFilter = nearest ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+        sampler.minFilter = nearest ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+        sampler.mipmapMode = filter == PVR_FILTER_TRILINEAR1 ||
+                              filter == PVR_FILTER_TRILINEAR2
+            ? VK_SAMPLER_MIPMAP_MODE_LINEAR
+            : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler.maxLod = static_cast<float>(texture.mip_count);
+        if (vkCreateSampler(g_device, &sampler, nullptr, &texture.sampler) != VK_SUCCESS) {
+            destroy_gpu_image(texture);
+            return false;
+        }
+    }
+    return true;
+}
+
+pc_endjinn_pvr::DecodedMip solid_mip(uint32_t rgba)
+{
+    pc_endjinn_pvr::DecodedMip mip{1u, 1u, std::vector<uint8_t>(4u)};
+    std::memcpy(mip.pixels.data(), &rgba, 4u);
+    return mip;
+}
+
+void write_texture_descriptor(const GpuTexture &texture)
+{
+    const GpuImage &color = texture.indexed ? g_white_texture : texture.image;
+    const GpuImage &index = texture.indexed ? texture.image : g_default_index_texture;
+    VkDescriptorImageInfo images[3] = {
+        {color.sampler, color.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+        {index.sampler, index.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+        {g_palette_texture.sampler, g_palette_texture.view,
+         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}};
+    VkWriteDescriptorSet writes[3]{};
+    for (uint32_t i = 0u; i < 3u; i++) {
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = texture.descriptor;
+        writes[i].dstBinding = i;
+        writes[i].descriptorCount = 1u;
+        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[i].pImageInfo = &images[i];
+    }
+    vkUpdateDescriptorSets(g_device, 3u, writes, 0u, nullptr);
+}
+
+bool allocate_texture_descriptor(GpuTexture &texture)
+{
+    VkDescriptorSetAllocateInfo alloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    alloc.descriptorPool = g_descriptor_pool;
+    alloc.descriptorSetCount = 1u;
+    alloc.pSetLayouts = &g_texture_set_layout;
+    if (vkAllocateDescriptorSets(g_device, &alloc, &texture.descriptor) != VK_SUCCESS) {
+        return false;
+    }
+    write_texture_descriptor(texture);
+    return true;
+}
+
+bool create_builtin_textures()
+{
+    const std::vector<pc_endjinn_pvr::DecodedMip> white = {solid_mip(0xffffffffu)};
+    pc_endjinn_pvr::DecodedMip index{1u, 1u, std::vector<uint8_t>(1u, 0u)};
+    const auto palette = pc_endjinn_pvr::palette_rgba();
+    pc_endjinn_pvr::DecodedMip palette_mip{
+        1024u, 1u, std::vector<uint8_t>(palette.size() * sizeof(uint32_t))};
+    std::memcpy(palette_mip.pixels.data(), palette.data(), palette_mip.pixels.size());
+    g_uploaded_palette_revision = pc_endjinn_pvr::palette_revision();
+    const bool uploaded =
+           upload_gpu_image(g_white_texture, VK_FORMAT_R8G8B8A8_UNORM, white,
+                            PVR_FILTER_NEAREST) &&
+           upload_gpu_image(g_default_index_texture, VK_FORMAT_R8_UINT, {index},
+                            PVR_FILTER_NEAREST) &&
+           upload_gpu_image(g_palette_texture, VK_FORMAT_R8G8B8A8_UNORM,
+                            {palette_mip}, PVR_FILTER_NEAREST);
+    if (!uploaded) {
+        return false;
+    }
+    GpuTexture untextured{};
+    untextured.image = g_white_texture;
+    if (!allocate_texture_descriptor(untextured)) {
+        return false;
+    }
+    g_default_texture_descriptor = untextured.descriptor;
+    return true;
+}
+
+bool update_palette_texture()
+{
+    const uint64_t revision = pc_endjinn_pvr::palette_revision();
+    if (revision == g_uploaded_palette_revision) {
+        return true;
+    }
+    const auto palette = pc_endjinn_pvr::palette_rgba();
+    pc_endjinn_pvr::DecodedMip mip{
+        1024u, 1u, std::vector<uint8_t>(palette.size() * sizeof(uint32_t))};
+    std::memcpy(mip.pixels.data(), palette.data(), mip.pixels.size());
+    if (!upload_gpu_image(g_palette_texture, VK_FORMAT_R8G8B8A8_UNORM, {mip},
+                          PVR_FILTER_NEAREST)) {
+        return false;
+    }
+    g_uploaded_palette_revision = revision;
+    return true;
+}
+
+GpuTexture *gpu_texture_for(const DrawBatch &batch)
+{
+    if (!batch.textured) {
+        return nullptr;
+    }
+    auto found = std::find_if(
+        g_texture_cache.begin(), g_texture_cache.end(),
+        [&](const GpuTexture &texture) {
+            return texture.source == batch.texture &&
+                   texture.source_format == batch.texture_format &&
+                   texture.width == batch.texture_width &&
+                   texture.height == batch.texture_height &&
+                   texture.filter == batch.texture_filter;
+        });
+    const uint64_t revision = pc_endjinn_pvr::texture_revision(batch.texture);
+    if (found != g_texture_cache.end() && found->revision == revision) {
+        return &*found;
+    }
+
+    QueuedPrimitive primitive{};
+    primitive.textured = true;
+    primitive.texture = batch.texture;
+    primitive.texture_format = batch.texture_format;
+    primitive.texture_width = batch.texture_width;
+    primitive.texture_height = batch.texture_height;
+    primitive.texture_filter = batch.texture_filter;
+    pc_endjinn_pvr::DecodedTexture decoded;
+    if (!pc_endjinn_pvr::decode_texture(primitive, decoded)) {
+        return nullptr;
+    }
+    if (found == g_texture_cache.end()) {
+        g_texture_cache.push_back({});
+        found = g_texture_cache.end() - 1;
+        found->source = batch.texture;
+        found->source_format = batch.texture_format;
+        found->width = batch.texture_width;
+        found->height = batch.texture_height;
+        found->filter = batch.texture_filter;
+    } else {
+        destroy_gpu_image(found->image);
+    }
+    found->indexed = decoded.indexed;
+    found->palette_base = decoded.palette_base;
+    found->revision = revision;
+    const VkFormat format = decoded.indexed ? VK_FORMAT_R8_UINT
+                                            : VK_FORMAT_R8G8B8A8_UNORM;
+    const pvr_filter_mode_t upload_filter =
+        decoded.indexed ? PVR_FILTER_NEAREST : batch.texture_filter;
+    if (!upload_gpu_image(found->image, format, decoded.mips, upload_filter)) {
+        return nullptr;
+    }
+    if (found->descriptor == VK_NULL_HANDLE) {
+        if (!allocate_texture_descriptor(*found)) {
+            return nullptr;
+        }
+    } else {
+        write_texture_descriptor(*found);
+    }
+    return &*found;
+}
+
 void destroy_frame_resources()
 {
+    destroy_texture_resources();
     if (g_vertex_buffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(g_device, g_vertex_buffer, nullptr);
         g_vertex_buffer = VK_NULL_HANDLE;
@@ -301,6 +725,10 @@ void destroy_frame_resources()
     if (g_pipeline_layout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(g_device, g_pipeline_layout, nullptr);
         g_pipeline_layout = VK_NULL_HANDLE;
+    }
+    if (g_texture_set_layout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(g_device, g_texture_set_layout, nullptr);
+        g_texture_set_layout = VK_NULL_HANDLE;
     }
     for (VkFramebuffer framebuffer : g_framebuffers) {
         vkDestroyFramebuffer(g_device, framebuffer, nullptr);
@@ -552,14 +980,15 @@ bool create_render_pipeline()
     binding.binding = 0u;
     binding.stride = sizeof(PcVertex);
     binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    VkVertexInputAttributeDescription attrs[2]{};
+    VkVertexInputAttributeDescription attrs[3]{};
     attrs[0] = {0u, 0u, VK_FORMAT_R32G32B32_SFLOAT, offsetof(PcVertex, position)};
     attrs[1] = {1u, 0u, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(PcVertex, color)};
+    attrs[2] = {2u, 0u, VK_FORMAT_R32G32_SFLOAT, offsetof(PcVertex, uv)};
     VkPipelineVertexInputStateCreateInfo vertex_input{};
     vertex_input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_input.vertexBindingDescriptionCount = 1u;
     vertex_input.pVertexBindingDescriptions = &binding;
-    vertex_input.vertexAttributeDescriptionCount = 2u;
+    vertex_input.vertexAttributeDescriptionCount = 3u;
     vertex_input.pVertexAttributeDescriptions = attrs;
     VkPipelineInputAssemblyStateCreateInfo assembly{};
     assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -600,8 +1029,41 @@ bool create_render_pipeline()
     blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     blend.attachmentCount = 1u;
     blend.pAttachments = &blend_att;
+    VkDescriptorSetLayoutBinding texture_bindings[3]{};
+    for (uint32_t i = 0u; i < 3u; i++) {
+        texture_bindings[i].binding = i;
+        texture_bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        texture_bindings[i].descriptorCount = 1u;
+        texture_bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+    VkDescriptorSetLayoutCreateInfo set_layout{};
+    set_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    set_layout.bindingCount = 3u;
+    set_layout.pBindings = texture_bindings;
+    if (vkCreateDescriptorSetLayout(g_device, &set_layout, nullptr,
+                                    &g_texture_set_layout) != VK_SUCCESS) {
+        return false;
+    }
+    VkDescriptorPoolSize pool_size{};
+    pool_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    pool_size.descriptorCount = 3072u;
+    VkDescriptorPoolCreateInfo pool{};
+    pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool.maxSets = 1024u;
+    pool.poolSizeCount = 1u;
+    pool.pPoolSizes = &pool_size;
+    if (vkCreateDescriptorPool(g_device, &pool, nullptr, &g_descriptor_pool) != VK_SUCCESS) {
+        return false;
+    }
+    VkPushConstantRange push{};
+    push.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    push.size = sizeof(TexturePush);
     VkPipelineLayoutCreateInfo layout{};
     layout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout.setLayoutCount = 1u;
+    layout.pSetLayouts = &g_texture_set_layout;
+    layout.pushConstantRangeCount = 1u;
+    layout.pPushConstantRanges = &push;
     if (vkCreatePipelineLayout(g_device, &layout, nullptr, &g_pipeline_layout) != VK_SUCCESS) {
         return false;
     }
@@ -667,9 +1129,11 @@ bool create_draw_resources()
     VkSemaphoreCreateInfo sem{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     VkFenceCreateInfo fence{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     fence.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-    return vkCreateSemaphore(g_device, &sem, nullptr, &g_image_available) == VK_SUCCESS &&
+    const bool sync_created =
+        vkCreateSemaphore(g_device, &sem, nullptr, &g_image_available) == VK_SUCCESS &&
         vkCreateSemaphore(g_device, &sem, nullptr, &g_render_finished) == VK_SUCCESS &&
         vkCreateFence(g_device, &fence, nullptr, &g_in_flight) == VK_SUCCESS;
+    return sync_created && create_builtin_textures();
 }
 
 bool ensure_vertex_buffer(size_t vertex_count)
@@ -709,9 +1173,9 @@ bool ensure_vertex_buffer(size_t vertex_count)
     return true;
 }
 
-PcVertex make_vertex(float x, float y, float z, uint32_t argb)
+PcVertex make_vertex(float x, float y, float z, uint32_t argb, float u, float v)
 {
-    const float half_w = (float)g_vid_mode.width;
+    const float half_w = (float)g_vid_mode.width * (g_fsaa_enabled ? 1.0f : 0.5f);
     const float half_h = (float)g_vid_mode.height * 0.5f;
     const float a = (float)((argb >> 24) & 0xffu) / 255.0f;
     const float r = (float)((argb >> 16) & 0xffu) / 255.0f;
@@ -725,13 +1189,16 @@ PcVertex make_vertex(float x, float y, float z, uint32_t argb)
     vertex.color[1] = g;
     vertex.color[2] = b;
     vertex.color[3] = a;
+    vertex.uv[0] = u;
+    vertex.uv[1] = v;
     return vertex;
 }
 
 void emit_primitive(std::vector<PcVertex> &out, const QueuedPrimitive &p)
 {
     const auto emit = [&](uint32_t i) {
-        out.push_back(make_vertex(p.x[i], p.y[i], p.z[i], p.argb));
+        out.push_back(make_vertex(p.x[i], p.y[i], p.z[i], p.argb,
+                                  p.u[i], p.v[i]));
     };
     if (p.count == 3u) {
         emit(0u); emit(1u); emit(2u);
@@ -756,7 +1223,7 @@ FrameDrawData build_frame_draw_data()
     FrameDrawData frame;
     frame.vertices.reserve(queued.size() * 6u);
 
-    const auto append_list = [&](pvr_list_t list, DrawRange &range, bool sort_back_to_front) {
+    const auto append_list = [&](pvr_list_t list, bool sort_back_to_front) {
         std::vector<const QueuedPrimitive *> primitives;
         primitives.reserve(queued.size());
         for (const QueuedPrimitive &primitive : queued) {
@@ -773,16 +1240,41 @@ FrameDrawData build_frame_draw_data()
                     return primitive_average_z(*a) < primitive_average_z(*b);
                 });
         }
-        range.first_vertex = static_cast<uint32_t>(frame.vertices.size());
         for (const QueuedPrimitive *primitive : primitives) {
+            const bool same_batch = !frame.batches.empty() &&
+                frame.batches.back().list == list &&
+                frame.batches.back().textured == primitive->textured &&
+                frame.batches.back().texture == primitive->texture &&
+                frame.batches.back().texture_format == primitive->texture_format &&
+                frame.batches.back().texture_width == primitive->texture_width &&
+                frame.batches.back().texture_height == primitive->texture_height &&
+                frame.batches.back().texture_filter == primitive->texture_filter;
+            if (!same_batch) {
+                DrawBatch batch{};
+                batch.list = list;
+                batch.first_vertex = static_cast<uint32_t>(frame.vertices.size());
+                batch.textured = primitive->textured;
+                batch.texture = primitive->texture;
+                batch.texture_format = primitive->texture_format;
+                batch.texture_width = primitive->texture_width;
+                batch.texture_height = primitive->texture_height;
+                batch.texture_filter = primitive->texture_filter;
+                const uint32_t pixel_format = (primitive->texture_format >> 27u) & 7u;
+                batch.palette_base = pixel_format == PVR_PIXEL_MODE_PAL_4BPP
+                    ? ((primitive->texture_format >> 21u) & 0x3fu) * 16u
+                    : ((primitive->texture_format >> 25u) & 0x03u) * 256u;
+                frame.batches.push_back(batch);
+            }
+            const uint32_t before = static_cast<uint32_t>(frame.vertices.size());
             emit_primitive(frame.vertices, *primitive);
+            frame.batches.back().vertex_count +=
+                static_cast<uint32_t>(frame.vertices.size()) - before;
         }
-        range.vertex_count = static_cast<uint32_t>(frame.vertices.size()) - range.first_vertex;
     };
 
-    append_list(PVR_LIST_OP_POLY, frame.opaque, false);
-    append_list(PVR_LIST_PT_POLY, frame.punch_through, false);
-    append_list(PVR_LIST_TR_POLY, frame.translucent, g_translucent_autosort);
+    append_list(PVR_LIST_OP_POLY, false);
+    append_list(PVR_LIST_PT_POLY, false);
+    append_list(PVR_LIST_TR_POLY, g_translucent_autosort);
     return frame;
 }
 
@@ -794,6 +1286,15 @@ bool draw_frame(const FrameDrawData &frame)
         g_translucent_pipeline == VK_NULL_HANDLE || g_command_buffers.empty()) {
         set_window_title("pc-enDjinn - draw unavailable");
         return false;
+    }
+    if (!update_palette_texture()) {
+        set_window_title("pc-enDjinn - palette upload failed");
+        return false;
+    }
+    for (const DrawBatch &batch : frame.batches) {
+        if (batch.textured && gpu_texture_for(batch) == nullptr) {
+            std::fprintf(stderr, "pc-enDjinn: texture decode/upload failed\n");
+        }
     }
     vkWaitForFences(g_device, 1u, &g_in_flight, VK_TRUE, UINT64_MAX);
     vkResetFences(g_device, 1u, &g_in_flight);
@@ -861,16 +1362,35 @@ bool draw_frame(const FrameDrawData &frame)
     if (!frame.vertices.empty()) {
         VkDeviceSize offset = 0u;
         vkCmdBindVertexBuffers(cmd, 0u, 1u, &g_vertex_buffer, &offset);
-        const auto draw_range = [&](VkPipeline pipeline, const DrawRange &range) {
-            if (range.vertex_count == 0u) {
-                return;
+        for (const DrawBatch &batch : frame.batches) {
+            if (batch.vertex_count == 0u) {
+                continue;
             }
+            VkPipeline pipeline = g_opaque_pipeline;
+            if (batch.list == PVR_LIST_PT_POLY) {
+                pipeline = g_punch_through_pipeline;
+            } else if (batch.list == PVR_LIST_TR_POLY) {
+                pipeline = g_translucent_pipeline;
+            }
+            GpuTexture *texture = gpu_texture_for(batch);
+            const VkDescriptorSet descriptor = texture == nullptr
+                ? g_default_texture_descriptor
+                : texture->descriptor;
+            TexturePush push{};
+            push.indexed = texture != nullptr && texture->indexed ? 1u : 0u;
+            push.palette_base = texture != nullptr
+                ? texture->palette_base
+                : batch.palette_base;
+            push.filter_mode = static_cast<uint32_t>(batch.texture_filter);
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-            vkCmdDraw(cmd, range.vertex_count, 1u, range.first_vertex, 0u);
-        };
-        draw_range(g_opaque_pipeline, frame.opaque);
-        draw_range(g_punch_through_pipeline, frame.punch_through);
-        draw_range(g_translucent_pipeline, frame.translucent);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    g_pipeline_layout, 0u, 1u, &descriptor,
+                                    0u, nullptr);
+            vkCmdPushConstants(cmd, g_pipeline_layout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0u,
+                               sizeof(push), &push);
+            vkCmdDraw(cmd, batch.vertex_count, 1u, batch.first_vertex, 0u);
+        }
     }
     vkCmdEndRenderPass(cmd);
     if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
@@ -1020,8 +1540,8 @@ bool create_vulkan_context()
         "pc-enDjinn",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
-        g_vid_mode.width,
-        g_vid_mode.height,
+        g_last_window_width,
+        g_last_window_height,
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (g_window == nullptr) {
         std::fprintf(stderr, "pc-enDjinn: SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -1122,13 +1642,14 @@ void vid_set_mode(vid_display_mode_generic_t display_mode, vid_pixel_mode_t pixe
 {
     (void)display_mode;
     (void)pixel_mode;
-    g_vid_mode.width = 1280;
-    g_vid_mode.height = 960;
+    g_vid_mode.width = 640;
+    g_vid_mode.height = 480;
 }
 
 void pvr_init(const pvr_init_params_t *params)
 {
     g_translucent_autosort = params == nullptr || params->autosort_disabled == 0u;
+    g_fsaa_enabled = params != nullptr && params->fsaa_enabled != 0;
     if (!create_vulkan_context()) {
         std::fprintf(stderr, "pc-enDjinn: pvr_init failed\n");
     }
@@ -1197,7 +1718,9 @@ void pvr_scene_finish(void)
 void pvr_list_begin(pvr_list_t list) { pc_endjinn_pvr::list_begin(list); }
 void pvr_list_finish(void) {}
 void pvr_wait_render_done(void) {}
-void pvr_set_pal_format(pvr_palfmt_t mode) { (void)mode; }
+void pvr_set_pal_format(pvr_palfmt_t mode) {
+    pc_endjinn_pvr::palette_format(mode);
+}
 
 void pvr_fog_table_color(float a, float r, float g, float b)
 {

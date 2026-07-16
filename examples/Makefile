@@ -1,15 +1,15 @@
 all:
 	@for dir in */; do \
-		$(MAKE) -C $$dir; \
+		$(MAKE) -C $$dir || exit; \
 	done
 clean:
 	@for dir in */; do \
-		$(MAKE) -C $$dir clean; \
+		$(MAKE) -C $$dir clean || exit; \
 	done
 
 mrproper:
 	@for dir in */; do \
-		$(MAKE) -C $$dir mrproper; \
+		$(MAKE) -C $$dir mrproper || exit; \
 	done
 
 .PHONY: all clean mrproper

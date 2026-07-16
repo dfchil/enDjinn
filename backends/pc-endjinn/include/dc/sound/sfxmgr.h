@@ -6,12 +6,6 @@
 typedef int sfxhnd_t;
 #define SFXHND_INVALID (-1)
 
-typedef struct fDtHeader {
-  uint32_t format;
-  uint16_t width;
-  uint16_t height;
-} fDtHeader;
-
 PC_ENDJINN_BEGIN_DECLS
 sfxhnd_t snd_sfx_load_raw_buf(void *samples, size_t size,
                               uint32_t sample_rate, uint8_t bits,

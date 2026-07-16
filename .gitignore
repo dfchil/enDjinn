@@ -1,9 +1,11 @@
 # ---> C
 # Object files
 *.o
+*.d
 *.ko
 *.obj
 *.elf
+build/
 
 # Precompiled Headers
 *.gch

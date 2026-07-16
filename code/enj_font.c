@@ -40,7 +40,7 @@ int enj_font_from_blob(const uint8_t *blob, enj_font_header_t *out_font) {
   pvr_txr_load_ex(blob + sizeof(enj_font_header_t), pvr_data,
                   1 << out_font->log2width, 1 << out_font->log2height,
                   PVR_TXRLOAD_4BPP);
-  out_font->pvr_data = (uint32_t)pvr_data;
+  out_font->pvr_data = (uint32_t)(uintptr_t)pvr_data;
 
   return 1;
 }
@@ -61,9 +61,9 @@ int enj_font_from_file(const char *path, enj_font_header_t *out_font) {
       success = 0;
       break;
     }
-    size_t blobsize =
-        sizeof(enj_font_header_t) +
-        (((1 << (out_font->log2width) * (1 << out_font->log2height))) >> 1);
+    size_t texture_size = (((size_t)1 << out_font->log2width) *
+                           ((size_t)1 << out_font->log2height)) >> 1;
+    size_t blobsize = sizeof(enj_font_header_t) + texture_size;
     uint8_t *font_blob = memalign(32, blobsize);
     if (!font_blob) {
       printf("Error allocating memory for font blob from file %s\n", path);
@@ -108,7 +108,8 @@ int enj_font_PAL_TR_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
       &cxt, PVR_LIST_TR_POLY,
       PVR_TXRFMT_PAL4BPP |
           (palette_entry << (pal_fmt == PVR_PAL_ARGB8888 ? 25 : 21)),
-      1 << font->log2width, 1 << font->log2height, (pvr_ptr_t)font->pvr_data,
+      1 << font->log2width, 1 << font->log2height,
+      (pvr_ptr_t)(uintptr_t)font->pvr_data,
       PVR_FILTER_NEAREST);
   pvr_sprite_compile(hdr, &cxt);
   hdr->argb = front_color.raw;
@@ -218,7 +219,7 @@ int enj_font_render_glyph(char glyph, enj_font_header_t *font, int16_t x,
                           int16_t y) {
   if (glyph < ' ' || glyph > '~') {
     ENJ_DEBUG_PRINT("Glyph '%c' out of range for font\n", glyph);
-    return -1;
+    return 0;
   }
   int glyph_index = (uint32_t)glyph - '!';
   enj_glyph_offset_t glyph_start = font->glyph_endings[glyph_index];
@@ -249,12 +250,14 @@ int enj_font_string_width(const char *text, enj_font_header_t *font) {
   while (*text != '\0') {
     if (*text < ' ' || *text > '~') {
       ENJ_DEBUG_PRINT("Glyph '%c' out of range for font\n", *text);
+      text++;
+      output += enj_font_letter_spacing * enj_font_scale;
       continue;
     }
     int glyph_index = (uint32_t)(*text) - '!';
     if (*text == ' ' || !(font->glyph_endings[glyph_index].available)) {
       output += enj_font_space_width(font);
-    } else if (*text >= '!' && *text <= '~') {
+    } else {
       enj_glyph_offset_t glyph_start = font->glyph_endings[glyph_index];
       enj_glyph_offset_t glyph_end = font->glyph_endings[glyph_index + 1];
       int startx = glyph_start.x_min > glyph_end.x_min ? 0 : glyph_start.x_min;

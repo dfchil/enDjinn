@@ -2,6 +2,8 @@
 #define PC_ENDJINN_DC_PVR_H
 
 #include <stdalign.h>
+#include <stdint.h>
+#include <string.h>
 
 #include <dc/video.h>
 #include <pc_endjinn/types.h>
@@ -10,7 +12,9 @@ typedef void *pvr_ptr_t;
 
 typedef enum pvr_list {
   PVR_LIST_OP_POLY = 0,
+  PVR_LIST_OP_MOD = 1,
   PVR_LIST_TR_POLY = 2,
+  PVR_LIST_TR_MOD = 3,
   PVR_LIST_PT_POLY = 4,
 } pvr_list_t;
 typedef pvr_list_t pvr_list_type_t;
@@ -21,7 +25,24 @@ typedef enum pvr_palfmt {
   PVR_PAL_ARGB4444 = 2,
   PVR_PAL_ARGB8888 = 3,
 } pvr_palfmt_t;
-typedef vid_pixel_mode_t pvr_pixel_mode_t;
+
+typedef enum pvr_pixel_mode {
+  PVR_PIXEL_MODE_ARGB1555 = 0,
+  PVR_PIXEL_MODE_RGB565 = 1,
+  PVR_PIXEL_MODE_ARGB4444 = 2,
+  PVR_PIXEL_MODE_YUV422 = 3,
+  PVR_PIXEL_MODE_BUMP = 4,
+  PVR_PIXEL_MODE_PAL_4BPP = 5,
+  PVR_PIXEL_MODE_PAL_8BPP = 6,
+} pvr_pixel_mode_t;
+
+typedef enum pvr_filter_mode {
+  PVR_FILTER_NEAREST = 0,
+  PVR_FILTER_BILINEAR = 1,
+  PVR_FILTER_TRILINEAR1 = 2,
+  PVR_FILTER_TRILINEAR2 = 3,
+  PVR_FILTER_NONE = PVR_FILTER_NEAREST,
+} pvr_filter_mode_t;
 
 typedef struct pvr_init_params {
   int opb_sizes[5];
@@ -36,12 +57,25 @@ typedef struct pvr_init_params {
 typedef struct pvr_context_gen {
   int culling;
   int fog_type;
+  int specular;
 } pvr_context_gen_t;
+typedef struct pvr_context_txr {
+  int enable;
+  int format;
+  int width;
+  int height;
+  pvr_ptr_t base;
+  pvr_filter_mode_t filter;
+} pvr_context_txr_t;
 typedef struct pvr_sprite_cxt {
   pvr_context_gen_t gen;
+  pvr_list_t list_type;
+  pvr_context_txr_t txr;
 } pvr_sprite_cxt_t;
 typedef struct pvr_poly_cxt {
   pvr_context_gen_t gen;
+  pvr_list_t list_type;
+  pvr_context_txr_t txr;
 } pvr_poly_cxt_t;
 
 typedef struct {
@@ -54,12 +88,20 @@ typedef struct {
   uint32_t reserved[2];
 } pvr_sprite_hdr_t;
 typedef pvr_sprite_hdr_t pvr_poly_hdr_t;
+typedef pvr_poly_hdr_t pvr_poly_mod_hdr_t;
+typedef pvr_poly_hdr_t pvr_mod_hdr_t;
 
 typedef struct pvr_vertex {
   alignas(32) uint32_t flags;
   float x, y, z, u, v;
   uint32_t argb, oargb;
 } pvr_vertex_t;
+
+typedef struct pvr_vertex_pcm {
+  alignas(32) uint32_t flags;
+  float x, y, z;
+  uint32_t argb0, argb1, d1, d2;
+} pvr_vertex_pcm_t;
 
 typedef struct pvr_sprite_col {
   alignas(32) uint32_t flags;
@@ -74,15 +116,50 @@ typedef struct pvr_sprite_txr {
   uint32_t auv, buv, cuv;
 } pvr_sprite_txr_t;
 
-#define PVR_CULLING_CCW 0
+typedef struct pvr_modifier_vol {
+  alignas(32) uint32_t flags;
+  float ax, ay, az, bx, by, bz, cx, cy, cz;
+  uint32_t d1, d2, d3, d4, d5, d6;
+} pvr_modifier_vol_t;
+
+#define PVR_CULLING_CCW 2
 #define PVR_FOG_TABLE 0
+#define PVR_SPECULAR_ENABLE 1
 #define PVR_BINSIZE_0 0
 #define PVR_BINSIZE_8 8
 #define PVR_BINSIZE_16 16
 #define PVR_BINSIZE_32 32
 #define PVR_CMD_VERTEX 0xe0000000u
 #define PVR_CMD_VERTEX_EOL 0xf0000000u
-#define PVR_PACK_16BIT_UV(u, v) (0u)
+static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
+  union {
+    float f;
+    uint32_t i;
+  } up = {.f = u}, vp = {.f = v};
+  return (up.i & 0xffff0000u) | (vp.i >> 16u);
+}
+#define PVR_MODIFIER_INCLUDE_LAST_POLY 1
+
+#define PVR_TXRFMT_MIPMAP (1u << 31)
+#define PVR_TXRFMT_VQ_DISABLE (0u << 30)
+#define PVR_TXRFMT_VQ_ENABLE (1u << 30)
+#define PVR_TXRFMT_ARGB1555 (0u << 27)
+#define PVR_TXRFMT_RGB565 (1u << 27)
+#define PVR_TXRFMT_ARGB4444 (2u << 27)
+#define PVR_TXRFMT_YUV422 (3u << 27)
+#define PVR_TXRFMT_BUMP (4u << 27)
+#define PVR_TXRFMT_PAL4BPP (5u << 27)
+#define PVR_TXRFMT_PAL8BPP (6u << 27)
+#define PVR_TXRFMT_TWIDDLED (0u << 26)
+#define PVR_TXRFMT_NONTWIDDLED (1u << 26)
+#define PVR_TXRFMT_POW2_STRIDE (0u << 25)
+#define PVR_TXRFMT_X32_STRIDE (1u << 25)
+#define PVR_TXRFMT_8BPP_PAL(x) ((uint32_t)(x) << 25)
+#define PVR_TXRFMT_4BPP_PAL(x) ((uint32_t)(x) << 21)
+
+#define PVR_TXRLOAD_4BPP 0x01u
+#define PVR_TXRLOAD_8BPP 0x02u
+#define PVR_TXRLOAD_16BPP 0x03u
 
 PC_ENDJINN_BEGIN_DECLS
 void pvr_init(const pvr_init_params_t *params);
@@ -95,6 +172,12 @@ void pvr_list_begin(pvr_list_t list);
 void pvr_list_finish(void);
 void pvr_wait_render_done(void);
 void pvr_set_pal_format(pvr_palfmt_t mode);
+void pvr_set_pal_entry(uint32_t index, uint32_t value);
+void *pvr_mem_malloc(size_t size);
+void pvr_mem_free(pvr_ptr_t ptr);
+void pvr_txr_load(const void *src, pvr_ptr_t dst, size_t count);
+void pvr_txr_load_ex(const void *src, pvr_ptr_t dst, uint32_t width,
+                     uint32_t height, uint32_t flags);
 void pvr_fog_table_color(float a, float r, float g, float b);
 void pvr_fog_table_linear(float start, float end);
 void *pvr_dr_target(void);
@@ -103,27 +186,86 @@ PC_ENDJINN_END_DECLS
 
 static inline void pvr_sprite_cxt_col(pvr_sprite_cxt_t *cxt,
                                       pvr_list_t list) {
-  (void)list;
+  memset(cxt, 0, sizeof(*cxt));
+  cxt->list_type = list;
   cxt->gen.culling = PVR_CULLING_CCW;
   cxt->gen.fog_type = PVR_FOG_TABLE;
+  cxt->gen.specular = 0;
+}
+
+static inline void pvr_sprite_cxt_txr(pvr_sprite_cxt_t *cxt,
+                                      pvr_list_t list, int texture_format,
+                                      int width, int height, pvr_ptr_t texture,
+                                      pvr_filter_mode_t filter) {
+  pvr_sprite_cxt_col(cxt, list);
+  cxt->txr.enable = 1;
+  cxt->txr.format = texture_format;
+  cxt->txr.width = width;
+  cxt->txr.height = height;
+  cxt->txr.base = texture;
+  cxt->txr.filter = filter;
 }
 
 static inline void pvr_poly_cxt_col(pvr_poly_cxt_t *cxt, pvr_list_t list) {
-  (void)list;
+  memset(cxt, 0, sizeof(*cxt));
+  cxt->list_type = list;
   cxt->gen.culling = PVR_CULLING_CCW;
   cxt->gen.fog_type = PVR_FOG_TABLE;
+  cxt->gen.specular = 0;
+}
+
+static inline void pvr_poly_cxt_txr(pvr_poly_cxt_t *cxt, pvr_list_t list,
+                                    int texture_format, int width, int height,
+                                    pvr_ptr_t texture,
+                                    pvr_filter_mode_t filter) {
+  pvr_poly_cxt_col(cxt, list);
+  cxt->txr.enable = 1;
+  cxt->txr.format = texture_format;
+  cxt->txr.width = width;
+  cxt->txr.height = height;
+  cxt->txr.base = texture;
+  cxt->txr.filter = filter;
+}
+
+static inline void pvr_poly_cxt_col_mod(pvr_poly_cxt_t *cxt,
+                                        pvr_list_t list) {
+  pvr_poly_cxt_col(cxt, list);
 }
 
 static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
                                       const pvr_sprite_cxt_t *cxt) {
-  (void)cxt;
-  hdr->cmd = 0u;
+  memset(hdr, 0, sizeof(*hdr));
+  hdr->cmd = 0x80000000u;
+  hdr->mode1 = (uint32_t)cxt->list_type | (cxt->txr.enable ? 0x80000000u : 0u);
+  hdr->mode2 = (uint32_t)cxt->txr.format;
+  hdr->mode3 = (uint32_t)cxt->txr.width | ((uint32_t)cxt->txr.height << 16u);
   hdr->argb = 0xffffffffu;
+  hdr->oargb = (uint32_t)cxt->txr.filter;
+  const uintptr_t base = (uintptr_t)cxt->txr.base;
+  hdr->reserved[0] = (uint32_t)base;
+#if UINTPTR_MAX > UINT32_MAX
+  hdr->reserved[1] = (uint32_t)(base >> 32u);
+#endif
 }
 
 static inline void pvr_poly_compile(pvr_poly_hdr_t *hdr,
                                     const pvr_poly_cxt_t *cxt) {
-  (void)cxt;
+  pvr_sprite_cxt_t sprite = {.gen = cxt->gen,
+                             .list_type = cxt->list_type,
+                             .txr = cxt->txr};
+  pvr_sprite_compile(hdr, &sprite);
+}
+
+static inline void pvr_poly_mod_compile(pvr_poly_mod_hdr_t *hdr,
+                                        const pvr_poly_cxt_t *cxt) {
+  pvr_poly_compile(hdr, cxt);
+}
+
+static inline void pvr_mod_compile(pvr_mod_hdr_t *hdr, pvr_list_t list,
+                                   uint32_t mode, uint32_t culling) {
+  (void)list;
+  (void)mode;
+  (void)culling;
   hdr->cmd = 0u;
   hdr->argb = 0xffffffffu;
 }

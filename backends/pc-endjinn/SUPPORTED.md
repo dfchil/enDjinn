@@ -11,6 +11,7 @@ the selected backend owns SDL, Vulkan, and host input details.
 - Vulkan instance, MoltenVK portability, surface, device, and swapchain setup
 - Swapchain recreation after resize or out-of-date presentation
 - Color and inverse-Z depth attachments
+- 640x480 PVR coordinates (1280x480 with FSAA) scaled to the Vulkan viewport
 - `timer_ns_gettime64`, `vid_mode`, `vid_set_mode`, and `vid_border_color`
 - `pvr_init`, `pvr_shutdown`, `pvr_wait_ready`, and `pvr_wait_render_done`
 - `pvr_scene_begin` and `pvr_scene_finish` frame collection/presentation
@@ -33,10 +34,15 @@ the selected backend owns SDL, Vulkan, and host input details.
 - submission-order translucent drawing when PVR autosort is disabled
 - OP, PT, then TR Vulkan draw ordering
 - the current Dream Driving road-decal depth bias
+- textured sprites and polygons, including qfont and enDjinn font rendering
+- ARGB1555, RGB565, ARGB4444, YUV422, PAL4, and PAL8 texture decoding
+- linear and twiddled texture layouts, VQ decoding, and mip levels
+- live ARGB1555, RGB565, ARGB4444, and ARGB8888 palette updates
+- nearest and bilinear filtering, texture alpha blending, and punch-through
+- 32-bit VRAM-style texture handles matching KOS pointer storage
 
 This is a supported packet subset, not an arbitrary raw PVR command decoder.
-Compiled headers currently contribute their flat ARGB color; complete header
-render state is not decoded yet.
+Only the render state listed here is decoded from compiled headers.
 
 ## Implemented Input
 
@@ -57,7 +63,8 @@ that a Dreamcast controller would report.
 
 - `pvr_list_finish` is accepted; list identity is captured by
   `pvr_list_begin`
-- `pvr_set_pal_format` stores no active palette behavior
+- modifier-volume headers and packets are accepted for source compatibility,
+  but do not modify host rendering
 - `pvr_fog_table_color` and `pvr_fog_table_linear` do not affect Vulkan output
 - `enj_rumble_*` reports no rumble device
 - `enj_sound_*` performs no playback and returns `SFXHND_INVALID` where needed
@@ -67,8 +74,7 @@ that a Dreamcast controller would report.
 
 - complete PVR header state decoding for culling, depth modes, blend factors,
   fog, and material state
-- texture upload, texture formats, palettes, and textured sprites/polygons
-- qfont/text rendering
+- PVR bump-map lighting semantics
 - tile-accurate Dreamcast translucent sorting
 - multiple simultaneous game controllers and configurable controller mappings
 - VMU, rumble, and sound backends

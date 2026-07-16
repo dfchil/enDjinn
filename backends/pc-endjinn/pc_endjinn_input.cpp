@@ -203,11 +203,11 @@ void *maple_dev_status(maple_device_t *device)
     return connected != 0u ? &g_controller_state : nullptr;
 }
 
-void maple_attach_callback(uint32_t, maple_user_callback_t, void *)
+void maple_attach_callback(uint32_t, maple_attach_callback_t)
 {
 }
 
-void maple_detach_callback(uint32_t, maple_user_callback_t, void *)
+void maple_detach_callback(uint32_t, maple_detach_callback_t)
 {
 }
 
