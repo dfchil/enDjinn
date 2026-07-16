@@ -9,10 +9,17 @@ environment active, build one with:
 make -C examples/enj_hello
 ```
 
-The top-level `examples/Makefile` builds every example. All examples compile
-against pc-enDjinn with `ENJ_TARGET=pc-endjinn`; Dreamcast remains the primary
-target, and placeholder host shims mean textures, fonts, sound, rumble, and
-modifier volumes do not currently render or behave equivalently on PC.
+The top-level `examples/Makefile` builds every example. All examples also
+compile against pc-enDjinn:
+
+```sh
+make -C examples ENJ_TARGET=pc-endjinn
+```
+
+Textures, fonts, PCM sound effects, controllers, and screen-space modifier
+masks work on PC. Rumble and VMU LCD output remain no-ops; see the
+[pc-enDjinn support matrix](../backends/pc-endjinn/SUPPORTED.md) for the exact
+differences.
 
 ## enj_hello
 
@@ -52,8 +59,9 @@ between a main mode, an information mode, and short animation modes.
 ## enj_modifiers
 
 Uses raw PVR modifier-volume commands alongside enDjinn’s render-list loop and
-sh4zam vector types. pc-enDjinn accepts the API for source compatibility but
-does not emulate modifier-volume rendering.
+sh4zam vector types. pc-enDjinn renders include/exclude modifier masks through
+Vulkan stencil state, but does not yet emulate depth-aware closed 3D shadow
+volumes.
 
 ## enj_fonts
 

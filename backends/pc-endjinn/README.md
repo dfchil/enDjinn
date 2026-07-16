@@ -14,6 +14,46 @@ KOS-shaped platform surface used by enDjinn's examples, including textured and
 palettized rendering, and leaves unsupported systems explicitly listed in
 `SUPPORTED.md`.
 
+## Quick Start
+
+Install a C/C++ compiler, SDL2, Vulkan, and Qt Shader Tools (`qsb`). On macOS,
+the usual Homebrew dependencies are:
+
+```sh
+brew install sdl2 molten-vk qt
+```
+
+Create an enDjinn application in the normal way, with a `code/` directory and
+a `Makefile` symlink to `base_link.mk`:
+
+```sh
+mkdir -p my-game/code
+cd my-game
+ln -s /path/to/enDjinn/base_link.mk Makefile
+```
+
+Add the application source and any project overrides in `local.cfg.mk`, then
+build and run:
+
+```sh
+make ENJ_TARGET=pc-endjinn
+./build/pc-endjinn/my-game
+```
+
+Run the executable from the application directory so it can find the shaders
+under `build/pc-endjinn/`. If `ENJ_BASENAME` is overridden, use that name
+instead of `my-game`. Clean the host build with:
+
+```sh
+make ENJ_TARGET=pc-endjinn clean
+```
+
+An ordinary PC build does not require an active KOS environment. Asset
+generation still requires the corresponding Dreamcast conversion tools.
+Projects with host-side library dependencies can add their include paths to
+`ENJ_HOST_CPPFLAGS` and link objects or static libraries through
+`ENJ_HOST_EXTRA_OBJS` in `local.cfg.mk`.
+
 ## Backend Files
 
 - `backend.mk`: Make variables for SDL2, Vulkan/MoltenVK, compile flags, link
@@ -29,8 +69,9 @@ palettized rendering, and leaves unsupported systems explicitly listed in
   renderer-neutral primitive queues.
 - `pc_endjinn_vulkan.cpp`: SDL window management, Vulkan resources, pipelines,
   frame construction, and presentation.
-- `pc_endjinn_input.cpp`: SDL implementations of Maple, sound, rumble, and
-  other currently required KOS symbols.
+- `pc_endjinn_input.cpp`: SDL implementations of Maple controllers and PCM
+  sound, plus the current rumble and VMU LCD stubs.
+- `pc_endjinn_fs.cpp`: host filesystem and `/vmu/` save-path handling.
 - `SUPPORTED.md`: Coverage matrix for implemented, stubbed, and unsupported
   KOS/enDjinn behavior.
 
@@ -50,11 +91,9 @@ Dreamcast builds resolve normal KOS includes to the real toolchain headers.
 PC builds prepend `backends/pc-endjinn/include`, resolving those same includes
 to the compatibility declarations supplied by this backend.
 
-For a generic host build, symlink the repository’s
-[`base_link.mk`](../../base_link.mk) into the application directory and build
-with `ENJ_TARGET=pc-endjinn`. The host branch builds only the
-same shared enDjinn C sources as the Dreamcast branch, plus the pc-enDjinn
-platform backend. Unsupported host behavior remains explicit no-op shim code.
+The host branch builds the same shared enDjinn C sources as the Dreamcast
+branch, plus the pc-enDjinn platform backend. Unsupported host behavior remains
+explicit no-op shim code.
 
 The examples compile with the same command, for example:
 
@@ -77,6 +116,23 @@ SDL2 and the native Vulkan loader are discovered with `pkg-config`. `QSB`,
 Typical Debian/Ubuntu package requirements are SDL2 development headers, the
 Vulkan loader and headers, Vulkan drivers for the installed GPU, and Qt's
 Shader Tools package providing `qsb`.
+
+On macOS, `HOMEBREW_PREFIX` defaults to `/opt/homebrew`; override it for
+another Homebrew location. `QSB`, `SDL2_CONFIG`, `PKG_CONFIG`, `SDL_CFLAGS`,
+`SDL_LIBS`, `VULKAN_CFLAGS`, and `VULKAN_LIBS` can also be supplied to `make`.
+
+## Runtime Controls
+
+- X/C/S/D: Dreamcast A/B/X/Y
+- F/V: left/right trigger
+- I/J/K/L: analogue stick
+- Arrow keys: D-pad
+- Enter: Start
+- Escape: quit
+- F11 or Alt+Enter: toggle fullscreen
+
+Up to four SDL GameControllers are assigned to Maple ports A-D in connection
+order. They use SDL's standard buttons, D-pad, left stick, and triggers.
 
 ## KOS ABI Contract
 

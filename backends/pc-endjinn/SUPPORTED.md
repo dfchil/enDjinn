@@ -12,8 +12,8 @@ the selected backend owns SDL, Vulkan, and host input details.
 - Swapchain recreation after resize or out-of-date presentation
 - Color and inverse-Z depth attachments
 - 640x480 PVR coordinates (1280x480 with FSAA) scaled to the Vulkan viewport
-- `timer_ns_gettime64`, `vid_mode`, `vid_set_mode`, and `vid_border_color`
-- `pvr_init`, `pvr_shutdown`, `pvr_wait_ready`, and `pvr_wait_render_done`
+- `timer_ns_gettime64`, `vid_mode`, and fixed 640x480 `vid_set_mode`
+- `pvr_init` and `pvr_shutdown`
 - `pvr_scene_begin` and `pvr_scene_finish` frame collection/presentation
 - `pvr_set_bg_color` as the Vulkan color clear value
 - host `enj_state_startup()` and `enj_state_run()`
@@ -67,7 +67,6 @@ Only the render state listed here is decoded from compiled headers.
   reconnect handling
 - Flycast-compatible keyboard bindings: X/C/S/D for A/B/X/Y, F/V for L/R,
   I/J/K/L for the analogue stick, arrows for D-pad, and Enter for Start
-- controller D-pad camera selection, X recenter, Y course switch, and Start
 
 Host keyboard shortcuts are translated into the same `cont_state_t` buttons
 that a Dreamcast controller would report.
@@ -76,6 +75,7 @@ that a Dreamcast controller would report.
 
 - `pvr_list_finish` is accepted; list identity is captured by
   `pvr_list_begin`
+- `pvr_wait_ready` and `pvr_wait_render_done` are accepted no-ops
 - `pvr_fog_table_color` and `pvr_fog_table_linear` do not affect Vulkan output
 - `enj_rumble_*` reports no rumble device
 - `vid_border_color` has no visible host equivalent

@@ -128,12 +128,23 @@ SDL2 and Vulkan/MoltenVK. It recompiles the same application against
 KOS-shaped compatibility headers and links PC implementations of the required
 KOS symbols; it is not a binary-only replacement for an already compiled
 Dreamcast executable. This is a development backend, not a full Dreamcast
-emulator: it currently supports selected flat-colour geometry and input, but
-also renders the texture and palette formats used by the examples, including
-qfont/text output. Sound, rumble, and VMU behavior remain unimplemented. See
-the [PC backend README](./backends/pc-endjinn/README.md)
-and its [support matrix](./backends/pc-endjinn/SUPPORTED.md) for the exact
-coverage and host dependencies.
+emulator.
+
+From an enDjinn application directory:
+
+```sh
+make ENJ_TARGET=pc-endjinn
+./build/pc-endjinn/my-game
+```
+
+The executable name defaults to the application directory name.
+
+The backend supports the geometry, texture and palette formats used by the
+examples, PCM sound effects, keyboard and SDL controllers, host save-file
+storage, and screen-space modifier masks. Rumble, VMU LCD output, and some PVR
+state remain unsupported. See the
+[PC backend README](./backends/pc-endjinn/README.md) for setup and usage and
+the [support matrix](./backends/pc-endjinn/SUPPORTED.md) for exact coverage.
 
 ## Profiling
 
