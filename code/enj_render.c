@@ -1,4 +1,7 @@
 #include <dc/video.h>
+#ifdef ENJ_DBG_PRINT
+#include <dc/perf_monitor.h>
+#endif
 #include <enDjinn/enj_enDjinn.h>
 #include <malloc.h>
 
@@ -36,7 +39,7 @@ void enj_render_post_callback_set(void (*post_call)(void *), void *data) {
 
 void enj_render_list_add(pvr_list_t renderlist, void (*renderer)(void *data),
                          void *data) {
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
   if (renderlist > PVR_LIST_PT_POLY || renderlist < PVR_LIST_OP_POLY) {
     ENJ_DEBUG_PRINT("Error: renderlist out of bounds\n");
     return;
@@ -96,7 +99,7 @@ void enj_render_next_frame(enj_mode_t *current_updater) {
   vid_border_color(0, 0, 255);
 #endif
 
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
   perf_monitor();
 #endif
 
@@ -147,6 +150,5 @@ void enj_render_print_list_sizes(void) {
   }
   ENJ_DEBUG_PRINT("Total bytes used in renderlists: %zu\n\n", total_bytes);
   ENJ_DEBUG_PRINT(
-      "***************************************************************\n",
-      total_bytes);
+      "***************************************************************\n");
 }

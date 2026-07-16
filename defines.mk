@@ -25,8 +25,12 @@ else
 	DEFINES += -DENJ_CBASEPATH="\"/cd/${ENJ_BASENAME}/\""
 endif
 	
-ifdef ENJ_DEBUG
-	DEFINES += -DENJ_DEBUG
+ifdef ENJ_DBG_PRINT
+	DEFINES += -DENJ_DBG_PRINT
+endif
+
+ifdef ENJ_DBG_GDB
+	DEFINES += -DENJ_DBG_GDB
 endif
 
 ifdef ENJ_FSAA

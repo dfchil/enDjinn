@@ -31,7 +31,7 @@
 #define ENJ_XSCALE (int)1
 #endif
 
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
 #define ENJ_DEBUG_PRINT(...)                                                       \
 do {                                                                         \
   fprintf(stdout, __VA_ARGS__);                                              \

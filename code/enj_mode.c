@@ -31,7 +31,7 @@ enj_mode_t* enj_mode_get_by_index(int index) {
 }
 
 enj_mode_t* enj_mode_pop(void) {
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
     if (current_mode_index <= 0) {
         ENJ_DEBUG_PRINT("Mode stack underflow\n");
         return NULL;
@@ -49,7 +49,7 @@ enj_mode_t* enj_mode_pop(void) {
 }
 
 void enj_mode_goto_index(int target) {
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
     if (target > current_mode_index) {
         ENJ_DEBUG_PRINT("Mode stack index out of bounds\n");
         return;
