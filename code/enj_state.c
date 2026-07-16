@@ -9,14 +9,14 @@
 #include <enDjinn/enj_qfont.h>
 #endif
 
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_GDB
 #include <arch/gdb.h>
 #endif
 
 #ifdef ENJ_DCPROF
 #include "../../enDjinn/profilers/dcprof/profiler.h"
 #endif
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
 #include <dc/perf_monitor.h>
 #endif
 
@@ -49,8 +49,10 @@ static inline void _vmu_splash_screen(void) {
 
 
 void enj_state_init_defaults(void) {
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_GDB
   gdb_init();
+#endif
+#ifdef ENJ_DBG_PRINT
   ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
 #endif
 
@@ -125,7 +127,7 @@ int enj_state_startup() {
                    state->video.bg_color.g / 255.0f,
                    state->video.bg_color.b / 255.0f);
 
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
   perf_monitor_init(PMCR_OPERAND_CACHE_READ_MISS_MODE,
                     PMCR_INSTRUCTION_CACHE_MISS_MODE);
 #endif
@@ -195,11 +197,11 @@ void enj_state_run(void) {
               (mode_index != state->soft_reset_target_index)) {
             enj_mode_cut_to_soft_reset_target();
           } else {
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
             enj_mode_t *from_mode = enj_mode_get();
 #endif
             enj_mode_pop();
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
             enj_mode_t *nxt_mode = enj_mode_get();
             ENJ_DEBUG_PRINT("Exiting from mode '%s':%d to mode '%s:%d'\n",
                             from_mode->name, mode_index, nxt_mode->name,
@@ -221,7 +223,7 @@ void enj_state_run(void) {
 #endif
   pvr_shutdown();
 
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
   perf_monitor_print(stdout);
 
   FILE *stats_out = fopen(ENJ_CBASEPATH "/pstats.txt", "a");
