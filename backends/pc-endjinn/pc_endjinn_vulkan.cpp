@@ -38,12 +38,16 @@ std::vector<VkImageView> g_swapchain_views;
 VkImage g_depth_image = VK_NULL_HANDLE;
 VkDeviceMemory g_depth_memory = VK_NULL_HANDLE;
 VkImageView g_depth_view = VK_NULL_HANDLE;
+VkFormat g_depth_format = VK_FORMAT_UNDEFINED;
 VkRenderPass g_render_pass = VK_NULL_HANDLE;
 std::vector<VkFramebuffer> g_framebuffers;
 VkPipelineLayout g_pipeline_layout = VK_NULL_HANDLE;
 VkPipeline g_opaque_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_pipeline = VK_NULL_HANDLE;
 VkPipeline g_translucent_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_volume_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_exclude_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_pipeline = VK_NULL_HANDLE;
 VkDescriptorSetLayout g_texture_set_layout = VK_NULL_HANDLE;
 VkDescriptorPool g_descriptor_pool = VK_NULL_HANDLE;
 VkCommandPool g_command_pool = VK_NULL_HANDLE;
@@ -87,6 +91,9 @@ struct DrawBatch {
     uint32_t texture_height;
     pvr_filter_mode_t texture_filter;
     uint32_t palette_base;
+    bool modifier;
+    bool modifier_volume;
+    uint32_t modifier_mode;
 };
 
 struct FrameDrawData {
@@ -722,6 +729,18 @@ void destroy_frame_resources()
         vkDestroyPipeline(g_device, g_translucent_pipeline, nullptr);
         g_translucent_pipeline = VK_NULL_HANDLE;
     }
+    if (g_modifier_volume_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_modifier_volume_pipeline, nullptr);
+        g_modifier_volume_pipeline = VK_NULL_HANDLE;
+    }
+    if (g_modifier_exclude_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_modifier_exclude_pipeline, nullptr);
+        g_modifier_exclude_pipeline = VK_NULL_HANDLE;
+    }
+    if (g_modifier_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_modifier_pipeline, nullptr);
+        g_modifier_pipeline = VK_NULL_HANDLE;
+    }
     if (g_pipeline_layout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(g_device, g_pipeline_layout, nullptr);
         g_pipeline_layout = VK_NULL_HANDLE;
@@ -848,13 +867,26 @@ bool recreate_draw_resources()
 
 bool create_depth_resources()
 {
+    constexpr VkFormat candidates[] = {
+        VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
+    for (VkFormat candidate : candidates) {
+        VkFormatProperties properties{};
+        vkGetPhysicalDeviceFormatProperties(g_physical_device, candidate, &properties);
+        if (properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+            g_depth_format = candidate;
+            break;
+        }
+    }
+    if (g_depth_format == VK_FORMAT_UNDEFINED) {
+        return false;
+    }
     VkImageCreateInfo image{};
     image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image.imageType = VK_IMAGE_TYPE_2D;
     image.extent = {g_extent.width, g_extent.height, 1u};
     image.mipLevels = 1u;
     image.arrayLayers = 1u;
-    image.format = VK_FORMAT_D32_SFLOAT;
+    image.format = g_depth_format;
     image.tiling = VK_IMAGE_TILING_OPTIMAL;
     image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     image.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
@@ -883,8 +915,8 @@ bool create_depth_resources()
     view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     view.image = g_depth_image;
     view.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    view.format = VK_FORMAT_D32_SFLOAT;
-    view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    view.format = g_depth_format;
+    view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
     view.subresourceRange.levelCount = 1u;
     view.subresourceRange.layerCount = 1u;
     return vkCreateImageView(g_device, &view, nullptr, &g_depth_view) == VK_SUCCESS;
@@ -900,11 +932,11 @@ bool create_render_pipeline()
     color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     color.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     VkAttachmentDescription depth{};
-    depth.format = VK_FORMAT_D32_SFLOAT;
+    depth.format = g_depth_format;
     depth.samples = VK_SAMPLE_COUNT_1_BIT;
     depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depth.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -1011,7 +1043,8 @@ bool create_render_pipeline()
     VkPipelineRasterizationStateCreateInfo raster{};
     raster.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster.polygonMode = VK_POLYGON_MODE_FILL;
-    raster.cullMode = VK_CULL_MODE_BACK_BIT;
+    // ponytail: 2D PVR packets mix cull directions; add per-context pipelines for 3D parity.
+    raster.cullMode = VK_CULL_MODE_NONE;
     raster.frontFace = VK_FRONT_FACE_CLOCKWISE;
     raster.lineWidth = 1.0f;
     VkPipelineMultisampleStateCreateInfo ms{};
@@ -1098,6 +1131,36 @@ bool create_render_pipeline()
     blend_att.alphaBlendOp = VK_BLEND_OP_ADD;
     ok = ok && vkCreateGraphicsPipelines(
         g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_translucent_pipeline) == VK_SUCCESS;
+
+    depth_state.depthTestEnable = VK_FALSE;
+    depth_state.depthWriteEnable = VK_FALSE;
+    depth_state.stencilTestEnable = VK_TRUE;
+    depth_state.front.compareOp = VK_COMPARE_OP_ALWAYS;
+    depth_state.front.passOp = VK_STENCIL_OP_REPLACE;
+    depth_state.front.reference = 1u;
+    depth_state.front.compareMask = 0xffu;
+    depth_state.front.writeMask = 0xffu;
+    depth_state.back = depth_state.front;
+    blend_att.colorWriteMask = 0u;
+    blend_att.blendEnable = VK_FALSE;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_modifier_volume_pipeline) == VK_SUCCESS;
+
+    depth_state.front.passOp = VK_STENCIL_OP_ZERO;
+    depth_state.back = depth_state.front;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_modifier_exclude_pipeline) == VK_SUCCESS;
+
+    depth_state.front.compareOp = VK_COMPARE_OP_EQUAL;
+    depth_state.front.passOp = VK_STENCIL_OP_KEEP;
+    depth_state.back = depth_state.front;
+    blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blend_att.blendEnable = VK_TRUE;
+    blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_modifier_pipeline) == VK_SUCCESS;
 
     vkDestroyShaderModule(g_device, punch_frag_module, nullptr);
     vkDestroyShaderModule(g_device, frag_module, nullptr);
@@ -1197,7 +1260,7 @@ PcVertex make_vertex(float x, float y, float z, uint32_t argb, float u, float v)
 void emit_primitive(std::vector<PcVertex> &out, const QueuedPrimitive &p)
 {
     const auto emit = [&](uint32_t i) {
-        out.push_back(make_vertex(p.x[i], p.y[i], p.z[i], p.argb,
+        out.push_back(make_vertex(p.x[i], p.y[i], p.z[i], p.color[i],
                                   p.u[i], p.v[i]));
     };
     if (p.count == 3u) {
@@ -1223,11 +1286,13 @@ FrameDrawData build_frame_draw_data()
     FrameDrawData frame;
     frame.vertices.reserve(queued.size() * 6u);
 
-    const auto append_list = [&](pvr_list_t list, bool sort_back_to_front) {
+    const auto append_list = [&](pvr_list_t list, bool sort_back_to_front,
+                                 bool modifier_volume) {
         std::vector<const QueuedPrimitive *> primitives;
         primitives.reserve(queued.size());
         for (const QueuedPrimitive &primitive : queued) {
-            if (primitive.list == list) {
+            if (primitive.list == list &&
+                primitive.modifier_volume == modifier_volume) {
                 primitives.push_back(&primitive);
             }
         }
@@ -1248,7 +1313,10 @@ FrameDrawData build_frame_draw_data()
                 frame.batches.back().texture_format == primitive->texture_format &&
                 frame.batches.back().texture_width == primitive->texture_width &&
                 frame.batches.back().texture_height == primitive->texture_height &&
-                frame.batches.back().texture_filter == primitive->texture_filter;
+                frame.batches.back().texture_filter == primitive->texture_filter &&
+                frame.batches.back().modifier == primitive->modifier &&
+                frame.batches.back().modifier_volume == primitive->modifier_volume &&
+                frame.batches.back().modifier_mode == primitive->modifier_mode;
             if (!same_batch) {
                 DrawBatch batch{};
                 batch.list = list;
@@ -1259,6 +1327,9 @@ FrameDrawData build_frame_draw_data()
                 batch.texture_width = primitive->texture_width;
                 batch.texture_height = primitive->texture_height;
                 batch.texture_filter = primitive->texture_filter;
+                batch.modifier = primitive->modifier;
+                batch.modifier_volume = primitive->modifier_volume;
+                batch.modifier_mode = primitive->modifier_mode;
                 const uint32_t pixel_format = (primitive->texture_format >> 27u) & 7u;
                 batch.palette_base = pixel_format == PVR_PIXEL_MODE_PAL_4BPP
                     ? ((primitive->texture_format >> 21u) & 0x3fu) * 16u
@@ -1272,9 +1343,11 @@ FrameDrawData build_frame_draw_data()
         }
     };
 
-    append_list(PVR_LIST_OP_POLY, false);
-    append_list(PVR_LIST_PT_POLY, false);
-    append_list(PVR_LIST_TR_POLY, g_translucent_autosort);
+    append_list(PVR_LIST_OP_MOD, false, true);
+    append_list(PVR_LIST_TR_MOD, false, true);
+    append_list(PVR_LIST_OP_POLY, false, false);
+    append_list(PVR_LIST_PT_POLY, false, false);
+    append_list(PVR_LIST_TR_POLY, g_translucent_autosort, false);
     return frame;
 }
 
@@ -1283,7 +1356,10 @@ bool draw_frame(const FrameDrawData &frame)
     if (g_device == VK_NULL_HANDLE || g_swapchain == VK_NULL_HANDLE ||
         g_opaque_pipeline == VK_NULL_HANDLE ||
         g_punch_through_pipeline == VK_NULL_HANDLE ||
-        g_translucent_pipeline == VK_NULL_HANDLE || g_command_buffers.empty()) {
+        g_translucent_pipeline == VK_NULL_HANDLE ||
+        g_modifier_volume_pipeline == VK_NULL_HANDLE ||
+        g_modifier_exclude_pipeline == VK_NULL_HANDLE ||
+        g_modifier_pipeline == VK_NULL_HANDLE || g_command_buffers.empty()) {
         set_window_title("pc-enDjinn - draw unavailable");
         return false;
     }
@@ -1367,7 +1443,14 @@ bool draw_frame(const FrameDrawData &frame)
                 continue;
             }
             VkPipeline pipeline = g_opaque_pipeline;
-            if (batch.list == PVR_LIST_PT_POLY) {
+            if (batch.modifier_volume) {
+                // ponytail: this is a 2D stencil mask; add PVR 3D winding only
+                // when a project needs closed OTHER_POLY shadow volumes.
+                pipeline = batch.modifier_mode == PVR_MODIFIER_EXCLUDE_LAST_POLY
+                    ? g_modifier_exclude_pipeline : g_modifier_volume_pipeline;
+            } else if (batch.modifier) {
+                pipeline = g_modifier_pipeline;
+            } else if (batch.list == PVR_LIST_PT_POLY) {
                 pipeline = g_punch_through_pipeline;
             } else if (batch.list == PVR_LIST_TR_POLY) {
                 pipeline = g_translucent_pipeline;

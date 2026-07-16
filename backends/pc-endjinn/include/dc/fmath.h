@@ -12,4 +12,6 @@ static inline void fsincosr(float angle, float *sine, float *cosine) {
   *cosine = cosf(angle);
 }
 
+static inline float fsqrt(float value) { return sqrtf(value); }
+
 #endif

@@ -44,6 +44,28 @@ typedef enum pvr_filter_mode {
   PVR_FILTER_NONE = PVR_FILTER_NEAREST,
 } pvr_filter_mode_t;
 
+typedef enum pvr_cull_mode {
+  PVR_CULLING_NONE,
+  PVR_CULLING_SMALL,
+  PVR_CULLING_CCW,
+  PVR_CULLING_CW,
+} pvr_cull_mode_t;
+
+typedef enum pvr_txr_shading_mode {
+  PVR_TXRENV_REPLACE,
+  PVR_TXRENV_MODULATE,
+  PVR_TXRENV_DECAL,
+  PVR_TXRENV_MODULATEALPHA,
+} pvr_txr_shading_mode_t;
+
+#define PVR_TXRALPHA_ENABLE 0
+#define PVR_UVCLAMP_NONE 0
+#define PVR_BLEND_SRCALPHA 4
+#define PVR_BLEND_INVSRCALPHA 5
+#define PVR_MODIFIER_OTHER_POLY 0
+#define PVR_MODIFIER_INCLUDE_LAST_POLY 1
+#define PVR_MODIFIER_EXCLUDE_LAST_POLY 2
+
 typedef struct pvr_init_params {
   int opb_sizes[5];
   int vertex_buf_size;
@@ -58,6 +80,7 @@ typedef struct pvr_context_gen {
   int culling;
   int fog_type;
   int specular;
+  int alpha;
 } pvr_context_gen_t;
 typedef struct pvr_context_txr {
   int enable;
@@ -66,7 +89,14 @@ typedef struct pvr_context_txr {
   int height;
   pvr_ptr_t base;
   pvr_filter_mode_t filter;
+  int alpha;
+  int env;
+  int uv_clamp;
 } pvr_context_txr_t;
+typedef struct pvr_context_blend {
+  int src;
+  int dst;
+} pvr_context_blend_t;
 typedef struct pvr_sprite_cxt {
   pvr_context_gen_t gen;
   pvr_list_t list_type;
@@ -76,6 +106,9 @@ typedef struct pvr_poly_cxt {
   pvr_context_gen_t gen;
   pvr_list_t list_type;
   pvr_context_txr_t txr;
+  pvr_context_txr_t txr2;
+  pvr_context_blend_t blend;
+  int modifier;
 } pvr_poly_cxt_t;
 
 typedef struct {
@@ -102,6 +135,14 @@ typedef struct pvr_vertex_pcm {
   float x, y, z;
   uint32_t argb0, argb1, d1, d2;
 } pvr_vertex_pcm_t;
+
+typedef struct pvr_vertex_tpcm {
+  alignas(32) uint32_t flags;
+  float x, y, z, u0, v0;
+  uint32_t argb0, oargb0;
+  float u1, v1;
+  uint32_t argb1, oargb1, d1, d2, d3, d4;
+} pvr_vertex_tpcm_t;
 
 typedef struct pvr_sprite_col {
   alignas(32) uint32_t flags;
@@ -138,7 +179,7 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
   } up = {.f = u}, vp = {.f = v};
   return (up.i & 0xffff0000u) | (vp.i >> 16u);
 }
-#define PVR_MODIFIER_INCLUDE_LAST_POLY 1
+#define PC_ENDJINN_PVR_HEADER_SPRITE 0x10000000u
 
 #define PVR_TXRFMT_MIPMAP (1u << 31)
 #define PVR_TXRFMT_VQ_DISABLE (0u << 30)
@@ -162,6 +203,8 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
 #define PVR_TXRLOAD_16BPP 0x03u
 
 PC_ENDJINN_BEGIN_DECLS
+uint32_t pc_endjinn_pvr_register_modifier_texture(
+    const pvr_context_txr_t *texture);
 void pvr_init(const pvr_init_params_t *params);
 void pvr_shutdown(void);
 void pvr_set_bg_color(float r, float g, float b);
@@ -230,13 +273,30 @@ static inline void pvr_poly_cxt_txr(pvr_poly_cxt_t *cxt, pvr_list_t list,
 static inline void pvr_poly_cxt_col_mod(pvr_poly_cxt_t *cxt,
                                         pvr_list_t list) {
   pvr_poly_cxt_col(cxt, list);
+  cxt->modifier = 1;
+}
+
+static inline void pvr_poly_cxt_txr_mod(
+    pvr_poly_cxt_t *cxt, pvr_list_t list, int texture_format, int width,
+    int height, pvr_ptr_t texture, pvr_filter_mode_t filter,
+    int texture_format2, int width2, int height2, pvr_ptr_t texture2,
+    pvr_filter_mode_t filter2) {
+  pvr_poly_cxt_txr(cxt, list, texture_format, width, height, texture, filter);
+  cxt->modifier = 1;
+  cxt->txr2.enable = 1;
+  cxt->txr2.format = texture_format2;
+  cxt->txr2.width = width2;
+  cxt->txr2.height = height2;
+  cxt->txr2.base = texture2;
+  cxt->txr2.filter = filter2;
 }
 
 static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
                                       const pvr_sprite_cxt_t *cxt) {
   memset(hdr, 0, sizeof(*hdr));
   hdr->cmd = 0x80000000u;
-  hdr->mode1 = (uint32_t)cxt->list_type | (cxt->txr.enable ? 0x80000000u : 0u);
+  hdr->mode1 = PC_ENDJINN_PVR_HEADER_SPRITE | (uint32_t)cxt->list_type |
+      (cxt->txr.enable ? 0x80000000u : 0u);
   hdr->mode2 = (uint32_t)cxt->txr.format;
   hdr->mode3 = (uint32_t)cxt->txr.width | ((uint32_t)cxt->txr.height << 16u);
   hdr->argb = 0xffffffffu;
@@ -254,19 +314,26 @@ static inline void pvr_poly_compile(pvr_poly_hdr_t *hdr,
                              .list_type = cxt->list_type,
                              .txr = cxt->txr};
   pvr_sprite_compile(hdr, &sprite);
+  hdr->mode1 &= ~PC_ENDJINN_PVR_HEADER_SPRITE;
 }
 
 static inline void pvr_poly_mod_compile(pvr_poly_mod_hdr_t *hdr,
                                         const pvr_poly_cxt_t *cxt) {
   pvr_poly_compile(hdr, cxt);
+  hdr->mode1 |= cxt->modifier ? 0x40000000u : 0u;
+  if (cxt->modifier && cxt->txr2.enable) {
+    hdr->cmd |= pc_endjinn_pvr_register_modifier_texture(&cxt->txr2) &
+                0x0fffffffu;
+  }
 }
 
 static inline void pvr_mod_compile(pvr_mod_hdr_t *hdr, pvr_list_t list,
                                    uint32_t mode, uint32_t culling) {
-  (void)list;
-  (void)mode;
   (void)culling;
-  hdr->cmd = 0u;
+  memset(hdr, 0, sizeof(*hdr));
+  hdr->cmd = 0x80000000u;
+  hdr->mode1 = (uint32_t)list | 0x20000000u;
+  hdr->oargb = mode;
   hdr->argb = 0xffffffffu;
 }
 

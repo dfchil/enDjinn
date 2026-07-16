@@ -16,6 +16,7 @@ struct QueuedPrimitive {
   float z[4];
   float u[4];
   float v[4];
+  uint32_t color[4];
   uint32_t count;
   uint32_t argb;
   pvr_list_t list;
@@ -25,6 +26,9 @@ struct QueuedPrimitive {
   uint32_t texture_width;
   uint32_t texture_height;
   pvr_filter_mode_t texture_filter;
+  bool modifier;
+  bool modifier_volume;
+  uint32_t modifier_mode;
 };
 
 struct DecodedMip {

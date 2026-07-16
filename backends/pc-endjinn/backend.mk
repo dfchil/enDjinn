@@ -31,7 +31,8 @@ PC_ENDJINN_PLATFORM_SRCS := \
 	$(PC_ENDJINN_BACKEND_DIR)enj_platform_pc_endjinn.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_pvr.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_vulkan.cpp \
-	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_input.cpp
+	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_input.cpp \
+	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_fs.cpp
 PC_ENDJINN_KOS_HEADERS := $(shell find $(PC_ENDJINN_BACKEND_DIR)include \
 	-type f -name '*.h')
 PC_ENDJINN_BACKEND_HEADERS := $(wildcard $(PC_ENDJINN_BACKEND_DIR)*.h)

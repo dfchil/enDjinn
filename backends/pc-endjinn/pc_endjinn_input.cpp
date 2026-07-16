@@ -3,43 +3,123 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace {
 
-SDL_GameController *g_game_controller = nullptr;
-maple_device_t g_keyboard_device{
-    0,
-    0,
-    true,
-    {MAPLE_FUNC_CONTROLLER},
-};
-cont_state_t g_controller_state{};
+std::array<SDL_GameController *, MAPLE_PORT_COUNT> g_game_controllers{};
+std::array<maple_device_t, MAPLE_PORT_COUNT> g_devices = {{
+    {0, 0, true, {MAPLE_FUNC_CONTROLLER}},
+    {1, 0, false, {MAPLE_FUNC_CONTROLLER}},
+    {2, 0, false, {MAPLE_FUNC_CONTROLLER}},
+    {3, 0, false, {MAPLE_FUNC_CONTROLLER}},
+}};
+std::array<cont_state_t, MAPLE_PORT_COUNT> g_controller_states{};
 bool g_controllers_initialized = false;
 bool g_quit_requested = false;
 
-void refresh_game_controller()
+struct Sound {
+    std::vector<int16_t> samples;
+    uint32_t rate;
+};
+
+struct Voice {
+    int sound = SFXHND_INVALID;
+    double frame = 0.0;
+    uint8_t volume = 0;
+    uint8_t pan = 0;
+};
+
+SDL_AudioDeviceID g_audio_device = 0;
+SDL_AudioSpec g_audio_spec{};
+std::vector<Sound> g_sounds;
+std::vector<Voice> g_voices;
+
+int16_t clamp_sample(int value)
 {
-    if (g_game_controller != nullptr &&
-        !SDL_GameControllerGetAttached(g_game_controller)) {
-        SDL_GameControllerClose(g_game_controller);
-        g_game_controller = nullptr;
-    }
-    if (g_game_controller != nullptr) {
-        return;
-    }
-    for (int i = 0; i < SDL_NumJoysticks(); i++) {
-        if (!SDL_IsGameController(i)) {
+    return static_cast<int16_t>(std::clamp(value, -32768, 32767));
+}
+
+void audio_callback(void *, Uint8 *stream, int bytes)
+{
+    auto *output = reinterpret_cast<int16_t *>(stream);
+    const int frames = bytes / (int)(sizeof(*output) * 2u);
+    std::memset(stream, 0, static_cast<size_t>(bytes));
+    for (Voice &voice : g_voices) {
+        if (voice.sound < 0 || static_cast<size_t>(voice.sound) >= g_sounds.size()) {
             continue;
         }
-        g_game_controller = SDL_GameControllerOpen(i);
-        if (g_game_controller != nullptr) {
+        const Sound &sound = g_sounds[voice.sound];
+        const size_t sound_frames = sound.samples.size() / 2u;
+        const double step = static_cast<double>(sound.rate) / g_audio_spec.freq;
+        for (int frame = 0; frame < frames && static_cast<size_t>(voice.frame) < sound_frames;
+             frame++, voice.frame += step) {
+            const size_t source = static_cast<size_t>(voice.frame) * 2u;
+            const int left = sound.samples[source];
+            const int right = sound.samples[source + 1u];
+            const int left_gain = voice.volume * (255 - voice.pan);
+            const int right_gain = voice.volume * voice.pan;
+            output[frame * 2] = clamp_sample(output[frame * 2] + left * left_gain / 65025);
+            output[frame * 2 + 1] = clamp_sample(output[frame * 2 + 1] + right * right_gain / 65025);
+        }
+    }
+    g_voices.erase(std::remove_if(g_voices.begin(), g_voices.end(), [](const Voice &voice) {
+        return voice.sound < 0 || static_cast<size_t>(voice.sound) >= g_sounds.size() ||
+            static_cast<size_t>(voice.frame) >= g_sounds[voice.sound].samples.size() / 2u;
+    }), g_voices.end());
+}
+
+void audio_shutdown()
+{
+    if (g_audio_device != 0) {
+        SDL_CloseAudioDevice(g_audio_device);
+        g_audio_device = 0;
+    }
+    g_voices.clear();
+    g_sounds.clear();
+}
+
+bool is_open(SDL_JoystickID instance)
+{
+    for (SDL_GameController *controller : g_game_controllers) {
+        if (controller != nullptr &&
+            SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)) == instance) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void refresh_game_controllers()
+{
+    for (size_t port = 0; port < g_game_controllers.size(); port++) {
+        SDL_GameController *&controller = g_game_controllers[port];
+        if (controller != nullptr && !SDL_GameControllerGetAttached(controller)) {
+            SDL_GameControllerClose(controller);
+            controller = nullptr;
+        }
+        g_devices[port].valid = port == 0 || controller != nullptr;
+    }
+    for (int i = 0; i < SDL_NumJoysticks(); i++) {
+        if (!SDL_IsGameController(i) || is_open(SDL_JoystickGetDeviceInstanceID(i))) {
+            continue;
+        }
+        const auto slot = std::find(g_game_controllers.begin(), g_game_controllers.end(), nullptr);
+        if (slot == g_game_controllers.end()) {
+            return;
+        }
+        *slot = SDL_GameControllerOpen(i);
+        if (*slot != nullptr) {
+            const size_t port = static_cast<size_t>(slot - g_game_controllers.begin());
+            g_devices[port].valid = true;
             std::fprintf(
                 stderr,
-                "pc-enDjinn: controller connected: %s\n",
-                SDL_GameControllerName(g_game_controller));
-            return;
+                "pc-enDjinn: controller connected on port %zu: %s\n", port,
+                SDL_GameControllerName(*slot));
         }
     }
 }
@@ -60,16 +140,14 @@ uint8_t trigger_to_u8(Sint16 axis)
         : 0u;
 }
 
-bool controller_button(SDL_GameControllerButton button)
+bool controller_button(SDL_GameController *controller, SDL_GameControllerButton button)
 {
-    return g_game_controller != nullptr &&
-        SDL_GameControllerGetButton(g_game_controller, button) != 0u;
+    return controller != nullptr && SDL_GameControllerGetButton(controller, button) != 0u;
 }
 
-Sint16 controller_axis(SDL_GameControllerAxis axis)
+Sint16 controller_axis(SDL_GameController *controller, SDL_GameControllerAxis axis)
 {
-    return g_game_controller != nullptr
-        ? SDL_GameControllerGetAxis(g_game_controller, axis)
+    return controller != nullptr ? SDL_GameControllerGetAxis(controller, axis)
         : 0;
 }
 
@@ -84,9 +162,12 @@ void pc_endjinn_input_request_quit(void)
 
 void pc_endjinn_input_shutdown(void)
 {
-    if (g_game_controller != nullptr) {
-        SDL_GameControllerClose(g_game_controller);
-        g_game_controller = nullptr;
+    audio_shutdown();
+    for (SDL_GameController *&controller : g_game_controllers) {
+        if (controller != nullptr) {
+            SDL_GameControllerClose(controller);
+            controller = nullptr;
+        }
     }
     g_controllers_initialized = false;
     g_quit_requested = false;
@@ -106,16 +187,18 @@ int pc_endjinn_controllers_init(void)
         return -1;
     }
     SDL_GameControllerEventState(SDL_ENABLE);
-    refresh_game_controller();
+    refresh_game_controllers();
     g_controllers_initialized = true;
     return 0;
 }
 
 void pc_endjinn_controllers_shutdown(void)
 {
-    if (g_game_controller != nullptr) {
-        SDL_GameControllerClose(g_game_controller);
-        g_game_controller = nullptr;
+    for (SDL_GameController *&controller : g_game_controllers) {
+        if (controller != nullptr) {
+            SDL_GameControllerClose(controller);
+            controller = nullptr;
+        }
     }
 }
 
@@ -131,76 +214,63 @@ size_t pc_endjinn_controllers_poll(
     std::memset(connected, 0, capacity * sizeof(*connected));
 
     SDL_PumpEvents();
-    refresh_game_controller();
+    refresh_game_controllers();
     const uint8_t *keys = SDL_GetKeyboardState(nullptr);
     if (keys == nullptr) {
         return 0u;
     }
 
-    cont_state_t &state = states[0];
-    connected[0] = 1u;
-    state.rtrig = keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_W]
-        ? 255u
-        : trigger_to_u8(controller_axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT));
-    state.ltrig = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_S]
-        ? 255u
-        : trigger_to_u8(controller_axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT));
-    state.a = keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_W] ||
-        controller_button(SDL_CONTROLLER_BUTTON_A) || state.rtrig > 16u;
-    state.b = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_S] ||
-        controller_button(SDL_CONTROLLER_BUTTON_B) || state.ltrig > 16u;
-    state.x = keys[SDL_SCANCODE_X] || keys[SDL_SCANCODE_R] ||
-        controller_button(SDL_CONTROLLER_BUTTON_X);
-    state.y = keys[SDL_SCANCODE_Y] || keys[SDL_SCANCODE_B] ||
-        keys[SDL_SCANCODE_M] || keys[SDL_SCANCODE_E] ||
-        controller_button(SDL_CONTROLLER_BUTTON_Y);
-    state.start = keys[SDL_SCANCODE_RETURN] ||
-        controller_button(SDL_CONTROLLER_BUTTON_START);
-    state.dpad_up = keys[SDL_SCANCODE_UP] || keys[SDL_SCANCODE_F4] ||
-        controller_button(SDL_CONTROLLER_BUTTON_DPAD_UP);
-    state.dpad_down = keys[SDL_SCANCODE_DOWN] || keys[SDL_SCANCODE_F1] ||
-        controller_button(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
-    state.dpad_left = keys[SDL_SCANCODE_LEFT] || keys[SDL_SCANCODE_F2] ||
-        controller_button(SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-    state.dpad_right = keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_F3] ||
-        controller_button(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-    state.joyx = keys[SDL_SCANCODE_A] ? -127 :
-        (keys[SDL_SCANCODE_D] ? 127 :
-            axis_to_i8(controller_axis(SDL_CONTROLLER_AXIS_LEFTX)));
-    state.joyy = keys[SDL_SCANCODE_W] ? -127 :
-        (keys[SDL_SCANCODE_S] ? 127 :
-            axis_to_i8(controller_axis(SDL_CONTROLLER_AXIS_LEFTY)));
-    if (g_quit_requested) {
-        state.a = 1u;
-        state.b = 1u;
-        state.x = 1u;
-        state.y = 1u;
-        state.start = 1u;
+    const size_t count = std::min(capacity, g_devices.size());
+    for (size_t port = 0; port < count; port++) {
+        SDL_GameController *controller = g_game_controllers[port];
+        cont_state_t &state = states[port];
+        const bool keyboard = port == 0;
+        connected[port] = keyboard || controller != nullptr;
+        state.rtrig = keyboard && keys[SDL_SCANCODE_V]
+            ? 255u : trigger_to_u8(controller_axis(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT));
+        state.ltrig = keyboard && keys[SDL_SCANCODE_F]
+            ? 255u : trigger_to_u8(controller_axis(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT));
+        state.a = (keyboard && keys[SDL_SCANCODE_X]) || controller_button(controller, SDL_CONTROLLER_BUTTON_A) || (!keyboard && state.rtrig > 16);
+        state.b = (keyboard && keys[SDL_SCANCODE_C]) || controller_button(controller, SDL_CONTROLLER_BUTTON_B) || (!keyboard && state.ltrig > 16);
+        state.x = (keyboard && keys[SDL_SCANCODE_S]) || controller_button(controller, SDL_CONTROLLER_BUTTON_X);
+        state.y = (keyboard && keys[SDL_SCANCODE_D]) || controller_button(controller, SDL_CONTROLLER_BUTTON_Y);
+        state.start = (keyboard && keys[SDL_SCANCODE_RETURN]) || controller_button(controller, SDL_CONTROLLER_BUTTON_START);
+        state.dpad_up = (keyboard && keys[SDL_SCANCODE_UP]) || controller_button(controller, SDL_CONTROLLER_BUTTON_DPAD_UP);
+        state.dpad_down = (keyboard && keys[SDL_SCANCODE_DOWN]) || controller_button(controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+        state.dpad_left = (keyboard && keys[SDL_SCANCODE_LEFT]) || controller_button(controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+        state.dpad_right = (keyboard && keys[SDL_SCANCODE_RIGHT]) || controller_button(controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+        state.joyx = keyboard && keys[SDL_SCANCODE_J] ? -127 : (keyboard && keys[SDL_SCANCODE_L] ? 127 : axis_to_i8(controller_axis(controller, SDL_CONTROLLER_AXIS_LEFTX)));
+        state.joyy = keyboard && keys[SDL_SCANCODE_I] ? -127 : (keyboard && keys[SDL_SCANCODE_K] ? 127 : axis_to_i8(controller_axis(controller, SDL_CONTROLLER_AXIS_LEFTY)));
     }
-    return 1u;
+    if (g_quit_requested) {
+        states[0].a = states[0].b = states[0].x = states[0].y = states[0].start = 1u;
+    }
+    return count;
 }
 
 maple_device_t *maple_enum_type(int index, uint32_t function)
 {
     (void)pc_endjinn_controllers_init();
-    return index == 0 && (g_keyboard_device.info.functions & function) != 0u
-        ? &g_keyboard_device
+    return index >= 0 && index < MAPLE_PORT_COUNT && g_devices[index].valid &&
+        (g_devices[index].info.functions & function) != 0u ? &g_devices[index]
         : nullptr;
 }
 
 maple_device_t *maple_enum_dev(int port, int unit)
 {
-    return port == 0 && unit == 0 ? &g_keyboard_device : nullptr;
+    return port >= 0 && port < MAPLE_PORT_COUNT && unit == 0 && g_devices[port].valid
+        ? &g_devices[port] : nullptr;
 }
 
 void *maple_dev_status(maple_device_t *device)
 {
-    if (device != &g_keyboard_device) {
+    if (device == nullptr || device->port < 0 || device->port >= MAPLE_PORT_COUNT) {
         return nullptr;
     }
-    uint8_t connected = 0u;
-    (void)pc_endjinn_controllers_poll(&g_controller_state, &connected, 1u);
-    return connected != 0u ? &g_controller_state : nullptr;
+    uint8_t connected[MAPLE_PORT_COUNT]{};
+    (void)pc_endjinn_controllers_poll(g_controller_states.data(), connected,
+                                      MAPLE_PORT_COUNT);
+    return connected[device->port] != 0u ? &g_controller_states[device->port] : nullptr;
 }
 
 void maple_attach_callback(uint32_t, maple_attach_callback_t)
@@ -211,18 +281,77 @@ void maple_detach_callback(uint32_t, maple_detach_callback_t)
 {
 }
 
-void snd_init(void) {}
-
-sfxhnd_t snd_sfx_load_raw_buf(void *, size_t, uint32_t, uint8_t, uint8_t)
+void snd_init(void)
 {
-    return SFXHND_INVALID;
+    if (g_audio_device != 0) {
+        return;
+    }
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+        std::fprintf(stderr, "pc-enDjinn: SDL audio initialization failed: %s\n", SDL_GetError());
+        return;
+    }
+    SDL_AudioSpec wanted{};
+    wanted.freq = 44100;
+    wanted.format = AUDIO_S16SYS;
+    wanted.channels = 2;
+    wanted.samples = 1024;
+    wanted.callback = audio_callback;
+    g_audio_device = SDL_OpenAudioDevice(nullptr, 0, &wanted, &g_audio_spec, 0);
+    if (g_audio_device == 0) {
+        std::fprintf(stderr, "pc-enDjinn: SDL audio open failed: %s\n", SDL_GetError());
+        return;
+    }
+    SDL_PauseAudioDevice(g_audio_device, 0);
 }
 
-void snd_sfx_unload(sfxhnd_t) {}
-
-int snd_sfx_play(sfxhnd_t, uint8_t, uint8_t)
+sfxhnd_t snd_sfx_load_raw_buf(void *samples, size_t size, uint32_t sample_rate,
+                              uint8_t bits, uint8_t channels)
 {
-    return -1;
+    if (samples == nullptr || bits != 16u || (channels != 1u && channels != 2u) || size < 2u) {
+        return SFXHND_INVALID;
+    }
+    const auto *input = static_cast<const int16_t *>(samples);
+    const size_t frames = size / sizeof(*input);
+    Sound sound{{}, sample_rate};
+    sound.samples.resize(frames * 2u);
+    for (size_t frame = 0; frame < frames; frame++) {
+        sound.samples[frame * 2u] = input[frame];
+        sound.samples[frame * 2u + 1u] = channels == 2u ? input[frames + frame] : input[frame];
+    }
+    if (g_audio_device != 0) {
+        SDL_LockAudioDevice(g_audio_device);
+    }
+    g_sounds.push_back(std::move(sound));
+    const sfxhnd_t handle = static_cast<sfxhnd_t>(g_sounds.size() - 1u);
+    if (g_audio_device != 0) {
+        SDL_UnlockAudioDevice(g_audio_device);
+    }
+    return handle;
+}
+
+void snd_sfx_unload(sfxhnd_t handle)
+{
+    if (handle < 0 || static_cast<size_t>(handle) >= g_sounds.size()) {
+        return;
+    }
+    if (g_audio_device != 0) {
+        SDL_LockAudioDevice(g_audio_device);
+    }
+    g_sounds[handle].samples.clear();
+    if (g_audio_device != 0) {
+        SDL_UnlockAudioDevice(g_audio_device);
+    }
+}
+
+int snd_sfx_play(sfxhnd_t handle, uint8_t volume, uint8_t pan)
+{
+    if (g_audio_device == 0 || handle < 0 || static_cast<size_t>(handle) >= g_sounds.size()) {
+        return -1;
+    }
+    SDL_LockAudioDevice(g_audio_device);
+    g_voices.push_back({handle, 0.0, volume, pan});
+    SDL_UnlockAudioDevice(g_audio_device);
+    return 0;
 }
 
 void purupuru_rumble_raw(maple_device_t *, uint32_t) {}

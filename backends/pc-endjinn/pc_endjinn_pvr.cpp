@@ -28,12 +28,21 @@ struct HeaderState {
   uint32_t width{};
   uint32_t height{};
   pvr_filter_mode_t filter{PVR_FILTER_NEAREST};
+  bool sprite{};
+  bool modifier{};
+  bool modifier_volume{};
+  uint32_t modifier_mode{};
+  bool modifier_textured{};
+  pvr_context_txr_t modifier_texture{};
 };
 
 std::array<uint8_t, 256> g_dr_packet{};
 pvr_list_t g_current_list = PVR_LIST_OP_POLY;
 pvr_sprite_txr_t g_sprite_first{};
 bool g_has_sprite_first = false;
+bool g_has_tpcm_first = false;
+pvr_modifier_vol_t g_modifier_volume_first{};
+bool g_has_modifier_volume_first = false;
 std::vector<pvr_vertex_t> g_triangle_vertices;
 std::vector<pc_endjinn_pvr::QueuedPrimitive> g_primitives;
 HeaderState g_header;
@@ -43,6 +52,8 @@ pvr_palfmt_t g_palette_format = PVR_PAL_ARGB8888;
 uint64_t g_palette_revision = 1u;
 uint64_t g_texture_revision = 1u;
 uintptr_t g_next_texture_handle = 0x10000u;
+uint32_t g_next_modifier_texture_id = 1u;
+std::unordered_map<uint32_t, pvr_context_txr_t> g_modifier_textures;
 
 float unpack_uv(uint32_t bits) {
   float value;
@@ -64,6 +75,9 @@ void copy_header_state(pc_endjinn_pvr::QueuedPrimitive &primitive) {
   primitive.texture_width = g_header.width;
   primitive.texture_height = g_header.height;
   primitive.texture_filter = g_header.filter;
+  primitive.modifier = g_header.modifier;
+  primitive.modifier_volume = false;
+  primitive.modifier_mode = 0u;
 }
 
 void queue_triangle(const pvr_vertex_t &a, const pvr_vertex_t &b,
@@ -79,7 +93,101 @@ void queue_triangle(const pvr_vertex_t &a, const pvr_vertex_t &b,
     primitive.z[i] = vertices[i].z;
     primitive.u[i] = vertices[i].u;
     primitive.v[i] = vertices[i].v;
+    primitive.color[i] = vertices[i].argb != 0u ? vertices[i].argb
+                                                 : primitive.argb;
   }
+  g_primitives.push_back(primitive);
+}
+
+void queue_modifier_triangle(const pvr_vertex_t outside[3],
+                             const pvr_vertex_t inside[3]) {
+  pc_endjinn_pvr::QueuedPrimitive primitive{};
+  primitive.count = 3u;
+  copy_header_state(primitive);
+  primitive.modifier = false;
+  for (uint32_t i = 0; i < 3u; i++) {
+    primitive.x[i] = outside[i].x;
+    primitive.y[i] = outside[i].y;
+    primitive.z[i] = outside[i].z;
+    primitive.u[i] = outside[i].u;
+    primitive.v[i] = outside[i].v;
+    primitive.color[i] = outside[i].argb;
+  }
+  g_primitives.push_back(primitive);
+
+  copy_header_state(primitive);
+  primitive.modifier = true;
+  if (g_header.modifier_textured) {
+    primitive.textured = true;
+    primitive.texture = g_header.modifier_texture.base;
+    primitive.texture_format = g_header.modifier_texture.format;
+    primitive.texture_width = g_header.modifier_texture.width;
+    primitive.texture_height = g_header.modifier_texture.height;
+    primitive.texture_filter = g_header.modifier_texture.filter;
+  } else {
+    primitive.textured = false;
+  }
+  for (uint32_t i = 0; i < 3u; i++) {
+    primitive.x[i] = inside[i].x;
+    primitive.y[i] = inside[i].y;
+    primitive.z[i] = inside[i].z;
+    primitive.u[i] = inside[i].u;
+    primitive.v[i] = inside[i].v;
+    primitive.color[i] = inside[i].argb;
+  }
+  g_primitives.push_back(primitive);
+}
+
+void queue_modifier_triangle(const pvr_vertex_pcm_t &a,
+                             const pvr_vertex_pcm_t &b,
+                             const pvr_vertex_pcm_t &c) {
+  pvr_vertex_t outside[3] = {}, inside[3] = {};
+  const pvr_vertex_pcm_t source[3] = {a, b, c};
+  for (uint32_t i = 0; i < 3u; i++) {
+    outside[i].x = inside[i].x = source[i].x;
+    outside[i].y = inside[i].y = source[i].y;
+    outside[i].z = inside[i].z = source[i].z;
+    outside[i].argb = source[i].argb0;
+    inside[i].argb = source[i].argb1;
+  }
+  queue_modifier_triangle(outside, inside);
+}
+
+void queue_modifier_triangle(const pvr_vertex_tpcm_t &a,
+                             const pvr_vertex_tpcm_t &b,
+                             const pvr_vertex_tpcm_t &c) {
+  pvr_vertex_t outside[3] = {}, inside[3] = {};
+  const pvr_vertex_tpcm_t source[3] = {a, b, c};
+  for (uint32_t i = 0; i < 3u; i++) {
+    outside[i].x = inside[i].x = source[i].x;
+    outside[i].y = inside[i].y = source[i].y;
+    outside[i].z = inside[i].z = source[i].z;
+    outside[i].u = source[i].u0;
+    outside[i].v = source[i].v0;
+    outside[i].argb = source[i].argb0;
+    inside[i].u = source[i].u1;
+    inside[i].v = source[i].v1;
+    inside[i].argb = source[i].argb1;
+  }
+  queue_modifier_triangle(outside, inside);
+}
+
+void queue_modifier_volume(const pvr_modifier_vol_t &first, const void *tail) {
+  const float *values = static_cast<const float *>(tail);
+  pc_endjinn_pvr::QueuedPrimitive primitive{};
+  primitive.count = 3u;
+  primitive.list = g_current_list;
+  primitive.modifier_volume = true;
+  primitive.modifier_mode = g_header.modifier_mode;
+  primitive.x[0] = first.ax;
+  primitive.y[0] = first.ay;
+  primitive.z[0] = first.az;
+  primitive.x[1] = first.bx;
+  primitive.y[1] = first.by;
+  primitive.z[1] = first.bz;
+  primitive.x[2] = first.cx;
+  primitive.y[2] = values[0];
+  primitive.z[2] = values[1];
   g_primitives.push_back(primitive);
 }
 
@@ -109,6 +217,9 @@ void queue_sprite_second_half(const void *ptr) {
     unpack_uv_pair(tail_words[7], primitive.u[2], primitive.v[2]);
     primitive.u[3] = primitive.u[0] + primitive.u[2] - primitive.u[1];
     primitive.v[3] = primitive.v[0] + primitive.v[2] - primitive.v[1];
+  }
+  for (uint32_t i = 0; i < primitive.count; i++) {
+    primitive.color[i] = primitive.argb;
   }
   g_primitives.push_back(primitive);
   g_has_sprite_first = false;
@@ -333,16 +444,16 @@ void scene_begin() {
   g_primitives.clear();
   g_triangle_vertices.clear();
   g_has_sprite_first = false;
+  g_has_modifier_volume_first = false;
 }
 
 void list_begin(pvr_list_t list) { g_current_list = list; }
 
 void *dr_target() {
-  if (!g_has_sprite_first) {
-    std::memset(g_dr_packet.data(), 0, g_dr_packet.size());
+  if (!g_has_sprite_first && !g_has_tpcm_first &&
+      !g_has_modifier_volume_first) {
     return g_dr_packet.data();
   }
-  std::memset(g_dr_packet.data() + 32u, 0, g_dr_packet.size() - 32u);
   return g_dr_packet.data() + 32u;
 }
 
@@ -351,28 +462,90 @@ void dr_commit(void *ptr) {
     return;
   }
 
+  if (g_has_modifier_volume_first) {
+    queue_modifier_volume(g_modifier_volume_first, ptr);
+    g_has_modifier_volume_first = false;
+    return;
+  }
+  if (g_has_tpcm_first) {
+    const pvr_vertex_tpcm_t *vertex =
+        reinterpret_cast<const pvr_vertex_tpcm_t *>(g_dr_packet.data());
+    static std::vector<pvr_vertex_tpcm_t> vertices;
+    vertices.push_back(*vertex);
+    if (vertices.size() >= 3u) {
+      const size_t n = vertices.size();
+      if ((n & 1u) == 0u) {
+        queue_modifier_triangle(vertices[n - 2u], vertices[n - 3u],
+                                vertices[n - 1u]);
+      } else {
+        queue_modifier_triangle(vertices[n - 3u], vertices[n - 2u],
+                                vertices[n - 1u]);
+      }
+    }
+    if (vertex->flags == PVR_CMD_VERTEX_EOL) {
+      vertices.clear();
+    }
+    g_has_tpcm_first = false;
+    return;
+  }
   const uint32_t flags = *static_cast<const uint32_t *>(ptr);
   if (g_has_sprite_first) {
     queue_sprite_second_half(ptr);
     return;
   }
 
+  if (g_header.sprite &&
+      (flags == PVR_CMD_VERTEX || flags == PVR_CMD_VERTEX_EOL)) {
+    std::memcpy(&g_sprite_first, ptr, sizeof(g_sprite_first));
+    g_has_sprite_first = true;
+    return;
+  }
+
   if (flags == PVR_CMD_VERTEX || flags == PVR_CMD_VERTEX_EOL) {
-    if (flags == PVR_CMD_VERTEX_EOL && g_triangle_vertices.empty()) {
-      std::memcpy(&g_sprite_first, ptr, sizeof(g_sprite_first));
-      g_has_sprite_first = true;
+    if (g_header.modifier_volume) {
+        std::memcpy(&g_modifier_volume_first, ptr, 32u);
+        g_has_modifier_volume_first = true;
+        return;
+    }
+    if (g_header.modifier) {
+      if (g_header.textured) {
+        g_has_tpcm_first = true;
+        return;
+      }
+      const pvr_vertex_pcm_t *vertex =
+          static_cast<const pvr_vertex_pcm_t *>(ptr);
+      static std::vector<pvr_vertex_pcm_t> vertices;
+      vertices.push_back(*vertex);
+      if (vertices.size() >= 3u) {
+        const size_t n = vertices.size();
+        if ((n & 1u) == 0u) {
+          queue_modifier_triangle(vertices[n - 2u], vertices[n - 3u],
+                                  vertices[n - 1u]);
+        } else {
+          queue_modifier_triangle(vertices[n - 3u], vertices[n - 2u],
+                                  vertices[n - 1u]);
+        }
+      }
+      if (flags == PVR_CMD_VERTEX_EOL) {
+        vertices.clear();
+      }
       return;
     }
-
     const pvr_vertex_t *vertex = static_cast<const pvr_vertex_t *>(ptr);
     g_triangle_vertices.push_back(*vertex);
-    if (flags == PVR_CMD_VERTEX_EOL) {
-      if (g_triangle_vertices.size() >= 3u) {
-        const size_t n = g_triangle_vertices.size();
+    if (g_triangle_vertices.size() >= 3u) {
+      const size_t n = g_triangle_vertices.size();
+      if ((n & 1u) == 0u) {
+        queue_triangle(g_triangle_vertices[n - 2u],
+                       g_triangle_vertices[n - 3u],
+                       g_triangle_vertices[n - 1u]);
+      } else {
         queue_triangle(g_triangle_vertices[n - 3u],
                        g_triangle_vertices[n - 2u],
                        g_triangle_vertices[n - 1u]);
       }
+    }
+    if (flags == PVR_CMD_VERTEX_EOL) {
       g_triangle_vertices.clear();
     }
     return;
@@ -385,6 +558,15 @@ void dr_commit(void *ptr) {
   g_header.width = header->mode3 & 0xffffu;
   g_header.height = header->mode3 >> 16u;
   g_header.filter = static_cast<pvr_filter_mode_t>(header->oargb);
+  g_header.sprite = (header->mode1 & PC_ENDJINN_PVR_HEADER_SPRITE) != 0u;
+  g_header.modifier = (header->mode1 & 0x40000000u) != 0u;
+  g_header.modifier_volume = (header->mode1 & 0x20000000u) != 0u;
+  g_header.modifier_mode = g_header.modifier_volume ? header->oargb : 0u;
+  const auto modifier_texture = g_modifier_textures.find(header->cmd & 0x0fffffffu);
+  g_header.modifier_textured = modifier_texture != g_modifier_textures.end();
+  if (g_header.modifier_textured) {
+    g_header.modifier_texture = modifier_texture->second;
+  }
   uintptr_t base = header->reserved[0];
 #if UINTPTR_MAX > UINT32_MAX
   base |= static_cast<uintptr_t>(header->reserved[1]) << 32u;
@@ -559,3 +741,23 @@ bool decode_texture(const QueuedPrimitive &primitive, DecodedTexture &decoded) {
 }
 
 }  // namespace pc_endjinn_pvr
+
+extern "C" uint32_t pc_endjinn_pvr_register_modifier_texture(
+    const pvr_context_txr_t *texture) {
+  if (texture == nullptr || !texture->enable ||
+      g_next_modifier_texture_id == 0x10000000u) {
+    return 0u;
+  }
+  for (const auto &[id, current] : g_modifier_textures) {
+    if (current.enable == texture->enable && current.format == texture->format &&
+        current.width == texture->width && current.height == texture->height &&
+        current.base == texture->base && current.filter == texture->filter &&
+        current.alpha == texture->alpha && current.env == texture->env &&
+        current.uv_clamp == texture->uv_clamp) {
+      return id;
+    }
+  }
+  const uint32_t id = g_next_modifier_texture_id++;
+  g_modifier_textures[id] = *texture;
+  return id;
+}

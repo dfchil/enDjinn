@@ -43,12 +43,10 @@ enj_mode_t* enj_mode_get_by_index(int index) {
 }
 
 enj_mode_t* enj_mode_pop(void) {
-#ifdef ENJ_DBG_PRINT
     if (current_mode_index <= 0) {
         ENJ_DEBUG_PRINT("Mode stack underflow\n");
         return NULL;
     }
-#endif 
     enj_mode_t* popped_mode = mode_stack[current_mode_index];
     mode_stack[current_mode_index] = NULL;
     current_mode_index--;
