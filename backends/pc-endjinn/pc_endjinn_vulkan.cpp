@@ -1731,7 +1731,8 @@ uint64_t timer_ns_gettime64(void)
     if (frequency == 0u) {
         return 0u;
     }
-    return (counter * 1000000000ull) / frequency;
+    return (counter / frequency) * 1000000000ull +
+           ((counter % frequency) * 1000000000ull) / frequency;
 }
 
 void vid_border_color(uint8_t r, uint8_t g, uint8_t b)

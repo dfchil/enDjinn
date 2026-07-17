@@ -14,7 +14,7 @@ ifneq (,$(wildcard ./local.cfg.mk))
   include ./local.cfg.mk
 endif
 
-# Both backends use the same generated Dreamcast asset blobs. The backend only
+# All backends use the same generated Dreamcast asset blobs. The backend only
 # changes how those blobs are consumed at runtime.
 ifndef ROMBASEPATH
 	ROMBASEPATH := $(ENJ_ROMDIR)/$(ENJ_BASENAME)
@@ -103,6 +103,68 @@ mrproper: clean
 .PHONY: all assets pc-endjinn pc-endjinn-objects clean mrproper list help info
 include ${ENJDIR}info.mk
 
+else ifeq ($(ENJ_TARGET),web-endjinn)
+include ${ENJDIR}backends/web-endjinn/backend.mk
+
+ENJ_CBASEPATH ?= /$(ROMBASEPATH)/
+OPTLEVEL ?= 2
+include ${ENJDIR}defines.mk
+
+ENJ_WEB_CFLAGS ?= -std=gnu23 -O2 -g -Wall -Wextra \
+	-Wno-unused-function -Wno-unused-variable
+ENJ_WEB_CXXFLAGS ?= -std=c++17 -O2 -g -Wall -Wextra
+ENJ_WEB_CPPFLAGS += -I$(shell pwd)/include -I${ENJDIR}include
+ENJ_WEB_PRELOAD_FLAGS ?= --preload-file $(ROMBASEPATH)@/$(ROMBASEPATH)
+
+ENJ_WEB_CORE_SRCS := $(sort $(wildcard ${ENJDIR}code/*.c))
+ENJ_WEB_APP_SRCS := $(patsubst ./%,%,$(shell find $(ENJ_CODEDIR) -name '*.c' -not -path "./.git/*"))
+ENJ_WEB_CORE_OBJS := $(patsubst ${ENJDIR}%.c,$(ENJ_WEB_BUILD_DIR)/enDjinn/%.o,$(ENJ_WEB_CORE_SRCS))
+ENJ_WEB_APP_OBJS := $(patsubst %.c,$(ENJ_WEB_BUILD_DIR)/%.o,$(ENJ_WEB_APP_SRCS))
+ENJ_WEB_BACKEND_OBJS := $(addprefix $(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/,$(notdir $(WEB_ENDJINN_PLATFORM_SRCS:.cpp=.o)))
+ENJ_WEB_OBJS := $(ENJ_WEB_CORE_OBJS) $(ENJ_WEB_APP_OBJS) \
+	$(ENJ_WEB_BACKEND_OBJS) $(ENJ_WEB_EXTRA_OBJS)
+ENJ_WEB_DEPS := $(filter %.d,$(ENJ_WEB_OBJS:.o=.d))
+
+-include $(ENJ_WEB_DEPS)
+
+all: web-endjinn
+.DEFAULT: all
+
+web-endjinn: $(ENJ_WEB_TARGET)
+web-endjinn-objects: $(ENJ_WEB_OBJS)
+
+$(ENJ_WEB_BUILD_DIR):
+	mkdir -p $@
+
+$(ENJ_WEB_BUILD_DIR)/enDjinn/%.o: ${ENJDIR}%.c $(ENJ_MAKEFILE) | $(ENJ_WEB_BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(EMCC) $(ENJ_WEB_CFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+
+$(ENJ_WEB_BUILD_DIR)/%.o: %.c $(ENJ_MAKEFILE) $(ENJ_ASSETS) | $(ENJ_WEB_BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(EMCC) $(ENJ_WEB_CFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+
+$(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/%.o: ${ENJDIR}backends/pc-endjinn/%.cpp | $(ENJ_WEB_BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+
+$(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/%.o: ${ENJDIR}backends/web-endjinn/%.cpp | $(ENJ_WEB_BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+
+$(ENJ_WEB_TARGET): $(ENJ_WEB_OBJS) $(ENJ_ASSETS) $(ENJ_WEB_EXTRA_DEPS)
+	@mkdir -p $(dir $@)
+	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) \
+		$(ENJ_WEB_OBJS) -o $@ $(ENJ_WEB_LDFLAGS) $(ENJ_WEB_PRELOAD_FLAGS)
+
+clean:
+	rm -rf $(ENJ_WEB_BUILD_DIR)
+
+mrproper: clean
+
+.PHONY: all assets web-endjinn web-endjinn-objects clean mrproper list help info
+include ${ENJDIR}info.mk
+
 else ifeq ($(ENJ_TARGET),dreamcast)
 include $(KOS_BASE)/Makefile.rules
 
@@ -153,7 +215,7 @@ $(ENJ_BINDIR)/${ENJ_BASENAME}.bin: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf
 	sh-elf-objcopy -O binary $< $@
 
 clean:
-	@rm -rf $(ENJ_BINDIR)/* $(OBJS) $(ENJ_DREAMCAST_DEPS)
+	@rm -rf $(ENJ_BINDIR)/* $(ENJ_BUILDDIR)
 
 mrproper: clean
 	rm -rf $(ENJ_BINDIR)/$(ENJ_BASENAME).elf $(ENJ_BINDIR)/$(ENJ_BASENAME).cdi $(ENJ_BINDIR)/$(ENJ_BASENAME).bin
@@ -165,5 +227,5 @@ mrproper: clean
 .PHONY: all assets clean mrproper list help info
 include ${ENJDIR}info.mk
 else
-$(error Unknown ENJ_TARGET '$(ENJ_TARGET)'; use ENJ_TARGET=dreamcast or ENJ_TARGET=pc-endjinn)
+$(error Unknown ENJ_TARGET '$(ENJ_TARGET)'; use dreamcast, pc-endjinn, or web-endjinn)
 endif

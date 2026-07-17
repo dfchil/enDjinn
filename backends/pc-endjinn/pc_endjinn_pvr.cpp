@@ -37,10 +37,12 @@ struct HeaderState {
   pvr_cull_mode_t culling{PVR_CULLING_NONE};
 };
 
-std::array<uint8_t, 256> g_dr_packet{};
+alignas(32) std::array<uint8_t, 96> g_dr_packet{};
+uint32_t g_dr_slot = 0u;
 pvr_list_t g_current_list = PVR_LIST_OP_POLY;
 pvr_sprite_txr_t g_sprite_first{};
 bool g_has_sprite_first = false;
+pvr_vertex_tpcm_t g_tpcm_first{};
 bool g_has_tpcm_first = false;
 pvr_modifier_vol_t g_modifier_volume_first{};
 bool g_has_modifier_volume_first = false;
@@ -453,11 +455,8 @@ void scene_begin() {
 void list_begin(pvr_list_t list) { g_current_list = list; }
 
 void *dr_target() {
-  if (!g_has_sprite_first && !g_has_tpcm_first &&
-      !g_has_modifier_volume_first) {
-    return g_dr_packet.data();
-  }
-  return g_dr_packet.data() + 32u;
+  g_dr_slot ^= 1u;
+  return g_dr_packet.data() + 32u * (g_dr_slot + 1u);
 }
 
 void dr_commit(void *ptr) {
@@ -471,8 +470,8 @@ void dr_commit(void *ptr) {
     return;
   }
   if (g_has_tpcm_first) {
-    const pvr_vertex_tpcm_t *vertex =
-        reinterpret_cast<const pvr_vertex_tpcm_t *>(g_dr_packet.data());
+    std::memcpy(reinterpret_cast<uint8_t *>(&g_tpcm_first) + 32u, ptr, 32u);
+    const pvr_vertex_tpcm_t *vertex = &g_tpcm_first;
     static std::vector<pvr_vertex_tpcm_t> vertices;
     vertices.push_back(*vertex);
     if (vertices.size() >= 3u) {
@@ -512,6 +511,7 @@ void dr_commit(void *ptr) {
     }
     if (g_header.modifier) {
       if (g_header.textured) {
+        std::memcpy(&g_tpcm_first, ptr, 32u);
         g_has_tpcm_first = true;
         return;
       }

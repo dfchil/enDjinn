@@ -101,7 +101,7 @@ variables are:
 
 | Variable | Purpose |
 | --- | --- |
-| `ENJ_TARGET` | `dreamcast` (default) or `pc-endjinn`. |
+| `ENJ_TARGET` | `dreamcast` (default), `pc-endjinn`, or `web-endjinn`. |
 | `ENJ_BASENAME` | Output/project name; defaults to the current directory name. |
 | `ENJ_CODEDIR` | C source directory; defaults to `./code`. |
 | `ENJ_ROMDIR` | CD-ROM asset root; defaults to `cdrom`. |
@@ -145,6 +145,21 @@ storage, and screen-space modifier masks. Rumble, VMU LCD output, and some PVR
 state remain unsupported. See the
 [PC backend README](./backends/pc-endjinn/README.md) for setup and usage and
 the [support matrix](./backends/pc-endjinn/SUPPORTED.md) for exact coverage.
+
+## Browser backend
+
+Set `ENJ_TARGET=web-endjinn` to compile the same application and generated
+assets to WebAssembly with Emscripten, SDL2, and WebGL 2:
+
+```sh
+make ENJ_TARGET=web-endjinn
+emrun build/web-endjinn/my-game.html
+```
+
+The browser target reuses the PC backend's input, audio, filesystem, and PVR
+packet decoding shims. Its KOS-compatible sleep shim yields the unchanged
+engine loop to the browser through Emscripten Asyncify. See the
+[browser backend README](./backends/web-endjinn/README.md) for details.
 
 ## Profiling
 

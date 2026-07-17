@@ -28,6 +28,36 @@ static void *_render_post_data = NULL;
 static void (*_render_post_call)(void *) = NULL;
 
 static pvr_palfmt_t enj_palette_mode_switch = -1;
+
+#if ENJ_SHOWFRAMETIMES == 1
+static uint64_t profile_update_ns;
+static uint64_t profile_wait_ns;
+static uint64_t profile_render_ns;
+static uint32_t profile_frames;
+
+static void enj_render_profile_record(uint64_t update_ns, uint64_t wait_ns,
+                                      uint64_t render_ns) {
+  profile_update_ns += update_ns;
+  profile_wait_ns += wait_ns;
+  profile_render_ns += render_ns;
+  if (++profile_frames < 60) {
+    return;
+  }
+
+  printf("frame profile avg: update %llu us, pvr wait %llu us, render %llu us, "
+         "busy %llu us\n",
+         (unsigned long long)(profile_update_ns / profile_frames / 1000),
+         (unsigned long long)(profile_wait_ns / profile_frames / 1000),
+         (unsigned long long)(profile_render_ns / profile_frames / 1000),
+         (unsigned long long)((profile_update_ns + profile_render_ns) /
+                              profile_frames / 1000));
+  profile_update_ns = 0;
+  profile_wait_ns = 0;
+  profile_render_ns = 0;
+  profile_frames = 0;
+}
+#endif
+
 void enj_render_palette_mode_set(pvr_palfmt_t mode) {
   enj_palette_mode_switch = mode;
 }
@@ -97,6 +127,7 @@ void enj_render_next_frame(enj_mode_t *current_updater) {
 
 #if ENJ_SHOWFRAMETIMES == 1
   vid_border_color(0, 0, 255);
+  uint64_t phase_start_ns = timer_ns_gettime64();
 #endif
 
 #ifdef ENJ_DBG_PRINT
@@ -106,11 +137,21 @@ void enj_render_next_frame(enj_mode_t *current_updater) {
   // update game logic and build custom rendering list
   current_updater->mode_updater(current_updater->data);
 
-  pvr_wait_ready();
-  pvr_scene_begin();
 #if ENJ_SHOWFRAMETIMES == 1
-  vid_border_color(0, 255, 0);
+  uint64_t phase_end_ns = timer_ns_gettime64();
+  uint64_t update_ns = phase_end_ns - phase_start_ns;
+  vid_border_color(255, 255, 0);
+  phase_start_ns = phase_end_ns;
 #endif
+  pvr_wait_ready();
+#if ENJ_SHOWFRAMETIMES == 1
+  phase_end_ns = timer_ns_gettime64();
+  uint64_t wait_ns = phase_end_ns - phase_start_ns;
+  uint64_t render_ns = 0;
+  vid_border_color(0, 255, 0);
+  phase_start_ns = phase_end_ns;
+#endif
+  pvr_scene_begin();
   for (int rlist = PVR_LIST_OP_POLY; rlist <= PVR_LIST_PT_POLY; rlist++) {
     pvr_list_begin(rlist);
     if (first_renderlists[rlist] != NULL) {
@@ -126,16 +167,43 @@ void enj_render_next_frame(enj_mode_t *current_updater) {
     pvr_list_finish();
   }
   if (enj_palette_mode_switch != -1) {
+#if ENJ_SHOWFRAMETIMES == 1
+    phase_end_ns = timer_ns_gettime64();
+    render_ns += phase_end_ns - phase_start_ns;
+    vid_border_color(255, 255, 0);
+    phase_start_ns = phase_end_ns;
+#endif
     pvr_wait_render_done();
+#if ENJ_SHOWFRAMETIMES == 1
+    phase_end_ns = timer_ns_gettime64();
+    wait_ns += phase_end_ns - phase_start_ns;
+    vid_border_color(0, 255, 0);
+    phase_start_ns = phase_end_ns;
+#endif
     pvr_set_pal_format(enj_palette_mode_switch);
     enj_palette_mode_switch = -1;
   }
+#if ENJ_SHOWFRAMETIMES == 1
+  phase_end_ns = timer_ns_gettime64();
+  render_ns += phase_end_ns - phase_start_ns;
+  vid_border_color(255, 255, 0);
+  phase_start_ns = phase_end_ns;
+#endif
   pvr_scene_finish();
+#if ENJ_SHOWFRAMETIMES == 1
+  phase_end_ns = timer_ns_gettime64();
+  wait_ns += phase_end_ns - phase_start_ns;
+  vid_border_color(0, 255, 0);
+  phase_start_ns = phase_end_ns;
+#endif
 
   if (_render_post_call != NULL) {
     _render_post_call(_render_post_data);
   }
 #if ENJ_SHOWFRAMETIMES == 1
+  phase_end_ns = timer_ns_gettime64();
+  render_ns += phase_end_ns - phase_start_ns;
+  enj_render_profile_record(update_ns, wait_ns, render_ns);
   vid_border_color(255, 0, 0);
 #endif
 }
