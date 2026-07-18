@@ -18,15 +18,16 @@ typedef struct maple_device {
   } info;
 } maple_device_t;
 
-typedef void (*maple_attach_callback_t)(maple_device_t *device);
-typedef void (*maple_detach_callback_t)(maple_device_t *device);
+typedef void (*maple_user_callback_t)(maple_device_t *device, void *user_data);
 
 PC_ENDJINN_BEGIN_DECLS
 maple_device_t *maple_enum_type(int index, uint32_t function);
 maple_device_t *maple_enum_dev(int port, int unit);
 void *maple_dev_status(maple_device_t *device);
-void maple_attach_callback(uint32_t function, maple_attach_callback_t callback);
-void maple_detach_callback(uint32_t function, maple_detach_callback_t callback);
+void maple_attach_callback(uint32_t function, maple_user_callback_t callback,
+                           void *user_data);
+void maple_detach_callback(uint32_t function, maple_user_callback_t callback,
+                           void *user_data);
 PC_ENDJINN_END_DECLS
 
 #endif

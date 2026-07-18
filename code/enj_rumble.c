@@ -10,7 +10,8 @@ static maple_device_t *local_rumbles[MAPLE_PORT_COUNT] = {0};
 static int rumble_rate_limits[MAPLE_PORT_COUNT] = {0};
 static uint32_t pending_rumble_effects[MAPLE_PORT_COUNT] = {0};
 
-static inline void scan_local_rumblers(maple_device_t *__unused) {
+static inline void scan_local_rumblers(maple_device_t *__unused,
+                                       void *__unused) {
   for (int i = 0; i < 4; i++) {
     local_rumbles[i] = NULL;
   }
@@ -23,9 +24,9 @@ static inline void scan_local_rumblers(maple_device_t *__unused) {
 }
 
 void enj_rumble_init_local_devices(void) {
-  scan_local_rumblers(NULL);
-  maple_attach_callback(MAPLE_FUNC_PURUPURU, scan_local_rumblers);
-  maple_detach_callback(MAPLE_FUNC_PURUPURU, scan_local_rumblers);
+  scan_local_rumblers(NULL, NULL);
+  maple_attach_callback(MAPLE_FUNC_PURUPURU, scan_local_rumblers, NULL);
+  maple_detach_callback(MAPLE_FUNC_PURUPURU, scan_local_rumblers, NULL);
 }
 
 size_t enj_rumble_states_length(void) { return MAPLE_PORT_COUNT; }
