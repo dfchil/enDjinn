@@ -1,5 +1,6 @@
 #include <kos.h>
 
+#include "pc_endjinn_pvr.h"
 #include "pc_endjinn_vulkan.h"
 
 extern "C" {
@@ -47,6 +48,22 @@ void pvr_wait_render_done(void) { pc_endjinn::pvr_wait_render_done(); }
 
 void pvr_set_pal_format(pvr_palfmt_t mode) {
   pc_endjinn::pvr_set_pal_format(mode);
+}
+
+void pvr_set_pal_entry(uint32_t index, uint32_t value) {
+  pc_endjinn_pvr::palette_entry(index, value);
+}
+
+void *pvr_mem_malloc(size_t size) { return pc_endjinn_pvr::texture_alloc(size); }
+void pvr_mem_free(pvr_ptr_t ptr) { pc_endjinn_pvr::texture_free(ptr); }
+
+void pvr_txr_load(const void *src, pvr_ptr_t dst, size_t count) {
+  pc_endjinn_pvr::texture_load(src, dst, count);
+}
+
+void pvr_txr_load_ex(const void *src, pvr_ptr_t dst, uint32_t width,
+                     uint32_t height, uint32_t flags) {
+  pc_endjinn_pvr::texture_load_ex(src, dst, width, height, flags);
 }
 
 void pvr_fog_table_color(float a, float r, float g, float b) {

@@ -2,9 +2,7 @@
 #define ENJ_TEXTURE_H
 
 #include <kos.h>
-#ifdef __DREAMCAST__
 #include <pvrtex/file_dctex.h>
-#endif
 #include <stdint.h>
 
 typedef fDtHeader dt_header_t;

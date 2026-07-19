@@ -22,24 +22,28 @@ do {                                \
 #define BIT_OFFSET(b) ((b) % ENJ_BITS_PER_BYTE)
 
 enj_bitmap_t *enj_bitmap_create(int width, int height) {
-  if (width % 8 != 0) {
+  if (width <= 0 || width % 8 != 0) {
     ENJ_DEBUG_PRINT("Width must be a multiple of 8");
     return NULL;
   }
-  if (height % 8 != 0) {
+  if (height <= 0 || height % 8 != 0) {
     ENJ_DEBUG_PRINT("Height must be a multiple of 8");
     return NULL;
   }
 
-  enj_bitmap_t *bitmap =
-      memalign(32, sizeof(enj_bitmap_t) + ((width * height) / ENJ_BITS_PER_BYTE));
-  memset(bitmap, 0, sizeof(enj_bitmap_t) + ((width * height) / ENJ_BITS_PER_BYTE));
+  size_t row_size = (size_t)width / ENJ_BITS_PER_BYTE;
+  if ((size_t)height > (SIZE_MAX - sizeof(enj_bitmap_t)) / row_size) {
+    return NULL;
+  }
+  size_t allocation_size = sizeof(enj_bitmap_t) + row_size * (size_t)height;
+  enj_bitmap_t *bitmap = memalign(32, allocation_size);
   if (bitmap == NULL) {
     return NULL;
   }
+  memset(bitmap, 0, allocation_size);
   bitmap->width = width;
   bitmap->height = height;
-  bitmap->data = (uint8_t *)((size_t)bitmap + sizeof(enj_bitmap_t));
+  bitmap->data = (uint8_t *)bitmap + sizeof(enj_bitmap_t);
   return bitmap;
 }
 

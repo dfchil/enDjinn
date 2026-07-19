@@ -11,9 +11,7 @@ alignas(32) static maple_device_t *local_controllers[MAPLE_PORT_COUNT] = {0};
 
 /* Called at init and then only as a callback when controller
    devices are connected or disconnected */
-void scan_local_controllers(maple_device_t *__unused, void *user_data) {
-  (void)user_data;
-
+void scan_local_controllers(maple_device_t *__unused, void *__unused) {
   /* Clear existing controller status */
   for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
     local_controllers[i] = NULL;

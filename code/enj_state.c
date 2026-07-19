@@ -5,18 +5,22 @@
 #include <kos.h>
 #include <malloc.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/enj_qfont.h>
 #endif
 
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_GDB
 #include <arch/gdb.h>
 #endif
 
 #ifdef ENJ_DCPROF
 #include "../../enDjinn/profilers/dcprof/profiler.h"
 #endif
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
 #include <dc/perf_monitor.h>
 #endif
 
@@ -49,8 +53,10 @@ static inline void _vmu_splash_screen(void) {
 
 
 void enj_state_init_defaults(void) {
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_GDB
   gdb_init();
+#endif
+#ifdef ENJ_DBG_PRINT
   ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
 #endif
 
@@ -92,7 +98,7 @@ void enj_ctrl_init_local_devices(void);
 void enj_rumble_init_local_devices(void);
 void enj_rumble_update(void);
 
-#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
+#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0 && !defined(__EMSCRIPTEN__)
 static void enj_state_wait_for_frame_deadline(uint64_t *deadline_ns) {
   const uint64_t frame_ns = 1000000000ull / ENJ_FRAME_RATE;
   uint64_t now_ns = timer_ns_gettime64();
@@ -125,7 +131,7 @@ int enj_state_startup() {
                    state->video.bg_color.g / 255.0f,
                    state->video.bg_color.b / 255.0f);
 
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
   perf_monitor_init(PMCR_OPERAND_CACHE_READ_MISS_MODE,
                     PMCR_INSTRUCTION_CACHE_MISS_MODE);
 #endif
@@ -148,80 +154,60 @@ int enj_state_startup() {
   return 0;
 }
 
-void enj_state_run(void) {
-  if (enj_mode_get_current_index() < 0) {
-    ENJ_DEBUG_PRINT(
-        "No mode pushed! Call enj_mode_push() before enj_state_run().\n");
-    return;
+static int enj_state_run_frame(enj_state_t *state,
+                               enj_ctrlr_state_t **cstates) {
+  if (state->flags.shut_down) {
+    return 0;
   }
-  enj_state_t *state = enj_state_get();
-  if (!state->flags.started) {
-    ENJ_DEBUG_PRINT("enDjinn not started! Call enj_state_startup() before "
-                    "enj_state_run().\n");
-    return;
+  if (state->flags.end_mode) {
+    if (enj_mode_pop() == NULL) {
+      return 0;
+    }
+    state->flags.end_mode = 0;
   }
-  enj_ctrlr_state_t **cstates = enj_ctrl_get_states();
-#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
-  uint64_t frame_deadline_ns = 0;
-#endif
+  enj_ctrl_map_states();
+  if (state->flags.soft_reset_enabled && !(enj_mode_get()->no_soft_reset)) {
+    for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+      if (cstates[i] && enj_ctrlr_button_combo_raw(cstates[i]->button.raw,
+                                                   state->exit_pattern)) {
+        cstates[i]->button.raw &= ~(state->exit_pattern << 1);
 
-  while (1) {
-    if (state->flags.shut_down) {
-      break;
-    }
-    if (state->flags.end_mode) {
-      if (enj_mode_pop() == NULL) {
-        // no more modes, exit
-        break;
-      }
-      state->flags.end_mode = 0;
-    }
-    enj_ctrl_map_states();
-    if (state->flags.soft_reset_enabled && !(enj_mode_get()->no_soft_reset)) {
-      /* check for controller exit patterns */
-      for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
-        if (cstates[i] && enj_ctrlr_button_combo_raw(cstates[i]->button.raw,
-                                                     state->exit_pattern)) {
-          // prevent re-triggering
-          cstates[i]->button.raw &= ~(state->exit_pattern << 1);
-
-          int mode_index = enj_mode_get_current_index();
-          if (mode_index == 0) {
-            // we're at the base mode, just shut down
-            enj_state_flag_shutdown(NULL);
-            break;
-          }
-          if (state->soft_reset_target_index != -1 &&
-              (mode_index != state->soft_reset_target_index)) {
-            enj_mode_cut_to_soft_reset_target();
-          } else {
-#ifdef ENJ_DEBUG
-            enj_mode_t *from_mode = enj_mode_get();
+        int mode_index = enj_mode_get_current_index();
+        if (mode_index == 0) {
+          enj_state_flag_shutdown(NULL);
+          break;
+        }
+        if (state->soft_reset_target_index != -1 &&
+            mode_index != state->soft_reset_target_index) {
+          enj_mode_cut_to_soft_reset_target();
+        } else {
+#ifdef ENJ_DBG_PRINT
+          enj_mode_t *from_mode = enj_mode_get();
 #endif
-            enj_mode_pop();
-#ifdef ENJ_DEBUG
-            enj_mode_t *nxt_mode = enj_mode_get();
-            ENJ_DEBUG_PRINT("Exiting from mode '%s':%d to mode '%s:%d'\n",
-                            from_mode->name, mode_index, nxt_mode->name,
-                            enj_mode_get_current_index());
+          enj_mode_pop();
+#ifdef ENJ_DBG_PRINT
+          enj_mode_t *nxt_mode = enj_mode_get();
+          ENJ_DEBUG_PRINT("Exiting from mode '%s':%d to mode '%s:%d'\n",
+                          from_mode->name, mode_index, nxt_mode->name,
+                          enj_mode_get_current_index());
 #endif
-          }
         }
       }
     }
-    enj_render_next_frame(enj_mode_get());
-    enj_rumble_update();
-#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
-    enj_state_wait_for_frame_deadline(&frame_deadline_ns);
-#endif
   }
+  enj_render_next_frame(enj_mode_get());
+  enj_rumble_update();
+  return 1;
+}
+
+static void enj_state_shutdown(void) {
 #ifdef ENJ_DCPROF
   profiler_stop();
   profiler_clean_up();
 #endif
   pvr_shutdown();
 
-#ifdef ENJ_DEBUG
+#ifdef ENJ_DBG_PRINT
   perf_monitor_print(stdout);
 
   FILE *stats_out = fopen(ENJ_CBASEPATH "/pstats.txt", "a");
@@ -254,5 +240,62 @@ void enj_state_run(void) {
 
 #ifdef RELEASEBUILD
   arch_set_exit_path(ARCH_EXIT_REBOOT);
+#endif
+}
+
+#ifdef __EMSCRIPTEN__
+static double enj_state_web_next_frame_ms;
+
+static void enj_state_web_frame(void *arg) {
+#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
+  const double frame_ms = 1000.0 / ENJ_FRAME_RATE;
+  const double now_ms = emscripten_get_now();
+  if (enj_state_web_next_frame_ms == 0.0) {
+    enj_state_web_next_frame_ms = now_ms;
+  }
+  if (now_ms < enj_state_web_next_frame_ms) {
+    return;
+  }
+  if (now_ms - enj_state_web_next_frame_ms > frame_ms) {
+    enj_state_web_next_frame_ms = now_ms;
+  }
+  enj_state_web_next_frame_ms += frame_ms;
+#endif
+
+  if (enj_state_run_frame(enj_state_get(), arg)) {
+    return;
+  }
+  emscripten_cancel_main_loop();
+  enj_state_shutdown();
+}
+#endif
+
+void enj_state_run(void) {
+  if (enj_mode_get_current_index() < 0) {
+    ENJ_DEBUG_PRINT(
+        "No mode pushed! Call enj_mode_push() before enj_state_run().\n");
+    return;
+  }
+  enj_state_t *state = enj_state_get();
+  if (!state->flags.started) {
+    ENJ_DEBUG_PRINT("enDjinn not started! Call enj_state_startup() before "
+                    "enj_state_run().\n");
+    return;
+  }
+  enj_ctrlr_state_t **cstates = enj_ctrl_get_states();
+
+#ifdef __EMSCRIPTEN__
+  enj_state_web_next_frame_ms = 0.0;
+  emscripten_set_main_loop_arg(enj_state_web_frame, cstates, 0, 1);
+#else
+#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
+  uint64_t frame_deadline_ns = 0;
+#endif
+  while (enj_state_run_frame(state, cstates)) {
+#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
+    enj_state_wait_for_frame_deadline(&frame_deadline_ns);
+#endif
+  }
+  enj_state_shutdown();
 #endif
 }

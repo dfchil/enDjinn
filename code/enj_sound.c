@@ -11,18 +11,24 @@ sfxhnd_t enj_sound_dca_load_file(const char* filename) {
   uint8_t *buffer = NULL;
   FILE* sndfile = fopen(filename, "rb");
   if (sndfile) {
-    fseek(sndfile, 0, SEEK_END);
-    size_t filesize = ftell(sndfile);
-    fseek(sndfile, 0, SEEK_SET);
-    
-    buffer = memalign(32, filesize);
-    size_t amountread = fread(buffer, 1, filesize, sndfile);
-    fclose(sndfile);
-    if (amountread == filesize) {
-      handle = enj_sound_dca_load_blob(buffer);
+    long file_end = fseek(sndfile, 0, SEEK_END) == 0 ? ftell(sndfile) : -1;
+    if (file_end > 0 && fseek(sndfile, 0, SEEK_SET) == 0) {
+      size_t filesize = (size_t)file_end;
+      buffer = memalign(32, filesize);
+      if (buffer != NULL) {
+        size_t amountread = fread(buffer, 1, filesize, sndfile);
+        if (amountread == filesize) {
+          handle = enj_sound_dca_load_blob(buffer);
+        } else {
+          ENJ_DEBUG_PRINT("enj_sound_dca_load_file: could not read entire file %s\n", filename);
+        }
+      } else {
+        ENJ_DEBUG_PRINT("enj_sound_dca_load_file: allocation failed for %s\n", filename);
+      }
     } else {
-      ENJ_DEBUG_PRINT("enj_sound_dca_load_file: could not read entire file %s\n", filename);
+      ENJ_DEBUG_PRINT("enj_sound_dca_load_file: could not determine size of %s\n", filename);
     }
+    fclose(sndfile);
   } else {
     ENJ_DEBUG_PRINT("enj_sound_dca_load_file: could not open file %s\n", filename);
   }

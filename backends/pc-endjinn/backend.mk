@@ -6,11 +6,11 @@ PKG_CONFIG ?= pkg-config
 ifeq ($(PC_ENDJINN_HOST_OS),Darwin)
 HOMEBREW_PREFIX ?= /opt/homebrew
 QSB ?= $(HOMEBREW_PREFIX)/bin/qsb
-SDL_PREFIX ?= $(HOMEBREW_PREFIX)/opt/sdl2
+SDL2_CONFIG ?= sdl2-config
 MOLTENVK_PREFIX ?= $(HOMEBREW_PREFIX)/opt/molten-vk
 
-SDL_CFLAGS ?= -I$(SDL_PREFIX)/include/SDL2 -D_THREAD_SAFE
-SDL_LIBS ?= -L$(SDL_PREFIX)/lib -lSDL2
+SDL_CFLAGS ?= $(shell $(SDL2_CONFIG) --cflags)
+SDL_LIBS ?= $(shell $(SDL2_CONFIG) --libs)
 VULKAN_CFLAGS ?= -I$(MOLTENVK_PREFIX)/libexec/include
 VULKAN_LIBS ?= -L$(MOLTENVK_PREFIX)/lib -lMoltenVK \
 	-framework Metal -framework IOSurface -framework QuartzCore \
@@ -31,7 +31,8 @@ PC_ENDJINN_PLATFORM_SRCS := \
 	$(PC_ENDJINN_BACKEND_DIR)enj_platform_pc_endjinn.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_pvr.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_vulkan.cpp \
-	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_input.cpp
+	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_input.cpp \
+	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_fs.cpp
 PC_ENDJINN_KOS_HEADERS := $(shell find $(PC_ENDJINN_BACKEND_DIR)include \
 	-type f -name '*.h')
 PC_ENDJINN_BACKEND_HEADERS := $(wildcard $(PC_ENDJINN_BACKEND_DIR)*.h)

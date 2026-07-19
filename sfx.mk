@@ -1,13 +1,15 @@
 ROMBASESFXDIR:=$(notdir $(ENJ_SOUNDFX_SRC_DIR))
 
-SOUNDMACHINE_DIR=${ENJDIR}tools/dcaconv/
-SOUNDMACHINE=${SOUNDMACHINE_DIR}/dcaconv
+ifeq ($(origin SOUNDMACHINE), undefined)
+SOUNDMACHINE_DIR := $(ENJDIR)tools/dcaconv
+SOUNDMACHINE := $(SOUNDMACHINE_DIR)/dcaconv
 
-${SOUNDMACHINE_DIR}:
-	cd ${ENJDIR}tools/ && git clone git@github.com:dfchil/dcaconv.git
+$(SOUNDMACHINE_DIR):
+	test -d $@ || git clone --depth 1 https://github.com/dfchil/dcaconv.git $@
 
-$(SOUNDMACHINE): ${SOUNDMACHINE_DIR}
-	@$(MAKE) -C ${SOUNDMACHINE_DIR} -j10
+$(SOUNDMACHINE): $(SOUNDMACHINE_DIR)
+	$(MAKE) -C $(SOUNDMACHINE_DIR)
+endif
 
 ENJ_SNDFXFILES:=
 ifneq (,$(wildcard $(ENJ_SOUNDFX_SRC_DIR)))
@@ -21,7 +23,6 @@ $(ROMBASEPATH)/$(ROMBASESFXDIR)/ADPCM/%.dca: $(ENJ_SOUNDFX_SRC_DIR)/ADPCM/%.* $(
 $(ROMBASEPATH)/$(ROMBASESFXDIR)/PCM/16/%.dca: $(ENJ_SOUNDFX_SRC_DIR)/PCM/16/%.* $(SOUNDMACHINE)
 	@mkdir -p $(shell dirname $@)
 	$(SOUNDMACHINE)  --format PCM16 -i $< -o $@
-
 
 $(ROMBASEPATH)/$(ROMBASESFXDIR)/PCM/8/%.dca: $(ENJ_SOUNDFX_SRC_DIR)/PCM/8/%.* $(SOUNDMACHINE)
 	@mkdir -p $(shell dirname $@)
