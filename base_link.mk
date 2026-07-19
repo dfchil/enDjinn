@@ -23,9 +23,16 @@ include ${ENJDIR}texture.mk
 include ${ENJDIR}sfx.mk
 include ${ENJDIR}fonts.mk
 ENJ_ASSETS := $(ENJ_TEXTURES) $(ENJ_SNDFXFILES) $(ENJ_FONTFILES)
+ENJ_IPLOGO_SRC ?= ${ENJDIR}docs/img/MR.image.png
+ENJ_IPLOGO ?= ${ENJDIR}assets/iplogo.mr
+ENJ_MAKEIP ?= $(if $(KOS_BASE),$(KOS_BASE)/utils/makeip/makeip,makeip)
 ENJ_DEPFLAGS ?= -MMD -MP -MF $(@:.o=.d)
 
-assets: $(ENJ_ASSETS)
+assets: $(ENJ_ASSETS) $(ENJ_IPLOGO)
+
+$(ENJ_IPLOGO): $(ENJ_IPLOGO_SRC)
+	@mkdir -p $(dir $@)
+	$(ENJ_MAKEIP) -l $< -s $@ -v -f
 
 .DEFAULT_GOAL := all
 
@@ -198,7 +205,7 @@ $(ENJ_BINDIR)/${ENJ_BASENAME}.elf: $(OBJS)
 	@echo "Linking $@..."
 	$(ENJ_CC) $(ENJ_INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(ENJ_LDLIBS) 
 
-$(ENJ_BINDIR)/${ENJ_BASENAME}.cdi: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf
+$(ENJ_BINDIR)/${ENJ_BASENAME}.cdi: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf $(ENJ_IPLOGO)
 	mkdcdisc \
 	--name ${ENJ_BASENAME} \
 	--elf $< \
@@ -207,7 +214,7 @@ $(ENJ_BINDIR)/${ENJ_BASENAME}.cdi: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf
 	--serial "ENJ01" \
 	--output $@ \
 	-v 3 \
-	--image ${ENJDIR}assets/iplogo.mr \
+	--image $(ENJ_IPLOGO) \
 	--no-padding
 
 $(ENJ_BINDIR)/${ENJ_BASENAME}.bin: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf
@@ -223,7 +230,7 @@ mrproper: clean
 	rm -f ${FONTMACHINE}
 	find . -type d -empty -delete
 
-.PRECIOUS: $(ENJ_ASSETS)
+.PRECIOUS: $(ENJ_ASSETS) $(ENJ_IPLOGO)
 .PHONY: all assets clean mrproper list help info
 include ${ENJDIR}info.mk
 else
