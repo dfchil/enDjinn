@@ -9,6 +9,10 @@
 #include <cstring>
 #include <vector>
 
+#ifdef ENJ_TARGET_WEB_ENDJINN
+#include "web_endjinn_input.h"
+#endif
+
 namespace {
 
 std::array<SDL_GameController *, MAPLE_PORT_COUNT> g_game_controllers{};
@@ -19,6 +23,9 @@ std::array<maple_device_t, MAPLE_PORT_COUNT> g_devices = {{
     {3, 0, false, {MAPLE_FUNC_CONTROLLER}},
 }};
 std::array<cont_state_t, MAPLE_PORT_COUNT> g_controller_states{};
+#ifdef ENJ_TARGET_WEB_ENDJINN
+std::array<int, MAPLE_PORT_COUNT> g_web_gamepad_indices = {{-1, -1, -1, -1}};
+#endif
 bool g_controllers_initialized = false;
 bool g_quit_requested = false;
 
@@ -83,29 +90,55 @@ void audio_shutdown()
     g_sounds.clear();
 }
 
-bool is_open(SDL_JoystickID instance)
+int open_controller_port(SDL_JoystickID instance)
 {
-    for (SDL_GameController *controller : g_game_controllers) {
+    for (size_t port = 0; port < g_game_controllers.size(); port++) {
+        SDL_GameController *controller = g_game_controllers[port];
         if (controller != nullptr &&
             SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)) == instance) {
-            return true;
+            return static_cast<int>(port);
         }
     }
-    return false;
+    return -1;
 }
 
 void refresh_game_controllers()
 {
+#ifdef ENJ_TARGET_WEB_ENDJINN
+    web_endjinn::gamepads_sample();
+#endif
     for (size_t port = 0; port < g_game_controllers.size(); port++) {
         SDL_GameController *&controller = g_game_controllers[port];
         if (controller != nullptr && !SDL_GameControllerGetAttached(controller)) {
             SDL_GameControllerClose(controller);
             controller = nullptr;
+#ifdef ENJ_TARGET_WEB_ENDJINN
+            g_web_gamepad_indices[port] = -1;
+#endif
         }
         g_devices[port].valid = port == 0 || controller != nullptr;
     }
+#ifdef ENJ_TARGET_WEB_ENDJINN
+    size_t controller_ordinal = 0u;
+#endif
     for (int i = 0; i < SDL_NumJoysticks(); i++) {
-        if (!SDL_IsGameController(i) || is_open(SDL_JoystickGetDeviceInstanceID(i))) {
+        if (!SDL_IsGameController(i)) {
+            continue;
+        }
+#ifdef ENJ_TARGET_WEB_ENDJINN
+        const int web_gamepad_index =
+            web_endjinn::gamepad_index_for_ordinal(controller_ordinal);
+        controller_ordinal++;
+#endif
+        const int open_port =
+            open_controller_port(SDL_JoystickGetDeviceInstanceID(i));
+        if (open_port >= 0) {
+#ifdef ENJ_TARGET_WEB_ENDJINN
+            if (web_gamepad_index >= 0) {
+                g_web_gamepad_indices[static_cast<size_t>(open_port)] =
+                    web_gamepad_index;
+            }
+#endif
             continue;
         }
         const auto slot = std::find(g_game_controllers.begin(), g_game_controllers.end(), nullptr);
@@ -115,6 +148,9 @@ void refresh_game_controllers()
         *slot = SDL_GameControllerOpen(i);
         if (*slot != nullptr) {
             const size_t port = static_cast<size_t>(slot - g_game_controllers.begin());
+#ifdef ENJ_TARGET_WEB_ENDJINN
+            g_web_gamepad_indices[port] = web_gamepad_index;
+#endif
             g_devices[port].valid = true;
             std::fprintf(
                 stderr,
@@ -140,15 +176,33 @@ uint8_t trigger_to_u8(Sint16 axis)
         : 0u;
 }
 
-bool controller_button(SDL_GameController *controller, SDL_GameControllerButton button)
-{
-    return controller != nullptr && SDL_GameControllerGetButton(controller, button) != 0u;
-}
-
 Sint16 controller_axis(SDL_GameController *controller, SDL_GameControllerAxis axis)
 {
     return controller != nullptr ? SDL_GameControllerGetAxis(controller, axis)
         : 0;
+}
+
+uint8_t controller_trigger_to_u8(SDL_GameController *controller,
+                                 SDL_GameControllerAxis axis, size_t port,
+                                 bool right_trigger)
+{
+#ifdef ENJ_TARGET_WEB_ENDJINN
+    const int web_value =
+        web_endjinn::gamepad_trigger(g_web_gamepad_indices[port],
+                                    right_trigger);
+    if (web_value >= 0) {
+        return static_cast<uint8_t>(web_value);
+    }
+#else
+    (void)port;
+    (void)right_trigger;
+#endif
+    return trigger_to_u8(controller_axis(controller, axis));
+}
+
+bool controller_button(SDL_GameController *controller, SDL_GameControllerButton button)
+{
+    return controller != nullptr && SDL_GameControllerGetButton(controller, button) != 0u;
 }
 
 }  // namespace
@@ -169,6 +223,9 @@ void pc_endjinn_input_shutdown(void)
             controller = nullptr;
         }
     }
+#ifdef ENJ_TARGET_WEB_ENDJINN
+    g_web_gamepad_indices.fill(-1);
+#endif
     g_controllers_initialized = false;
     g_quit_requested = false;
     SDL_Quit();
@@ -200,6 +257,9 @@ void pc_endjinn_controllers_shutdown(void)
             controller = nullptr;
         }
     }
+#ifdef ENJ_TARGET_WEB_ENDJINN
+    g_web_gamepad_indices.fill(-1);
+#endif
 }
 
 size_t pc_endjinn_controllers_poll(
@@ -227,9 +287,11 @@ size_t pc_endjinn_controllers_poll(
         const bool keyboard = port == 0;
         connected[port] = keyboard || controller != nullptr;
         state.rtrig = keyboard && keys[SDL_SCANCODE_V]
-            ? 255u : trigger_to_u8(controller_axis(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT));
+            ? 255u : controller_trigger_to_u8(
+                controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, port, true);
         state.ltrig = keyboard && keys[SDL_SCANCODE_F]
-            ? 255u : trigger_to_u8(controller_axis(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT));
+            ? 255u : controller_trigger_to_u8(
+                controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT, port, false);
         state.a = (keyboard && keys[SDL_SCANCODE_X]) || controller_button(controller, SDL_CONTROLLER_BUTTON_A) || (!keyboard && state.rtrig > 16);
         state.b = (keyboard && keys[SDL_SCANCODE_C]) || controller_button(controller, SDL_CONTROLLER_BUTTON_B) || (!keyboard && state.ltrig > 16);
         state.x = (keyboard && keys[SDL_SCANCODE_S]) || controller_button(controller, SDL_CONTROLLER_BUTTON_X);

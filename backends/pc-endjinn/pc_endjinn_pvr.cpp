@@ -54,6 +54,9 @@ std::unordered_map<pvr_ptr_t, TextureUpload> g_uploads;
 std::array<uint32_t, 1024> g_palette{};
 pvr_palfmt_t g_palette_format = PVR_PAL_ARGB8888;
 uint64_t g_palette_revision = 1u;
+uint64_t g_palette_format_revision = 1u;
+std::array<uint64_t, 64> g_palette_4bpp_revisions{};
+std::array<uint64_t, 4> g_palette_8bpp_revisions{};
 uint64_t g_texture_revision = 1u;
 uintptr_t g_next_texture_handle = 0x10000u;
 uint32_t g_next_modifier_texture_id = 1u;
@@ -639,18 +642,35 @@ void texture_load_ex(const void *src, pvr_ptr_t dst, uint32_t width,
 void palette_format(pvr_palfmt_t format) {
   if (g_palette_format != format) {
     g_palette_format = format;
-    g_palette_revision++;
+    g_palette_format_revision = ++g_palette_revision;
   }
 }
 
 void palette_entry(uint32_t index, uint32_t value) {
   if (index < g_palette.size() && g_palette[index] != value) {
     g_palette[index] = value;
-    g_palette_revision++;
+    const uint64_t revision = ++g_palette_revision;
+    g_palette_4bpp_revisions[index / 16u] = revision;
+    g_palette_8bpp_revisions[index / 256u] = revision;
   }
 }
 
 uint64_t palette_revision() { return g_palette_revision; }
+
+uint64_t palette_revision(uint32_t texture_format) {
+  const uint32_t pixel_format = (texture_format >> 27u) & 7u;
+  if (pixel_format == PVR_PIXEL_MODE_PAL_4BPP) {
+    const size_t bank = (texture_format >> 21u) & 0x3fu;
+    return std::max(g_palette_format_revision,
+                    g_palette_4bpp_revisions[bank]);
+  }
+  if (pixel_format == PVR_PIXEL_MODE_PAL_8BPP) {
+    const size_t bank = (texture_format >> 25u) & 0x03u;
+    return std::max(g_palette_format_revision,
+                    g_palette_8bpp_revisions[bank]);
+  }
+  return 0u;
+}
 
 uint64_t texture_revision(pvr_ptr_t ptr) {
   const auto found = g_uploads.find(ptr);

@@ -32,4 +32,5 @@ WEB_ENDJINN_PLATFORM_SRCS := \
 	$(ENJDIR)backends/pc-endjinn/pc_endjinn_input.cpp \
 	$(ENJDIR)backends/pc-endjinn/pc_endjinn_fs.cpp \
 	$(WEB_ENDJINN_BACKEND_DIR)enj_platform_web_endjinn.cpp \
+	$(WEB_ENDJINN_BACKEND_DIR)web_endjinn_input.cpp \
 	$(WEB_ENDJINN_BACKEND_DIR)web_endjinn_webgl.cpp

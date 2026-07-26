@@ -113,8 +113,23 @@ variables are:
 | `ENJ_DEBUG` | Enables `ENJ_DEBUG_PRINT` and Dreamcast debug instrumentation. |
 | `ENJ_FSAA` | Enables FSAA and changes `ENJ_XSCALE` accordingly. |
 | `ENJ_FRAME_RATE` | Enables a frame-rate deadline when set to a positive value. |
+| `ENJ_WEB_SIMD` | Set to `1` to compile and link `web-endjinn` with WebAssembly SIMD128; defaults to `0`. |
+| `ENJ_USE_SH4ZAM` | Set to `1` to build and link the optional SH4ZAM integration for the selected target. |
+| `SH4ZAM_DIR` | Optional path to the SH4ZAM source tree when automatic discovery is unsuitable. |
 | `ENJ_INJECT_QFONT` | Builds and embeds the built-in quick font. |
 | `ENJ_ADD_LOGO_TEXTURE` | Adds enDjinn logo textures to the generated assets. |
+
+When `ENJ_USE_SH4ZAM=1`, enDjinn builds SH4ZAM natively with CMake for
+`pc-endjinn`, compiles its software implementation with Emscripten for
+`web-endjinn`, and compiles its SH-4 implementation with KOS for `dreamcast`.
+The integration is disabled by default; applications that use `shz_*` APIs
+should enable it in `local.cfg.mk`. Set `SH4ZAM_DIR` explicitly or place the
+source tree next to the application or enDjinn, or under `third_party/` or
+`vendor/` in the application.
+
+Set `ENJ_WEB_SIMD=1` to pass `-msimd128` to every WebAssembly compilation and
+the final link, including optional integrations such as SH4ZAM. Leave it at
+the default `0` when producing a scalar compatibility build.
 
 Run `make cfg_info` in a project directory to inspect the resolved build
 configuration, and `make auto_variables` to inspect generated asset and

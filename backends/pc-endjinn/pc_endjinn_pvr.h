@@ -58,6 +58,7 @@ void texture_load_ex(const void *src, pvr_ptr_t dst, uint32_t width,
 void palette_format(pvr_palfmt_t format);
 void palette_entry(uint32_t index, uint32_t value);
 uint64_t palette_revision();
+uint64_t palette_revision(uint32_t texture_format);
 uint64_t texture_revision(pvr_ptr_t ptr);
 std::array<uint32_t, 1024> palette_rgba();
 bool decode_texture(const QueuedPrimitive &primitive, DecodedTexture &decoded);

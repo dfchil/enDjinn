@@ -1,6 +1,7 @@
 #include "web_endjinn_webgl.h"
 
 #include "../pc-endjinn/pc_endjinn_pvr.h"
+#include <enDjinn/enj_web_render.h>
 
 #include <SDL.h>
 #ifdef __EMSCRIPTEN__
@@ -20,6 +21,7 @@
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 extern "C" void pc_endjinn_input_shutdown(void);
@@ -30,9 +32,11 @@ using pc_endjinn_pvr::QueuedPrimitive;
 
 struct WebVertex {
   float position[3];
-  float color[4];
+  uint8_t color[4];
   float uv[2];
 };
+
+static_assert(sizeof(WebVertex) == 24u);
 
 struct DrawBatch {
   pvr_list_t list{};
@@ -54,10 +58,35 @@ struct FrameDrawData {
   std::vector<DrawBatch> batches;
 };
 
+struct SortablePrimitive {
+  const QueuedPrimitive *primitive{};
+  float depth{};
+};
+
 struct WebTexture {
   GLuint id{};
   uint64_t texture_revision{};
   uint64_t palette_revision{};
+};
+
+struct CustomRenderPass {
+  enj_web_render_pass_callback_t callback{};
+  std::vector<uint8_t> data;
+};
+
+struct GenericDrawState {
+  bool depth_test{};
+  bool depth_write{};
+  bool color_write{};
+  bool stencil_test{};
+  bool blend{};
+  bool punch_through{};
+  GLenum stencil_func{GL_ALWAYS};
+  GLuint stencil_func_mask{0xffu};
+  GLuint stencil_write_mask{0xffu};
+  GLenum stencil_depth_pass{GL_KEEP};
+  GLenum blend_source{GL_SRC_ALPHA};
+  GLenum blend_destination{GL_ONE_MINUS_SRC_ALPHA};
 };
 
 vid_mode_t g_video_mode{640, 480};
@@ -65,6 +94,7 @@ SDL_Window *g_window = nullptr;
 SDL_GLContext g_context = nullptr;
 GLuint g_program = 0;
 GLuint g_vertex_buffer = 0;
+GLuint g_vertex_array = 0;
 GLuint g_white_texture = 0;
 GLint g_position = -1;
 GLint g_color = -1;
@@ -77,6 +107,12 @@ bool g_fsaa = false;
 bool g_translucent_autosort = true;
 bool g_ready = false;
 std::unordered_map<uint64_t, WebTexture> g_textures;
+FrameDrawData g_frame;
+std::array<std::vector<SortablePrimitive>, 5> g_frame_lists;
+std::vector<CustomRenderPass> g_custom_render_passes;
+GLuint g_bound_texture = 0;
+GenericDrawState g_generic_draw_state;
+bool g_generic_draw_state_valid = false;
 
 constexpr const char *vertex_shader = R"(#version 300 es
 in vec3 a_position;
@@ -165,10 +201,10 @@ WebVertex make_vertex(float x, float y, float z, uint32_t argb, float u,
   const float half_height = g_video_mode.height * 0.5f;
   return {{x / half_width - 1.0f, 1.0f - y / half_height,
            pvr_depth(z)},
-          {((argb >> 16u) & 0xffu) / 255.0f,
-           ((argb >> 8u) & 0xffu) / 255.0f,
-           (argb & 0xffu) / 255.0f,
-           ((argb >> 24u) & 0xffu) / 255.0f},
+          {static_cast<uint8_t>((argb >> 16u) & 0xffu),
+           static_cast<uint8_t>((argb >> 8u) & 0xffu),
+           static_cast<uint8_t>(argb & 0xffu),
+           static_cast<uint8_t>((argb >> 24u) & 0xffu)},
           {u, v}};
 }
 
@@ -221,45 +257,63 @@ float average_z(const QueuedPrimitive &primitive) {
   return primitive.count == 0 ? 0.0f : total / primitive.count;
 }
 
-FrameDrawData build_frame() {
+const FrameDrawData &build_frame() {
   const auto &queued = pc_endjinn_pvr::primitives();
-  FrameDrawData frame;
-  frame.vertices.reserve(queued.size() * 6u);
+  g_frame.vertices.clear();
+  g_frame.batches.clear();
+  g_frame.vertices.reserve(queued.size() * 6u);
+  for (auto &list : g_frame_lists) {
+    list.clear();
+  }
 
-  const auto append_list = [&](pvr_list_t list, bool sort,
-                               bool modifier_volume) {
-    std::vector<const QueuedPrimitive *> primitives;
-    for (const QueuedPrimitive &primitive : queued) {
-      if (primitive.list == list &&
-          primitive.modifier_volume == modifier_volume) {
-        primitives.push_back(&primitive);
+  for (const QueuedPrimitive &primitive : queued) {
+    size_t list_index = g_frame_lists.size();
+    if (primitive.modifier_volume) {
+      if (primitive.list == PVR_LIST_OP_MOD) {
+        list_index = 0u;
+      } else if (primitive.list == PVR_LIST_TR_MOD) {
+        list_index = 1u;
       }
+    } else if (primitive.list == PVR_LIST_OP_POLY) {
+      list_index = 2u;
+    } else if (primitive.list == PVR_LIST_PT_POLY) {
+      list_index = 3u;
+    } else if (primitive.list == PVR_LIST_TR_POLY) {
+      list_index = 4u;
     }
-    if (sort) {
-      std::stable_sort(primitives.begin(), primitives.end(),
-                       [](const QueuedPrimitive *a,
-                          const QueuedPrimitive *b) {
-                         return average_z(*a) < average_z(*b);
-                       });
+    if (list_index < g_frame_lists.size()) {
+      g_frame_lists[list_index].push_back(
+          {&primitive, list_index == 4u ? average_z(primitive) : 0.0f});
     }
-    for (const QueuedPrimitive *primitive : primitives) {
-      const bool same = !frame.batches.empty() &&
-                        frame.batches.back().list == list &&
-                        frame.batches.back().textured == primitive->textured &&
-                        frame.batches.back().texture == primitive->texture &&
-                        frame.batches.back().texture_format ==
+  }
+  if (g_translucent_autosort) {
+    std::stable_sort(
+        g_frame_lists[4].begin(), g_frame_lists[4].end(),
+        [](const SortablePrimitive &a, const SortablePrimitive &b) {
+          return a.depth < b.depth;
+        });
+  }
+
+  const auto append_list = [&](pvr_list_t list, size_t list_index) {
+    for (const SortablePrimitive &sortable : g_frame_lists[list_index]) {
+      const QueuedPrimitive *primitive = sortable.primitive;
+      const bool same = !g_frame.batches.empty() &&
+                        g_frame.batches.back().list == list &&
+                        g_frame.batches.back().textured == primitive->textured &&
+                        g_frame.batches.back().texture == primitive->texture &&
+                        g_frame.batches.back().texture_format ==
                             primitive->texture_format &&
-                        frame.batches.back().texture_filter ==
+                        g_frame.batches.back().texture_filter ==
                             primitive->texture_filter &&
-                        frame.batches.back().modifier == primitive->modifier &&
-                        frame.batches.back().modifier_volume ==
+                        g_frame.batches.back().modifier == primitive->modifier &&
+                        g_frame.batches.back().modifier_volume ==
                             primitive->modifier_volume &&
-                        frame.batches.back().modifier_mode ==
+                        g_frame.batches.back().modifier_mode ==
                             primitive->modifier_mode;
       if (!same) {
-        frame.batches.push_back(
+        g_frame.batches.push_back(
             {list,
-             static_cast<uint32_t>(frame.vertices.size()),
+             static_cast<uint32_t>(g_frame.vertices.size()),
              0u,
              primitive->textured,
              primitive->texture,
@@ -271,24 +325,32 @@ FrameDrawData build_frame() {
              primitive->modifier_volume,
              primitive->modifier_mode});
       }
-      const uint32_t before = static_cast<uint32_t>(frame.vertices.size());
-      emit_primitive(frame.vertices, *primitive);
-      frame.batches.back().vertex_count +=
-          static_cast<uint32_t>(frame.vertices.size()) - before;
+      const uint32_t before =
+          static_cast<uint32_t>(g_frame.vertices.size());
+      emit_primitive(g_frame.vertices, *primitive);
+      g_frame.batches.back().vertex_count +=
+          static_cast<uint32_t>(g_frame.vertices.size()) - before;
     }
   };
 
-  append_list(PVR_LIST_OP_MOD, false, true);
-  append_list(PVR_LIST_TR_MOD, false, true);
-  append_list(PVR_LIST_OP_POLY, false, false);
-  append_list(PVR_LIST_PT_POLY, false, false);
-  append_list(PVR_LIST_TR_POLY, g_translucent_autosort, false);
-  return frame;
+  append_list(PVR_LIST_OP_MOD, 0u);
+  append_list(PVR_LIST_TR_MOD, 1u);
+  append_list(PVR_LIST_OP_POLY, 2u);
+  append_list(PVR_LIST_PT_POLY, 3u);
+  append_list(PVR_LIST_TR_POLY, 4u);
+  return g_frame;
 }
 
 uint64_t texture_key(const DrawBatch &batch) {
   return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(batch.texture)) |
          (static_cast<uint64_t>(batch.texture_format) << 32u);
+}
+
+void bind_texture_2d(GLuint texture) {
+  if (g_bound_texture != texture) {
+    glBindTexture(GL_TEXTURE_2D, texture);
+    g_bound_texture = texture;
+  }
 }
 
 GLuint texture_for(const DrawBatch &batch) {
@@ -299,7 +361,8 @@ GLuint texture_for(const DrawBatch &batch) {
   WebTexture &cached = g_textures[key];
   const uint64_t texture_revision =
       pc_endjinn_pvr::texture_revision(batch.texture);
-  const uint64_t palette_revision = pc_endjinn_pvr::palette_revision();
+  const uint64_t palette_revision =
+      pc_endjinn_pvr::palette_revision(batch.texture_format);
   if (cached.id != 0 && cached.texture_revision == texture_revision &&
       cached.palette_revision == palette_revision) {
     return cached.id;
@@ -319,11 +382,11 @@ GLuint texture_for(const DrawBatch &batch) {
   if (cached.id == 0) {
     glGenTextures(1, &cached.id);
   }
-  glBindTexture(GL_TEXTURE_2D, cached.id);
-  const auto palette = pc_endjinn_pvr::palette_rgba();
-  for (size_t level = 0; level < decoded.mips.size(); level++) {
-    const auto &mip = decoded.mips[level];
-    if (decoded.indexed) {
+  bind_texture_2d(cached.id);
+  if (decoded.indexed) {
+    const auto palette = pc_endjinn_pvr::palette_rgba();
+    for (size_t level = 0; level < decoded.mips.size(); level++) {
+      const auto &mip = decoded.mips[level];
       std::vector<uint32_t> rgba(mip.pixels.size());
       for (size_t i = 0; i < rgba.size(); i++) {
         const size_t color = decoded.palette_base + mip.pixels[i];
@@ -333,7 +396,10 @@ GLuint texture_for(const DrawBatch &batch) {
                    static_cast<GLsizei>(mip.width),
                    static_cast<GLsizei>(mip.height), 0, GL_RGBA,
                    GL_UNSIGNED_BYTE, rgba.data());
-    } else {
+    }
+  } else {
+    for (size_t level = 0; level < decoded.mips.size(); level++) {
+      const auto &mip = decoded.mips[level];
       glTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), GL_RGBA,
                    static_cast<GLsizei>(mip.width),
                    static_cast<GLsizei>(mip.height), 0, GL_RGBA,
@@ -357,39 +423,92 @@ GLuint texture_for(const DrawBatch &batch) {
 }
 
 void set_draw_state(const DrawBatch &batch) {
-  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-  glDisable(GL_STENCIL_TEST);
-  glEnable(GL_DEPTH_TEST);
-  glDepthFunc(GL_GEQUAL);
-  glDepthMask(GL_TRUE);
-  glDisable(GL_BLEND);
-  glUniform1i(g_punch_through, batch.list == PVR_LIST_PT_POLY);
-
+  GenericDrawState desired{};
+  desired.depth_test = true;
+  desired.depth_write = true;
+  desired.color_write = true;
+  desired.punch_through = batch.list == PVR_LIST_PT_POLY;
   if (batch.modifier_volume) {
-    glDisable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    glEnable(GL_STENCIL_TEST);
-    glStencilFunc(GL_ALWAYS, 1, 0xff);
-    glStencilMask(0xff);
-    glStencilOp(GL_KEEP, GL_KEEP,
-                batch.modifier_mode == PVR_MODIFIER_EXCLUDE_LAST_POLY
-                    ? GL_ZERO
-                    : GL_REPLACE);
+    desired.depth_test = false;
+    desired.depth_write = false;
+    desired.color_write = false;
+    desired.stencil_test = true;
+    desired.stencil_func = GL_ALWAYS;
+    desired.stencil_func_mask = 0xffu;
+    desired.stencil_write_mask = 0xffu;
+    desired.stencil_depth_pass =
+        batch.modifier_mode == PVR_MODIFIER_EXCLUDE_LAST_POLY
+            ? GL_ZERO
+            : GL_REPLACE;
   } else if (batch.modifier) {
-    glDisable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glEnable(GL_STENCIL_TEST);
-    glStencilFunc(GL_EQUAL, 1, 0xff);
-    glStencilMask(0x00);
-    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    desired.depth_test = false;
+    desired.depth_write = false;
+    desired.stencil_test = true;
+    desired.blend = true;
+    desired.stencil_func = GL_EQUAL;
+    desired.stencil_func_mask = 0xffu;
+    desired.stencil_write_mask = 0x00u;
+    desired.stencil_depth_pass = GL_KEEP;
   } else if (batch.list == PVR_LIST_TR_POLY) {
-    glDepthMask(GL_FALSE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    desired.depth_write = false;
+    desired.blend = true;
   }
+
+  const bool invalid = !g_generic_draw_state_valid;
+  if (invalid ||
+      desired.color_write != g_generic_draw_state.color_write) {
+    const GLboolean enabled = desired.color_write ? GL_TRUE : GL_FALSE;
+    glColorMask(enabled, enabled, enabled, enabled);
+  }
+  if (invalid || desired.depth_test != g_generic_draw_state.depth_test) {
+    desired.depth_test ? glEnable(GL_DEPTH_TEST) : glDisable(GL_DEPTH_TEST);
+  }
+  if (invalid) {
+    glDepthFunc(GL_GEQUAL);
+  }
+  if (invalid || desired.depth_write != g_generic_draw_state.depth_write) {
+    glDepthMask(desired.depth_write ? GL_TRUE : GL_FALSE);
+  }
+  if (invalid ||
+      desired.stencil_test != g_generic_draw_state.stencil_test) {
+    desired.stencil_test ? glEnable(GL_STENCIL_TEST)
+                         : glDisable(GL_STENCIL_TEST);
+  }
+  if (desired.stencil_test &&
+      (invalid || !g_generic_draw_state.stencil_test ||
+       desired.stencil_func != g_generic_draw_state.stencil_func ||
+       desired.stencil_func_mask !=
+           g_generic_draw_state.stencil_func_mask)) {
+    glStencilFunc(desired.stencil_func, 1, desired.stencil_func_mask);
+  }
+  if (desired.stencil_test &&
+      (invalid || !g_generic_draw_state.stencil_test ||
+       desired.stencil_write_mask !=
+           g_generic_draw_state.stencil_write_mask)) {
+    glStencilMask(desired.stencil_write_mask);
+  }
+  if (desired.stencil_test &&
+      (invalid || !g_generic_draw_state.stencil_test ||
+       desired.stencil_depth_pass !=
+           g_generic_draw_state.stencil_depth_pass)) {
+    glStencilOp(GL_KEEP, GL_KEEP, desired.stencil_depth_pass);
+  }
+  if (invalid || desired.blend != g_generic_draw_state.blend) {
+    desired.blend ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
+  }
+  if (desired.blend &&
+      (invalid || !g_generic_draw_state.blend ||
+       desired.blend_source != g_generic_draw_state.blend_source ||
+       desired.blend_destination !=
+           g_generic_draw_state.blend_destination)) {
+    glBlendFunc(desired.blend_source, desired.blend_destination);
+  }
+  if (invalid ||
+      desired.punch_through != g_generic_draw_state.punch_through) {
+    glUniform1i(g_punch_through, desired.punch_through);
+  }
+  g_generic_draw_state = desired;
+  g_generic_draw_state_valid = true;
 }
 
 void draw_frame(const FrameDrawData &frame) {
@@ -407,8 +526,10 @@ void draw_frame(const FrameDrawData &frame) {
       std::min(width, height * g_video_mode.width / g_video_mode.height);
   const int viewport_height =
       std::min(height, width * g_video_mode.height / g_video_mode.width);
-  glViewport((width - viewport_width) / 2, (height - viewport_height) / 2,
-             viewport_width, viewport_height);
+  const int viewport_x = (width - viewport_width) / 2;
+  const int viewport_y = (height - viewport_height) / 2;
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
   glClearColor(g_bg_color[0], g_bg_color[1], g_bg_color[2], 1.0f);
 #ifdef __EMSCRIPTEN__
   glClearDepthf(0.0f);
@@ -418,39 +539,55 @@ void draw_frame(const FrameDrawData &frame) {
   glDepthMask(GL_TRUE);
   glClearStencil(0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+  const enj_web_render_pass_context_t pass_context = {
+      viewport_x,
+      viewport_y,
+      viewport_width,
+      viewport_height,
+      g_video_mode.width * (g_fsaa ? 2 : 1),
+      g_video_mode.height,
+  };
+  for (const CustomRenderPass &pass : g_custom_render_passes) {
+    if (pass.callback == nullptr) {
+      continue;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
+    pass.callback(&pass_context,
+                  pass.data.empty() ? nullptr : pass.data.data());
+  }
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
+  g_bound_texture = 0;
+
   if (frame.vertices.empty()) {
     SDL_GL_SwapWindow(g_window);
     return;
   }
 
   glUseProgram(g_program);
+  glBindVertexArray(g_vertex_array);
   glBindBuffer(GL_ARRAY_BUFFER, g_vertex_buffer);
   glBufferData(GL_ARRAY_BUFFER,
                static_cast<GLsizeiptr>(frame.vertices.size() *
                                        sizeof(WebVertex)),
                frame.vertices.data(), GL_STREAM_DRAW);
-  glEnableVertexAttribArray(static_cast<GLuint>(g_position));
-  glEnableVertexAttribArray(static_cast<GLuint>(g_color));
-  glEnableVertexAttribArray(static_cast<GLuint>(g_uv));
-  glVertexAttribPointer(static_cast<GLuint>(g_position), 3, GL_FLOAT, GL_FALSE,
-                        sizeof(WebVertex),
-                        reinterpret_cast<void *>(offsetof(WebVertex, position)));
-  glVertexAttribPointer(static_cast<GLuint>(g_color), 4, GL_FLOAT, GL_FALSE,
-                        sizeof(WebVertex),
-                        reinterpret_cast<void *>(offsetof(WebVertex, color)));
-  glVertexAttribPointer(static_cast<GLuint>(g_uv), 2, GL_FLOAT, GL_FALSE,
-                        sizeof(WebVertex),
-                        reinterpret_cast<void *>(offsetof(WebVertex, uv)));
   glActiveTexture(GL_TEXTURE0);
   glUniform1i(g_sampler, 0);
 
+  g_generic_draw_state_valid = false;
+  int last_textured = -1;
   for (const DrawBatch &batch : frame.batches) {
     if (batch.vertex_count == 0) {
       continue;
     }
     set_draw_state(batch);
-    glBindTexture(GL_TEXTURE_2D, texture_for(batch));
-    glUniform1i(g_textured, batch.textured);
+    bind_texture_2d(texture_for(batch));
+    if (last_textured != static_cast<int>(batch.textured)) {
+      last_textured = static_cast<int>(batch.textured);
+      glUniform1i(g_textured, last_textured);
+    }
     glDrawArrays(GL_TRIANGLES, static_cast<GLint>(batch.first_vertex),
                  static_cast<GLsizei>(batch.vertex_count));
   }
@@ -484,8 +621,23 @@ bool create_context() {
     return false;
   }
   glGenBuffers(1, &g_vertex_buffer);
+  glGenVertexArrays(1, &g_vertex_array);
+  glBindVertexArray(g_vertex_array);
+  glBindBuffer(GL_ARRAY_BUFFER, g_vertex_buffer);
+  glEnableVertexAttribArray(static_cast<GLuint>(g_position));
+  glEnableVertexAttribArray(static_cast<GLuint>(g_color));
+  glEnableVertexAttribArray(static_cast<GLuint>(g_uv));
+  glVertexAttribPointer(static_cast<GLuint>(g_position), 3, GL_FLOAT, GL_FALSE,
+                        sizeof(WebVertex),
+                        reinterpret_cast<void *>(offsetof(WebVertex, position)));
+  glVertexAttribPointer(static_cast<GLuint>(g_color), 4, GL_UNSIGNED_BYTE,
+                        GL_TRUE, sizeof(WebVertex),
+                        reinterpret_cast<void *>(offsetof(WebVertex, color)));
+  glVertexAttribPointer(static_cast<GLuint>(g_uv), 2, GL_FLOAT, GL_FALSE,
+                        sizeof(WebVertex),
+                        reinterpret_cast<void *>(offsetof(WebVertex, uv)));
   glGenTextures(1, &g_white_texture);
-  glBindTexture(GL_TEXTURE_2D, g_white_texture);
+  bind_texture_2d(g_white_texture);
   const uint32_t white = 0xffffffffu;
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, &white);
@@ -496,6 +648,37 @@ bool create_context() {
 }
 
 }  // namespace
+
+extern "C" void
+enj_web_render_pass_submit(enj_web_render_pass_callback_t callback,
+                           const void *data, uint32_t data_size) {
+  if (callback == nullptr) {
+    return;
+  }
+  CustomRenderPass pass{};
+  pass.callback = callback;
+  if (data != nullptr && data_size != 0u) {
+    const auto *bytes = static_cast<const uint8_t *>(data);
+    pass.data.assign(bytes, bytes + data_size);
+  }
+  g_custom_render_passes.push_back(std::move(pass));
+}
+
+extern "C" void enj_web_texture_bind(const enj_web_texture_t *texture) {
+  DrawBatch batch{};
+  if (texture != nullptr) {
+    batch.textured = texture->textured != 0u;
+    batch.texture = texture->texture;
+    batch.texture_format = texture->texture_format;
+    batch.texture_width = texture->texture_width;
+    batch.texture_height = texture->texture_height;
+    batch.texture_filter =
+        static_cast<pvr_filter_mode_t>(texture->texture_filter);
+  }
+  const GLuint resolved = texture_for(batch);
+  glBindTexture(GL_TEXTURE_2D, resolved);
+  g_bound_texture = resolved;
+}
 
 #ifdef __EMSCRIPTEN__
 extern "C" EMSCRIPTEN_KEEPALIVE void
@@ -537,14 +720,19 @@ void pvr_shutdown() {
       glDeleteTextures(1, &texture.id);
     }
     glDeleteTextures(1, &g_white_texture);
+    glDeleteVertexArrays(1, &g_vertex_array);
     glDeleteBuffers(1, &g_vertex_buffer);
     glDeleteProgram(g_program);
   }
   g_textures.clear();
+  g_custom_render_passes.clear();
   g_ready = false;
   g_white_texture = 0;
+  g_vertex_array = 0;
   g_vertex_buffer = 0;
   g_program = 0;
+  g_bound_texture = 0;
+  g_generic_draw_state_valid = false;
   if (g_context != nullptr) {
     SDL_GL_DeleteContext(g_context);
     g_context = nullptr;
@@ -562,7 +750,10 @@ void pvr_set_bg_color(float r, float g, float b) {
   g_bg_color[2] = clamp01(b);
 }
 
-void pvr_scene_begin() { pc_endjinn_pvr::scene_begin(); }
+void pvr_scene_begin() {
+  g_custom_render_passes.clear();
+  pc_endjinn_pvr::scene_begin();
+}
 void pvr_scene_finish() { draw_frame(build_frame()); }
 
 }  // namespace web_endjinn

@@ -14,6 +14,23 @@ ifneq (,$(wildcard ./local.cfg.mk))
   include ./local.cfg.mk
 endif
 
+# Optional engine integrations are disabled unless the application enables
+# them from local.cfg.mk or the make command line.
+ENJ_USE_SH4ZAM ?= 0
+ifeq ($(ENJ_USE_SH4ZAM),1)
+  include ${ENJDIR}features/sh4zam.mk
+endif
+
+# WebAssembly SIMD is opt-in so applications can retain a scalar compatibility
+# build. Keep this separate from ENJ_WEB_{C,CXX}FLAGS because applications may
+# replace those variables wholesale on the make command line.
+ENJ_WEB_SIMD ?= 0
+ifeq ($(ENJ_WEB_SIMD),1)
+  ENJ_WEB_SIMD_FLAGS := -msimd128
+else
+  ENJ_WEB_SIMD_FLAGS :=
+endif
+
 # All backends use the same generated Dreamcast asset blobs. The backend only
 # changes how those blobs are consumed at runtime.
 ifndef ROMBASEPATH
@@ -125,10 +142,12 @@ ENJ_WEB_PRELOAD_FLAGS ?= --preload-file $(ROMBASEPATH)@/$(ROMBASEPATH)
 
 ENJ_WEB_CORE_SRCS := $(sort $(wildcard ${ENJDIR}code/*.c))
 ENJ_WEB_APP_SRCS := $(patsubst ./%,%,$(shell find $(ENJ_CODEDIR) -name '*.c' -not -path "./.git/*"))
+ENJ_WEB_APP_CXX_SRCS := $(patsubst ./%,%,$(shell find $(ENJ_CODEDIR) -name '*.cpp' -not -path "./.git/*"))
 ENJ_WEB_CORE_OBJS := $(patsubst ${ENJDIR}%.c,$(ENJ_WEB_BUILD_DIR)/enDjinn/%.o,$(ENJ_WEB_CORE_SRCS))
 ENJ_WEB_APP_OBJS := $(patsubst %.c,$(ENJ_WEB_BUILD_DIR)/%.o,$(ENJ_WEB_APP_SRCS))
+ENJ_WEB_APP_CXX_OBJS := $(patsubst %.cpp,$(ENJ_WEB_BUILD_DIR)/%.o,$(ENJ_WEB_APP_CXX_SRCS))
 ENJ_WEB_BACKEND_OBJS := $(addprefix $(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/,$(notdir $(WEB_ENDJINN_PLATFORM_SRCS:.cpp=.o)))
-ENJ_WEB_OBJS := $(ENJ_WEB_CORE_OBJS) $(ENJ_WEB_APP_OBJS) \
+ENJ_WEB_OBJS := $(ENJ_WEB_CORE_OBJS) $(ENJ_WEB_APP_OBJS) $(ENJ_WEB_APP_CXX_OBJS) \
 	$(ENJ_WEB_BACKEND_OBJS) $(ENJ_WEB_EXTRA_OBJS)
 ENJ_WEB_DEPS := $(filter %.d,$(ENJ_WEB_OBJS:.o=.d))
 
@@ -145,23 +164,27 @@ $(ENJ_WEB_BUILD_DIR):
 
 $(ENJ_WEB_BUILD_DIR)/enDjinn/%.o: ${ENJDIR}%.c $(ENJ_MAKEFILE) | $(ENJ_WEB_BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(EMCC) $(ENJ_WEB_CFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+	$(EMCC) $(ENJ_WEB_CFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
 
 $(ENJ_WEB_BUILD_DIR)/%.o: %.c $(ENJ_MAKEFILE) $(ENJ_ASSETS) | $(ENJ_WEB_BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(EMCC) $(ENJ_WEB_CFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+	$(EMCC) $(ENJ_WEB_CFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+
+$(ENJ_WEB_BUILD_DIR)/%.o: %.cpp $(ENJ_MAKEFILE) $(ENJ_ASSETS) | $(ENJ_WEB_BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
 
 $(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/%.o: ${ENJDIR}backends/pc-endjinn/%.cpp | $(ENJ_WEB_BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
 
 $(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/%.o: ${ENJDIR}backends/web-endjinn/%.cpp | $(ENJ_WEB_BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
 
 $(ENJ_WEB_TARGET): $(ENJ_WEB_OBJS) $(ENJ_ASSETS) $(ENJ_WEB_EXTRA_DEPS)
 	@mkdir -p $(dir $@)
-	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) \
+	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) \
 		$(ENJ_WEB_OBJS) -o $@ $(ENJ_WEB_LDFLAGS) $(ENJ_WEB_PRELOAD_FLAGS)
 
 clean:
