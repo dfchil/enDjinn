@@ -35,7 +35,7 @@ the selected backend owns SDL, Vulkan, and host input details.
 - stable back-to-front translucent sorting when PVR autosort is enabled
 - submission-order translucent drawing when PVR autosort is disabled
 - OP, PT, then TR Vulkan draw ordering
-- the current Dream Driving road-decal depth bias
+- caller-owned projected depth, including Dream Driving's road-only decal bias
 - textured sprites and polygons, including qfont and enDjinn font rendering
 - ARGB1555, RGB565, ARGB4444, YUV422, PAL4, and PAL8 texture decoding
 - linear and twiddled texture layouts, VQ decoding, and mip levels

@@ -249,34 +249,6 @@ float clamp01(float value)
     return std::min(std::max(value, 0.0f), 1.0f);
 }
 
-bool argb_is_road_decal(uint32_t argb)
-{
-    if ((argb & 0xff000000u) == 0u) {
-        return false;
-    }
-    const uint32_t r = (argb >> 16u) & 0xffu;
-    const uint32_t g = (argb >> 8u) & 0xffu;
-    const uint32_t b = argb & 0xffu;
-    const uint32_t maxc = std::max(r, std::max(g, b));
-    const uint32_t minc = std::min(r, std::min(g, b));
-    const bool white = minc >= 176u;
-    const bool yellow_or_orange = r >= 176u && g >= 132u && b <= 96u;
-    const bool skid = maxc <= 96u && maxc >= 18u && maxc - minc <= 32u;
-    return white || yellow_or_orange || skid;
-}
-
-float pvr_decal_depth_bias(uint32_t argb, float z)
-{
-    if (!argb_is_road_decal(argb)) {
-        return z;
-    }
-    float bias = 0.000035f + z * 0.00105f;
-    if (bias > 0.0011f) {
-        bias = 0.0011f;
-    }
-    return clamp01(z + bias);
-}
-
 uint32_t find_memory_type(uint32_t bits, VkMemoryPropertyFlags flags)
 {
     VkPhysicalDeviceMemoryProperties props{};
@@ -1247,7 +1219,13 @@ PcVertex make_vertex(float x, float y, float z, uint32_t argb, float u, float v)
     PcVertex vertex{};
     vertex.position[0] = x / half_w - 1.0f;
     vertex.position[1] = y / half_h - 1.0f;
-    vertex.position[2] = pvr_decal_depth_bias(argb, clamp01(z * 0.25f));
+    /*
+     * The KOS/PVR shim must preserve the depth submitted by its caller.
+     * Application-specific overlays (including Dream Driving's road
+     * markings) own any bias before the pvr_* boundary; inferring ownership
+     * from colour also biases similarly coloured vehicle and scenery faces.
+     */
+    vertex.position[2] = clamp01(z * 0.25f);
     vertex.color[0] = r;
     vertex.color[1] = g;
     vertex.color[2] = b;
