@@ -71,6 +71,7 @@ struct WebTexture {
 };
 
 struct CustomRenderPass {
+  enj_web_render_pass_phase_t phase{ENJ_WEB_RENDER_PASS_BACKGROUND};
   enj_web_render_pass_callback_t callback{};
   std::vector<uint8_t> data;
 };
@@ -515,6 +516,21 @@ void set_draw_state(const DrawBatch &batch) {
   g_generic_draw_state_valid = true;
 }
 
+void run_custom_render_passes(
+    enj_web_render_pass_phase_t phase,
+    const enj_web_render_pass_context_t &context) {
+  for (const CustomRenderPass &pass : g_custom_render_passes) {
+    if (pass.phase != phase || pass.callback == nullptr) {
+      continue;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(context.viewport_x, context.viewport_y, context.viewport_width,
+               context.viewport_height);
+    pass.callback(&context,
+                  pass.data.empty() ? nullptr : pass.data.data());
+  }
+}
+
 void draw_frame(const FrameDrawData &frame) {
   if (!g_ready) {
     return;
@@ -552,49 +568,40 @@ void draw_frame(const FrameDrawData &frame) {
       g_video_mode.width * (g_fsaa ? 2 : 1),
       g_video_mode.height,
   };
-  for (const CustomRenderPass &pass : g_custom_render_passes) {
-    if (pass.callback == nullptr) {
-      continue;
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
-    pass.callback(&pass_context,
-                  pass.data.empty() ? nullptr : pass.data.data());
-  }
+  run_custom_render_passes(ENJ_WEB_RENDER_PASS_BACKGROUND, pass_context);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
   g_bound_texture = 0;
 
-  if (frame.vertices.empty()) {
-    SDL_GL_SwapWindow(g_window);
-    return;
-  }
+  if (!frame.vertices.empty()) {
+    glUseProgram(g_program);
+    glBindVertexArray(g_vertex_array);
+    glBindBuffer(GL_ARRAY_BUFFER, g_vertex_buffer);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(frame.vertices.size() *
+                                         sizeof(WebVertex)),
+                 frame.vertices.data(), GL_STREAM_DRAW);
+    glActiveTexture(GL_TEXTURE0);
+    glUniform1i(g_sampler, 0);
 
-  glUseProgram(g_program);
-  glBindVertexArray(g_vertex_array);
-  glBindBuffer(GL_ARRAY_BUFFER, g_vertex_buffer);
-  glBufferData(GL_ARRAY_BUFFER,
-               static_cast<GLsizeiptr>(frame.vertices.size() *
-                                       sizeof(WebVertex)),
-               frame.vertices.data(), GL_STREAM_DRAW);
-  glActiveTexture(GL_TEXTURE0);
-  glUniform1i(g_sampler, 0);
-
-  g_generic_draw_state_valid = false;
-  int last_textured = -1;
-  for (const DrawBatch &batch : frame.batches) {
-    if (batch.vertex_count == 0) {
-      continue;
+    g_generic_draw_state_valid = false;
+    int last_textured = -1;
+    for (const DrawBatch &batch : frame.batches) {
+      if (batch.vertex_count == 0) {
+        continue;
+      }
+      set_draw_state(batch);
+      bind_texture_2d(texture_for(batch));
+      if (last_textured != static_cast<int>(batch.textured)) {
+        last_textured = static_cast<int>(batch.textured);
+        glUniform1i(g_textured, last_textured);
+      }
+      glDrawArrays(GL_TRIANGLES, static_cast<GLint>(batch.first_vertex),
+                   static_cast<GLsizei>(batch.vertex_count));
     }
-    set_draw_state(batch);
-    bind_texture_2d(texture_for(batch));
-    if (last_textured != static_cast<int>(batch.textured)) {
-      last_textured = static_cast<int>(batch.textured);
-      glUniform1i(g_textured, last_textured);
-    }
-    glDrawArrays(GL_TRIANGLES, static_cast<GLint>(batch.first_vertex),
-                 static_cast<GLsizei>(batch.vertex_count));
   }
+  glStencilMask(0xff);
+  run_custom_render_passes(ENJ_WEB_RENDER_PASS_FOREGROUND, pass_context);
   glStencilMask(0xff);
   SDL_GL_SwapWindow(g_window);
 }
@@ -656,10 +663,19 @@ bool create_context() {
 extern "C" void
 enj_web_render_pass_submit(enj_web_render_pass_callback_t callback,
                            const void *data, uint32_t data_size) {
+  enj_web_render_pass_submit_at(ENJ_WEB_RENDER_PASS_BACKGROUND, callback, data,
+                                data_size);
+}
+
+extern "C" void
+enj_web_render_pass_submit_at(enj_web_render_pass_phase_t phase,
+                              enj_web_render_pass_callback_t callback,
+                              const void *data, uint32_t data_size) {
   if (callback == nullptr) {
     return;
   }
   CustomRenderPass pass{};
+  pass.phase = phase;
   pass.callback = callback;
   if (data != nullptr && data_size != 0u) {
     const auto *bytes = static_cast<const uint8_t *>(data);

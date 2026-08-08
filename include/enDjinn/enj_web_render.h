@@ -19,6 +19,11 @@ typedef struct {
 typedef void (*enj_web_render_pass_callback_t)(
     const enj_web_render_pass_context_t *context, const void *data);
 
+typedef enum {
+  ENJ_WEB_RENDER_PASS_BACKGROUND = 0,
+  ENJ_WEB_RENDER_PASS_FOREGROUND = 1,
+} enj_web_render_pass_phase_t;
+
 typedef struct {
   uint32_t textured;
   void *texture;
@@ -35,6 +40,14 @@ typedef struct {
  */
 void enj_web_render_pass_submit(enj_web_render_pass_callback_t callback,
                                 const void *data, uint32_t data_size);
+
+/*
+ * Queue a pass at an explicit scene phase. Foreground passes run after all
+ * queued PVR primitives and are intended for depth-tested translucent effects.
+ */
+void enj_web_render_pass_submit_at(enj_web_render_pass_phase_t phase,
+                                   enj_web_render_pass_callback_t callback,
+                                   const void *data, uint32_t data_size);
 
 /*
  * Resolve and bind a PVR texture through enDjinn's WebGL texture cache.
