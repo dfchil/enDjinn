@@ -68,6 +68,14 @@ struct WebTexture {
   GLuint id{};
   uint64_t texture_revision{};
   uint64_t palette_revision{};
+  uint32_t texture_filter{UINT32_MAX};
+  bool has_mips{};
+};
+
+struct WebIndexTexture {
+  GLuint id{};
+  uint64_t texture_revision{};
+  bool has_mips{};
 };
 
 struct CustomRenderPass {
@@ -98,6 +106,8 @@ GLuint g_program = 0;
 GLuint g_vertex_buffer = 0;
 GLuint g_vertex_array = 0;
 GLuint g_white_texture = 0;
+GLuint g_palette_texture = 0;
+uint64_t g_uploaded_palette_revision = 0u;
 GLint g_position = -1;
 GLint g_color = -1;
 GLint g_uv = -1;
@@ -109,6 +119,7 @@ bool g_fsaa = false;
 bool g_translucent_autosort = true;
 bool g_ready = false;
 std::unordered_map<uint64_t, WebTexture> g_textures;
+std::unordered_map<uint64_t, WebIndexTexture> g_index_textures;
 FrameDrawData g_frame;
 std::array<std::vector<SortablePrimitive>, 5> g_frame_lists;
 std::vector<CustomRenderPass> g_custom_render_passes;
@@ -351,6 +362,23 @@ uint64_t texture_key(const DrawBatch &batch) {
          (static_cast<uint64_t>(batch.texture_format) << 32u);
 }
 
+uint32_t texture_storage_format(uint32_t format) {
+  const uint32_t pixel_format = (format >> 27u) & 7u;
+  if (pixel_format == PVR_PIXEL_MODE_PAL_4BPP) {
+    return format & ~PVR_TXRFMT_4BPP_PAL(0x3fu);
+  }
+  if (pixel_format == PVR_PIXEL_MODE_PAL_8BPP) {
+    return format & ~PVR_TXRFMT_8BPP_PAL(0x03u);
+  }
+  return format;
+}
+
+uint64_t index_texture_key(const DrawBatch &batch) {
+  return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(batch.texture)) |
+         (static_cast<uint64_t>(texture_storage_format(batch.texture_format))
+          << 32u);
+}
+
 void bind_texture_2d(GLuint texture) {
   if (g_bound_texture != texture) {
     glBindTexture(GL_TEXTURE_2D, texture);
@@ -370,6 +398,20 @@ GLuint texture_for(const DrawBatch &batch) {
       pc_endjinn_pvr::palette_revision(batch.texture_format);
   if (cached.id != 0 && cached.texture_revision == texture_revision &&
       cached.palette_revision == palette_revision) {
+    if (cached.texture_filter !=
+        static_cast<uint32_t>(batch.texture_filter)) {
+      bind_texture_2d(cached.id);
+      const bool nearest = batch.texture_filter == PVR_FILTER_NEAREST;
+      const bool trilinear = batch.texture_filter == PVR_FILTER_TRILINEAR1 ||
+                             batch.texture_filter == PVR_FILTER_TRILINEAR2;
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+                      nearest ? GL_NEAREST : GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                      trilinear && cached.has_mips
+                          ? GL_LINEAR_MIPMAP_LINEAR
+                          : (nearest ? GL_NEAREST : GL_LINEAR));
+      cached.texture_filter = static_cast<uint32_t>(batch.texture_filter);
+    }
     return cached.id;
   }
 
@@ -424,7 +466,85 @@ GLuint texture_for(const DrawBatch &batch) {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
   cached.texture_revision = texture_revision;
   cached.palette_revision = palette_revision;
+  cached.texture_filter = static_cast<uint32_t>(batch.texture_filter);
+  cached.has_mips = decoded.mips.size() > 1u;
   return cached.id;
+}
+
+bool update_palette_texture(uint32_t texture_unit) {
+  const uint64_t revision = pc_endjinn_pvr::palette_revision();
+  glActiveTexture(GL_TEXTURE0 + texture_unit);
+  if (g_palette_texture == 0u) {
+    glGenTextures(1, &g_palette_texture);
+  }
+  glBindTexture(GL_TEXTURE_2D, g_palette_texture);
+  if (revision == g_uploaded_palette_revision) {
+    return true;
+  }
+
+  const auto palette = pc_endjinn_pvr::palette_rgba();
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+               static_cast<GLsizei>(palette.size()), 1, 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, palette.data());
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  g_uploaded_palette_revision = revision;
+  return true;
+}
+
+WebIndexTexture *index_texture_for(const DrawBatch &batch,
+                                   uint32_t texture_unit,
+                                   uint32_t *palette_base) {
+  if (!batch.textured) {
+    return nullptr;
+  }
+
+  const uint64_t key = index_texture_key(batch);
+  WebIndexTexture &cached = g_index_textures[key];
+  const uint64_t revision = pc_endjinn_pvr::texture_revision(batch.texture);
+  if (cached.id == 0u || cached.texture_revision != revision) {
+    QueuedPrimitive description{};
+    description.textured = true;
+    description.texture = batch.texture;
+    description.texture_format = batch.texture_format;
+    description.texture_width = batch.texture_width;
+    description.texture_height = batch.texture_height;
+    description.texture_filter = batch.texture_filter;
+    pc_endjinn_pvr::DecodedTexture decoded;
+    if (!pc_endjinn_pvr::decode_texture(description, decoded) ||
+        !decoded.indexed) {
+      return nullptr;
+    }
+    if (cached.id == 0u) {
+      glGenTextures(1, &cached.id);
+    }
+    glActiveTexture(GL_TEXTURE0 + texture_unit);
+    glBindTexture(GL_TEXTURE_2D, cached.id);
+    for (size_t level = 0; level < decoded.mips.size(); level++) {
+      const auto &mip = decoded.mips[level];
+      glTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), GL_R8UI,
+                   static_cast<GLsizei>(mip.width),
+                   static_cast<GLsizei>(mip.height), 0, GL_RED_INTEGER,
+                   GL_UNSIGNED_BYTE, mip.pixels.data());
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    cached.texture_revision = revision;
+    cached.has_mips = decoded.mips.size() > 1u;
+  } else {
+    glActiveTexture(GL_TEXTURE0 + texture_unit);
+    glBindTexture(GL_TEXTURE_2D, cached.id);
+  }
+
+  const uint32_t pixel_format = (batch.texture_format >> 27u) & 7u;
+  *palette_base = pixel_format == PVR_PIXEL_MODE_PAL_4BPP
+                      ? ((batch.texture_format >> 21u) & 0x3fu) * 16u
+                      : ((batch.texture_format >> 25u) & 0x03u) * 256u;
+  return &cached;
 }
 
 void set_draw_state(const DrawBatch &batch) {
@@ -700,6 +820,29 @@ extern "C" void enj_web_texture_bind(const enj_web_texture_t *texture) {
   g_bound_texture = resolved;
 }
 
+extern "C" int enj_web_indexed_texture_bind(
+    const enj_web_texture_t *texture, uint32_t index_texture_unit,
+    uint32_t palette_texture_unit, uint32_t *palette_base) {
+  if (texture == nullptr || palette_base == nullptr) {
+    return 0;
+  }
+  DrawBatch batch{};
+  batch.textured = texture->textured != 0u;
+  batch.texture = texture->texture;
+  batch.texture_format = texture->texture_format;
+  batch.texture_width = texture->texture_width;
+  batch.texture_height = texture->texture_height;
+  batch.texture_filter =
+      static_cast<pvr_filter_mode_t>(texture->texture_filter);
+  if (index_texture_for(batch, index_texture_unit, palette_base) == nullptr ||
+      !update_palette_texture(palette_texture_unit)) {
+    return 0;
+  }
+  glActiveTexture(GL_TEXTURE0 + index_texture_unit);
+  g_bound_texture = 0u;
+  return 1;
+}
+
 #ifdef __EMSCRIPTEN__
 extern "C" EMSCRIPTEN_KEEPALIVE void
 web_endjinn_request_fullscreen(int resize_canvas) {
@@ -739,15 +882,23 @@ void pvr_shutdown() {
       (void)key;
       glDeleteTextures(1, &texture.id);
     }
+    for (const auto &[key, texture] : g_index_textures) {
+      (void)key;
+      glDeleteTextures(1, &texture.id);
+    }
+    glDeleteTextures(1, &g_palette_texture);
     glDeleteTextures(1, &g_white_texture);
     glDeleteVertexArrays(1, &g_vertex_array);
     glDeleteBuffers(1, &g_vertex_buffer);
     glDeleteProgram(g_program);
   }
   g_textures.clear();
+  g_index_textures.clear();
   g_custom_render_passes.clear();
   g_ready = false;
   g_white_texture = 0;
+  g_palette_texture = 0;
+  g_uploaded_palette_revision = 0u;
   g_vertex_array = 0;
   g_vertex_buffer = 0;
   g_program = 0;

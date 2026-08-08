@@ -623,16 +623,29 @@ bool update_palette_texture()
     return true;
 }
 
+uint32_t texture_storage_format(uint32_t format)
+{
+    const uint32_t pixel_format = (format >> 27u) & 7u;
+    if (pixel_format == PVR_PIXEL_MODE_PAL_4BPP) {
+        return format & ~PVR_TXRFMT_4BPP_PAL(0x3fu);
+    }
+    if (pixel_format == PVR_PIXEL_MODE_PAL_8BPP) {
+        return format & ~PVR_TXRFMT_8BPP_PAL(0x03u);
+    }
+    return format;
+}
+
 GpuTexture *gpu_texture_for(const DrawBatch &batch)
 {
     if (!batch.textured) {
         return nullptr;
     }
+    const uint32_t storage_format = texture_storage_format(batch.texture_format);
     auto found = std::find_if(
         g_texture_cache.begin(), g_texture_cache.end(),
         [&](const GpuTexture &texture) {
             return texture.source == batch.texture &&
-                   texture.source_format == batch.texture_format &&
+                   texture.source_format == storage_format &&
                    texture.width == batch.texture_width &&
                    texture.height == batch.texture_height &&
                    texture.filter == batch.texture_filter;
@@ -657,7 +670,7 @@ GpuTexture *gpu_texture_for(const DrawBatch &batch)
         g_texture_cache.push_back({});
         found = g_texture_cache.end() - 1;
         found->source = batch.texture;
-        found->source_format = batch.texture_format;
+        found->source_format = storage_format;
         found->width = batch.texture_width;
         found->height = batch.texture_height;
         found->filter = batch.texture_filter;
@@ -1511,9 +1524,7 @@ bool draw_frame(const FrameDrawData &frame)
                 : texture->descriptor;
             TexturePush push{};
             push.indexed = texture != nullptr && texture->indexed ? 1u : 0u;
-            push.palette_base = texture != nullptr
-                ? texture->palette_base
-                : batch.palette_base;
+            push.palette_base = batch.palette_base;
             push.filter_mode = static_cast<uint32_t>(batch.texture_filter);
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,

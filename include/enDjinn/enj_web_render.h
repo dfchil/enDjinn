@@ -55,6 +55,16 @@ void enj_web_render_pass_submit_at(enj_web_render_pass_phase_t phase,
  */
 void enj_web_texture_bind(const enj_web_texture_t *texture);
 
+/*
+ * Bind an indexed PVR texture and the emulated palette as separate WebGL
+ * textures. Returns non-zero for a valid indexed texture and writes its
+ * palette base. Texture units are numeric GL texture-unit indices.
+ */
+int enj_web_indexed_texture_bind(const enj_web_texture_t *texture,
+                                 uint32_t index_texture_unit,
+                                 uint32_t palette_texture_unit,
+                                 uint32_t *palette_base);
+
 #ifdef __cplusplus
 }
 #endif
