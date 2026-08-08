@@ -1,5 +1,6 @@
 #include "web_endjinn_input.h"
 
+#include <emscripten.h>
 #include <emscripten/html5.h>
 
 #include <algorithm>
@@ -10,6 +11,74 @@ namespace web_endjinn {
 namespace {
 
 bool g_sample_valid = false;
+
+EM_JS(int, web_endjinn_gamepad_has_rumble_js, (int gamepad_index), {
+    const getGamepads = navigator.getGamepads || navigator.webkitGetGamepads;
+    if (!getGamepads) {
+        return 0;
+    }
+    const gamepads = getGamepads.call(navigator);
+    const gamepad = gamepads && gamepads[gamepad_index];
+    return gamepad &&
+        (gamepad.vibrationActuator ||
+         (gamepad.hapticActuators && gamepad.hapticActuators.length > 0))
+        ? 1 : 0;
+});
+
+EM_JS(int, web_endjinn_gamepad_rumble_js,
+      (int gamepad_index, double low_frequency, double high_frequency,
+       int duration_ms), {
+    const getGamepads = navigator.getGamepads || navigator.webkitGetGamepads;
+    if (!getGamepads) {
+        return 0;
+    }
+    const gamepads = getGamepads.call(navigator);
+    const gamepad = gamepads && gamepads[gamepad_index];
+    const actuator = gamepad &&
+        (gamepad.vibrationActuator ||
+         (gamepad.hapticActuators && gamepad.hapticActuators[0]));
+    if (!actuator) {
+        return 0;
+    }
+
+    const ignoreRejection = result => {
+        if (result && typeof result.catch === "function") {
+            result.catch(() => {});
+        }
+    };
+    if (duration_ms <= 0) {
+        if (typeof actuator.reset === "function") {
+            ignoreRejection(actuator.reset());
+        } else if (typeof actuator.playEffect === "function") {
+            ignoreRejection(actuator.playEffect("dual-rumble", {
+                duration: 0,
+                strongMagnitude: 0,
+                weakMagnitude: 0
+            }));
+        } else if (typeof actuator.pulse === "function") {
+            ignoreRejection(actuator.pulse(0, 0));
+        }
+        return 1;
+    }
+
+    low_frequency = Math.max(0, Math.min(1, low_frequency));
+    high_frequency = Math.max(0, Math.min(1, high_frequency));
+    if (typeof actuator.playEffect === "function") {
+        ignoreRejection(actuator.playEffect("dual-rumble", {
+            duration: duration_ms,
+            startDelay: 0,
+            strongMagnitude: low_frequency,
+            weakMagnitude: high_frequency
+        }));
+        return 1;
+    }
+    if (typeof actuator.pulse === "function") {
+        ignoreRejection(actuator.pulse(
+            Math.max(low_frequency, high_frequency), duration_ms));
+        return 1;
+    }
+    return 0;
+});
 
 int trigger_to_u8(double value)
 {
@@ -69,6 +138,20 @@ int gamepad_trigger(int gamepad_index, bool right_trigger)
         return trigger_to_u8(state.analogButton[6 + trigger]);
     }
     return -1;
+}
+
+bool gamepad_has_rumble(int gamepad_index)
+{
+    return gamepad_index >= 0 &&
+        web_endjinn_gamepad_has_rumble_js(gamepad_index) != 0;
+}
+
+bool gamepad_rumble(int gamepad_index, double low_frequency,
+                    double high_frequency, int duration_ms)
+{
+    return gamepad_index >= 0 &&
+        web_endjinn_gamepad_rumble_js(
+            gamepad_index, low_frequency, high_frequency, duration_ms) != 0;
 }
 
 }  // namespace web_endjinn

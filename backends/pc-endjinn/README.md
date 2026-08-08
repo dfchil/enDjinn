@@ -69,8 +69,8 @@ Projects with host-side library dependencies can add their include paths to
   renderer-neutral primitive queues.
 - `pc_endjinn_vulkan.cpp`: SDL window management, Vulkan resources, pipelines,
   frame construction, and presentation.
-- `pc_endjinn_input.cpp`: SDL implementations of Maple controllers and PCM
-  sound, plus the current rumble and VMU LCD stubs.
+- `pc_endjinn_input.cpp`: SDL implementations of Maple controllers, controller
+  rumble, and PCM sound, plus the current VMU LCD stubs.
 - `pc_endjinn_fs.cpp`: host filesystem and `/vmu/` save-path handling.
 - `SUPPORTED.md`: Coverage matrix for implemented, stubbed, and unsupported
   KOS/enDjinn behavior.

@@ -65,6 +65,9 @@ Only the render state listed here is decoded from compiled headers.
 - keyboard-backed port-A `enj_ctrlr_state_t`
 - up to four SDL GameControllers mapped to Maple ports A-D, with hot-plug
   reconnect handling
+- SDL controller rumble, with Dreamcast Purupuru power and frequency mapped to
+  the host controller's low- and high-frequency motors
+- browser Gamepad vibration actuators for rumble-capable Web controllers
 - Flycast-compatible keyboard bindings: X/C/S/D for A/B/X/Y, F/V for L/R,
   I/J/K/L for the analogue stick, arrows for D-pad, and Enter for Start
 
@@ -77,7 +80,6 @@ that a Dreamcast controller would report.
   `pvr_list_begin`
 - `pvr_wait_ready` and `pvr_wait_render_done` are accepted no-ops
 - `pvr_fog_table_color` and `pvr_fog_table_linear` do not affect Vulkan output
-- `enj_rumble_*` reports no rumble device
 - `vid_border_color` has no visible host equivalent
 
 ## Not Implemented Yet
@@ -85,5 +87,5 @@ that a Dreamcast controller would report.
 - PVR culling modes and complete depth, blend, fog, and material-state decoding
 - PVR bump-map lighting semantics
 - tile-accurate Dreamcast translucent sorting
-- configurable controller mappings, VMU LCD output, and controller rumble
+- configurable controller mappings and VMU LCD output
 - arbitrary PVR packet streams outside the documented colored geometry subset
