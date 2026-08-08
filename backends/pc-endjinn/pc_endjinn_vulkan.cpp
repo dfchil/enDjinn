@@ -43,7 +43,9 @@ VkRenderPass g_render_pass = VK_NULL_HANDLE;
 std::vector<VkFramebuffer> g_framebuffers;
 VkPipelineLayout g_pipeline_layout = VK_NULL_HANDLE;
 VkPipeline g_opaque_pipeline = VK_NULL_HANDLE;
+VkPipeline g_opaque_no_depth_write_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_pipeline = VK_NULL_HANDLE;
+VkPipeline g_punch_through_no_depth_write_pipeline = VK_NULL_HANDLE;
 VkPipeline g_translucent_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_volume_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_exclude_pipeline = VK_NULL_HANDLE;
@@ -84,6 +86,7 @@ struct DrawBatch {
     pvr_list_t list;
     uint32_t first_vertex;
     uint32_t vertex_count;
+    bool depth_write;
     bool textured;
     pvr_ptr_t texture;
     uint32_t texture_format;
@@ -721,9 +724,18 @@ void destroy_frame_resources()
         vkDestroyPipeline(g_device, g_opaque_pipeline, nullptr);
         g_opaque_pipeline = VK_NULL_HANDLE;
     }
+    if (g_opaque_no_depth_write_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_opaque_no_depth_write_pipeline, nullptr);
+        g_opaque_no_depth_write_pipeline = VK_NULL_HANDLE;
+    }
     if (g_punch_through_pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(g_device, g_punch_through_pipeline, nullptr);
         g_punch_through_pipeline = VK_NULL_HANDLE;
+    }
+    if (g_punch_through_no_depth_write_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_punch_through_no_depth_write_pipeline,
+                          nullptr);
+        g_punch_through_no_depth_write_pipeline = VK_NULL_HANDLE;
     }
     if (g_translucent_pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(g_device, g_translucent_pipeline, nullptr);
@@ -1116,12 +1128,22 @@ bool create_render_pipeline()
     bool ok = vkCreateGraphicsPipelines(
         g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_opaque_pipeline) == VK_SUCCESS;
 
+    depth_state.depthWriteEnable = VK_FALSE;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_opaque_no_depth_write_pipeline) == VK_SUCCESS;
+    depth_state.depthWriteEnable = VK_TRUE;
+
     stages[1].module = punch_frag_module;
     ok = ok && vkCreateGraphicsPipelines(
         g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_punch_through_pipeline) == VK_SUCCESS;
 
-    stages[1].module = frag_module;
     depth_state.depthWriteEnable = VK_FALSE;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_punch_through_no_depth_write_pipeline) == VK_SUCCESS;
+
+    stages[1].module = frag_module;
     blend_att.blendEnable = VK_TRUE;
     blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -1328,6 +1350,7 @@ FrameDrawData build_frame_draw_data()
         for (const QueuedPrimitive *primitive : primitives) {
             const bool same_batch = !frame.batches.empty() &&
                 frame.batches.back().list == list &&
+                frame.batches.back().depth_write == primitive->depth_write &&
                 frame.batches.back().textured == primitive->textured &&
                 frame.batches.back().texture == primitive->texture &&
                 frame.batches.back().texture_format == primitive->texture_format &&
@@ -1341,6 +1364,7 @@ FrameDrawData build_frame_draw_data()
                 DrawBatch batch{};
                 batch.list = list;
                 batch.first_vertex = static_cast<uint32_t>(frame.vertices.size());
+                batch.depth_write = primitive->depth_write;
                 batch.textured = primitive->textured;
                 batch.texture = primitive->texture;
                 batch.texture_format = primitive->texture_format;
@@ -1375,7 +1399,9 @@ bool draw_frame(const FrameDrawData &frame)
 {
     if (g_device == VK_NULL_HANDLE || g_swapchain == VK_NULL_HANDLE ||
         g_opaque_pipeline == VK_NULL_HANDLE ||
+        g_opaque_no_depth_write_pipeline == VK_NULL_HANDLE ||
         g_punch_through_pipeline == VK_NULL_HANDLE ||
+        g_punch_through_no_depth_write_pipeline == VK_NULL_HANDLE ||
         g_translucent_pipeline == VK_NULL_HANDLE ||
         g_modifier_volume_pipeline == VK_NULL_HANDLE ||
         g_modifier_exclude_pipeline == VK_NULL_HANDLE ||
@@ -1471,9 +1497,13 @@ bool draw_frame(const FrameDrawData &frame)
             } else if (batch.modifier) {
                 pipeline = g_modifier_pipeline;
             } else if (batch.list == PVR_LIST_PT_POLY) {
-                pipeline = g_punch_through_pipeline;
+                pipeline = batch.depth_write
+                    ? g_punch_through_pipeline
+                    : g_punch_through_no_depth_write_pipeline;
             } else if (batch.list == PVR_LIST_TR_POLY) {
                 pipeline = g_translucent_pipeline;
+            } else if (!batch.depth_write) {
+                pipeline = g_opaque_no_depth_write_pipeline;
             }
             GpuTexture *texture = gpu_texture_for(batch);
             const VkDescriptorSet descriptor = texture == nullptr

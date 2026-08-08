@@ -42,6 +42,7 @@ struct DrawBatch {
   pvr_list_t list{};
   uint32_t first_vertex{};
   uint32_t vertex_count{};
+  bool depth_write{};
   bool textured{};
   pvr_ptr_t texture{};
   uint32_t texture_format{};
@@ -299,6 +300,8 @@ const FrameDrawData &build_frame() {
       const QueuedPrimitive *primitive = sortable.primitive;
       const bool same = !g_frame.batches.empty() &&
                         g_frame.batches.back().list == list &&
+                        g_frame.batches.back().depth_write ==
+                            primitive->depth_write &&
                         g_frame.batches.back().textured == primitive->textured &&
                         g_frame.batches.back().texture == primitive->texture &&
                         g_frame.batches.back().texture_format ==
@@ -315,6 +318,7 @@ const FrameDrawData &build_frame() {
             {list,
              static_cast<uint32_t>(g_frame.vertices.size()),
              0u,
+             primitive->depth_write,
              primitive->textured,
              primitive->texture,
              primitive->texture_format,
@@ -425,7 +429,7 @@ GLuint texture_for(const DrawBatch &batch) {
 void set_draw_state(const DrawBatch &batch) {
   GenericDrawState desired{};
   desired.depth_test = true;
-  desired.depth_write = true;
+  desired.depth_write = batch.depth_write;
   desired.color_write = true;
   desired.punch_through = batch.list == PVR_LIST_PT_POLY;
   if (batch.modifier_volume) {

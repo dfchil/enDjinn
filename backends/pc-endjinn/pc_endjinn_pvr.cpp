@@ -36,6 +36,7 @@ struct HeaderState {
   bool modifier_textured{};
   pvr_context_txr_t modifier_texture{};
   pvr_cull_mode_t culling{PVR_CULLING_NONE};
+  bool depth_write{true};
 };
 
 alignas(32) std::array<uint8_t, 96> g_dr_packet{};
@@ -77,6 +78,7 @@ void copy_header_state(pc_endjinn_pvr::QueuedPrimitive &primitive) {
   primitive.argb = g_header.argb;
   primitive.list = g_current_list;
   primitive.culling = g_header.culling;
+  primitive.depth_write = g_header.depth_write;
   primitive.textured = g_header.textured;
   primitive.texture = g_header.texture;
   primitive.texture_format = g_header.format;
@@ -571,6 +573,8 @@ void dr_commit(void *ptr) {
   g_header.culling = static_cast<pvr_cull_mode_t>(
       (header->mode1 & PC_ENDJINN_PVR_HEADER_CULL_MASK) >>
       PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
+  g_header.depth_write =
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_DEPTH_WRITE) != 0u;
   g_header.modifier_mode = g_header.modifier_volume ? header->oargb : 0u;
   const auto modifier_texture = g_modifier_textures.find(header->cmd & 0x0fffffffu);
   g_header.modifier_textured = modifier_texture != g_modifier_textures.end();
