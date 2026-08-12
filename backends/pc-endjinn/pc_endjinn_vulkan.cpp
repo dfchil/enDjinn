@@ -376,7 +376,7 @@ bool create_readback_buffer(VkDeviceSize size, VkBuffer &buffer,
     return true;
 }
 
-const char *screenshot_path()
+const char *screenshot_requested_path()
 {
     if (!g_screenshot_checked) {
         g_screenshot_checked = true;
@@ -392,6 +392,12 @@ const char *screenshot_path()
             }
         }
     }
+    return g_screenshot_path;
+}
+
+const char *screenshot_path()
+{
+    (void)screenshot_requested_path();
     return !g_screenshot_captured && g_presented_frames >= g_screenshot_frame
         ? g_screenshot_path : nullptr;
 }
@@ -887,7 +893,7 @@ bool create_swapchain()
     info.imageExtent = g_extent;
     info.imageArrayLayers = 1u;
     info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    if (screenshot_path() != nullptr && g_swapchain_readback_supported) {
+    if (screenshot_requested_path() != nullptr && g_swapchain_readback_supported) {
         info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     }
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -993,7 +999,7 @@ bool create_render_pipeline()
     color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color.finalLayout = screenshot_path() != nullptr && g_swapchain_readback_supported
+    color.finalLayout = screenshot_requested_path() != nullptr && g_swapchain_readback_supported
         ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     VkAttachmentDescription depth{};
     depth.format = g_depth_format;
@@ -1493,8 +1499,10 @@ bool draw_frame(const FrameDrawData &frame)
     }
 
     const char *const requested_screenshot = screenshot_path();
-    const bool capture_screenshot = requested_screenshot != nullptr &&
+    const bool screenshot_enabled = screenshot_requested_path() != nullptr &&
         g_swapchain_readback_supported;
+    const bool capture_screenshot = requested_screenshot != nullptr &&
+        screenshot_enabled;
     VkBuffer screenshot_buffer = VK_NULL_HANDLE;
     VkDeviceMemory screenshot_memory = VK_NULL_HANDLE;
     const VkDeviceSize screenshot_bytes =
@@ -1580,14 +1588,16 @@ bool draw_frame(const FrameDrawData &frame)
         }
     }
     vkCmdEndRenderPass(cmd);
-    if (capture_screenshot) {
+    if (screenshot_enabled) {
         VkBufferImageCopy copy{};
-        copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copy.imageSubresource.layerCount = 1u;
-        copy.imageExtent = {g_extent.width, g_extent.height, 1u};
-        vkCmdCopyImageToBuffer(cmd, g_swapchain_images[image_index],
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               screenshot_buffer, 1u, &copy);
+        if (capture_screenshot) {
+            copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copy.imageSubresource.layerCount = 1u;
+            copy.imageExtent = {g_extent.width, g_extent.height, 1u};
+            vkCmdCopyImageToBuffer(cmd, g_swapchain_images[image_index],
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   screenshot_buffer, 1u, &copy);
+        }
         VkImageMemoryBarrier to_present{};
         to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
