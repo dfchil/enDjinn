@@ -68,6 +68,7 @@ bool g_swapchain_readback_supported = false;
 bool g_screenshot_checked = false;
 bool g_screenshot_captured = false;
 const char *g_screenshot_path = nullptr;
+uint64_t g_screenshot_frame = 0u;
 
 struct PcVertex {
     float position[3];
@@ -382,8 +383,17 @@ const char *screenshot_path()
         const char *const candidate = std::getenv("ENJ_SCREENSHOT_PATH");
         g_screenshot_path = candidate != nullptr && *candidate != '\0'
             ? candidate : nullptr;
+        const char *const frame_text = std::getenv("ENJ_SCREENSHOT_FRAME");
+        if (frame_text != nullptr && *frame_text != '\0') {
+            char *end = nullptr;
+            const unsigned long long parsed = std::strtoull(frame_text, &end, 10);
+            if (end != frame_text && *end == '\0') {
+                g_screenshot_frame = static_cast<uint64_t>(parsed);
+            }
+        }
     }
-    return !g_screenshot_captured ? g_screenshot_path : nullptr;
+    return !g_screenshot_captured && g_presented_frames >= g_screenshot_frame
+        ? g_screenshot_path : nullptr;
 }
 
 bool write_screenshot_ppm(const char *path, VkDeviceMemory memory,
