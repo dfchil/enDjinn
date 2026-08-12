@@ -64,6 +64,10 @@ bool g_fsaa_enabled = false;
 bool g_fullscreen_toggle_requested = false;
 int g_last_window_width = 1280;
 int g_last_window_height = 960;
+bool g_swapchain_readback_supported = false;
+bool g_screenshot_checked = false;
+bool g_screenshot_captured = false;
+const char *g_screenshot_path = nullptr;
 
 struct PcVertex {
     float position[3];
@@ -337,6 +341,78 @@ bool create_staging_buffer(VkDeviceSize size, VkBuffer &buffer,
         return false;
     }
     return vkBindBufferMemory(g_device, buffer, memory, 0u) == VK_SUCCESS;
+}
+
+bool create_readback_buffer(VkDeviceSize size, VkBuffer &buffer,
+                            VkDeviceMemory &memory)
+{
+    VkBufferCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = size;
+    info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(g_device, &info, nullptr, &buffer) != VK_SUCCESS) {
+        return false;
+    }
+    VkMemoryRequirements req{};
+    vkGetBufferMemoryRequirements(g_device, buffer, &req);
+    VkMemoryAllocateInfo alloc{};
+    alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc.allocationSize = req.size;
+    alloc.memoryTypeIndex = find_memory_type(
+        req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (vkAllocateMemory(g_device, &alloc, nullptr, &memory) != VK_SUCCESS ||
+        vkBindBufferMemory(g_device, buffer, memory, 0u) != VK_SUCCESS) {
+        if (memory != VK_NULL_HANDLE) {
+            vkFreeMemory(g_device, memory, nullptr);
+            memory = VK_NULL_HANDLE;
+        }
+        vkDestroyBuffer(g_device, buffer, nullptr);
+        buffer = VK_NULL_HANDLE;
+        return false;
+    }
+    return true;
+}
+
+const char *screenshot_path()
+{
+    if (!g_screenshot_checked) {
+        g_screenshot_checked = true;
+        const char *const candidate = std::getenv("ENJ_SCREENSHOT_PATH");
+        g_screenshot_path = candidate != nullptr && *candidate != '\0'
+            ? candidate : nullptr;
+    }
+    return !g_screenshot_captured ? g_screenshot_path : nullptr;
+}
+
+bool write_screenshot_ppm(const char *path, VkDeviceMemory memory,
+                          VkDeviceSize size)
+{
+    if (g_swapchain_format != VK_FORMAT_B8G8R8A8_UNORM || path == nullptr) {
+        return false;
+    }
+    void *mapped = nullptr;
+    if (vkMapMemory(g_device, memory, 0u, size, 0u, &mapped) != VK_SUCCESS) {
+        return false;
+    }
+    FILE *const output = std::fopen(path, "wb");
+    if (output == nullptr) {
+        vkUnmapMemory(g_device, memory);
+        return false;
+    }
+    std::fprintf(output, "P6\n%u %u\n255\n", g_extent.width, g_extent.height);
+    const uint8_t *const pixels = static_cast<const uint8_t *>(mapped);
+    for (uint32_t y = 0u; y < g_extent.height; ++y) {
+        for (uint32_t x = 0u; x < g_extent.width; ++x) {
+            const uint8_t *const bgra = pixels + (y * g_extent.width + x) * 4u;
+            const uint8_t rgb[3] = {bgra[2], bgra[1], bgra[0]};
+            std::fwrite(rgb, sizeof(rgb), 1u, output);
+        }
+    }
+    const bool ok = std::fclose(output) == 0;
+    vkUnmapMemory(g_device, memory);
+    return ok;
 }
 
 bool upload_gpu_image(GpuImage &texture, VkFormat format,
@@ -790,6 +866,8 @@ bool create_swapchain()
     if (caps.maxImageCount > 0u && image_count > caps.maxImageCount) {
         image_count = caps.maxImageCount;
     }
+    g_swapchain_readback_supported =
+        (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u;
     VkSwapchainCreateInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     info.surface = g_surface;
@@ -799,6 +877,9 @@ bool create_swapchain()
     info.imageExtent = g_extent;
     info.imageArrayLayers = 1u;
     info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if (screenshot_path() != nullptr && g_swapchain_readback_supported) {
+        info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     info.preTransform = caps.currentTransform;
     info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -902,7 +983,8 @@ bool create_render_pipeline()
     color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    color.finalLayout = screenshot_path() != nullptr && g_swapchain_readback_supported
+        ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     VkAttachmentDescription depth{};
     depth.format = g_depth_format;
     depth.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1400,6 +1482,20 @@ bool draw_frame(const FrameDrawData &frame)
         vkUnmapMemory(g_device, g_vertex_memory);
     }
 
+    const char *const requested_screenshot = screenshot_path();
+    const bool capture_screenshot = requested_screenshot != nullptr &&
+        g_swapchain_readback_supported;
+    VkBuffer screenshot_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory screenshot_memory = VK_NULL_HANDLE;
+    const VkDeviceSize screenshot_bytes =
+        static_cast<VkDeviceSize>(g_extent.width) * g_extent.height * 4u;
+    if (capture_screenshot &&
+        !create_readback_buffer(screenshot_bytes, screenshot_buffer,
+                                screenshot_memory)) {
+        std::fprintf(stderr, "pc-enDjinn: screenshot readback allocation failed\n");
+        return false;
+    }
+
     VkCommandBuffer cmd = g_command_buffers[image_index];
     vkResetCommandBuffer(cmd, 0u);
     VkCommandBufferBeginInfo begin{};
@@ -1474,7 +1570,32 @@ bool draw_frame(const FrameDrawData &frame)
         }
     }
     vkCmdEndRenderPass(cmd);
+    if (capture_screenshot) {
+        VkBufferImageCopy copy{};
+        copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copy.imageSubresource.layerCount = 1u;
+        copy.imageExtent = {g_extent.width, g_extent.height, 1u};
+        vkCmdCopyImageToBuffer(cmd, g_swapchain_images[image_index],
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               screenshot_buffer, 1u, &copy);
+        VkImageMemoryBarrier to_present{};
+        to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        to_present.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        to_present.image = g_swapchain_images[image_index];
+        to_present.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        to_present.subresourceRange.levelCount = 1u;
+        to_present.subresourceRange.layerCount = 1u;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0u,
+                             0u, nullptr, 0u, nullptr, 1u, &to_present);
+    }
     if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
+        if (screenshot_buffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(g_device, screenshot_buffer, nullptr);
+            vkFreeMemory(g_device, screenshot_memory, nullptr);
+        }
         set_window_title("pc-enDjinn - command end failed");
         return false;
     }
@@ -1490,8 +1611,29 @@ bool draw_frame(const FrameDrawData &frame)
     submit.signalSemaphoreCount = 1u;
     submit.pSignalSemaphores = &g_render_finished;
     if (vkQueueSubmit(g_graphics_queue, 1u, &submit, g_in_flight) != VK_SUCCESS) {
+        if (screenshot_buffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(g_device, screenshot_buffer, nullptr);
+            vkFreeMemory(g_device, screenshot_memory, nullptr);
+        }
         set_window_title("pc-enDjinn - queue submit failed");
         return false;
+    }
+
+    if (capture_screenshot) {
+        vkWaitForFences(g_device, 1u, &g_in_flight, VK_TRUE, UINT64_MAX);
+        const bool written = write_screenshot_ppm(
+            requested_screenshot, screenshot_memory, screenshot_bytes);
+        vkDestroyBuffer(g_device, screenshot_buffer, nullptr);
+        vkFreeMemory(g_device, screenshot_memory, nullptr);
+        if (!written) {
+            std::fprintf(stderr, "pc-enDjinn: screenshot write failed\n");
+        } else {
+            g_screenshot_captured = true;
+            std::fprintf(stderr, "pc-enDjinn: screenshot=%s\n", requested_screenshot);
+        }
+    } else if (requested_screenshot != nullptr) {
+        std::fprintf(stderr, "pc-enDjinn: swapchain readback unsupported\n");
+        g_screenshot_captured = true;
     }
 
     VkPresentInfoKHR present{};
