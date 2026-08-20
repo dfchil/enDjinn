@@ -41,7 +41,7 @@ size_t enj_ctrl_map_states(void) {
   size_t count = 0;
   for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
     maple_device_t *device = local_controllers[i];
-    if (device && device->valid == true) {
+    if (device && device->valid) {
       cont_state_t *new_state = (cont_state_t *)maple_dev_status(device);
       if (new_state) {
         ctrlr_states_refs[i] = ctrlr_states_storage + i;
