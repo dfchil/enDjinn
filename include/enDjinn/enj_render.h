@@ -1,7 +1,8 @@
 #ifndef ENDJINN_RENDER_H
 #define ENDJINN_RENDER_H
 
-#include <kos.h>
+#include <dc/pvr.h>
+#include <dc/pvr/pvr_pal.h>
 #include <enDjinn/enj_mode.h>
 
 /**

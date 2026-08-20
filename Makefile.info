@@ -3,20 +3,13 @@ list:
 
 
 cfg_info:
-	@echo "Makefile configurable variables (redefine in $(shell pwd)/local.cfg.mk as necessary):"
+	@echo "Makefile configurable variables (redefine in $(shell pwd)/Makefile.cfg as necessary):"
 	@echo "enDjinn directory: $(ENJDIR)"
-	@echo "ENJ_MAKEFILE = ${ENJ_MAKEFILE}"
-	@echo "ENJ_BASEDIR = ${ENJ_BASEDIR}"
 	@echo "ENJ_BASENAME      = ${ENJ_BASENAME}"
 	@echo "                  # Basename of the target that other names are built from,"
 	@echo "                  # defaults to the current directory name."
 	@echo "ENJ_TEXTURE_SRC_DIR    = ${ENJ_TEXTURE_SRC_DIR}"
 	@echo "                  # Directory containing texture assets"
-	@echo "ENJ_PAL4_PVRTEX_FLAGS = ${ENJ_PAL4_PVRTEX_FLAGS}"
-	@echo "ENJ_PAL8_PVRTEX_FLAGS = ${ENJ_PAL8_PVRTEX_FLAGS}"
-	@echo "ENJ_PAL4_VQ_TW_PVRTEX_FLAGS = ${ENJ_PAL4_VQ_TW_PVRTEX_FLAGS}"
-	@echo "ENJ_PAL8_VQ_TW_PVRTEX_FLAGS = ${ENJ_PAL8_VQ_TW_PVRTEX_FLAGS}"
-	@echo "                  # Extra pvrtex flags for each palettized texture type"
 	@echo "ENJ_SOUNDFX_SRC_DIR    = ${ENJ_SOUNDFX_SRC_DIR}"
 	@echo "                  # Directory containing sound effect assets"
 	@echo "ENJ_ROMDIR        = ${ENJ_ROMDIR}"
@@ -36,8 +29,6 @@ cfg_info:
 
 	@echo "ENJ_CFLAGS        = ${ENJ_CFLAGS}"
 	@echo ""
-	@echo ""
-
 
 auto_variables:
 	@echo "Make automatic variables for target ${ENJ_BASENAME}.elf:"
@@ -65,10 +56,8 @@ auto_variables:
 help:
 	@echo "make [TARGET] where TARGET is one of:"
 	@echo "  ${ENJ_BASENAME}.elf        Build all part_*.elf files"
-	@echo "  assets                       Generate project assets"
 	@echo "  clean        						Remove all built files"
 	@echo "  help         						Show this help message"
 	@echo "  list         						List all make targets"
 	@echo "  cfg_info         					Show redefineable makefile variables"
-	@echo "  cmdline_info          					Alias for ${ENJ_BASENAME}.elf"
-	@echo "  auto_variables          					Show automatic make variables"
+	@echo "  cmdline_info          				Alias for ${ENJ_BASENAME}.elf"

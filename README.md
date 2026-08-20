@@ -1,187 +1,95 @@
 # enDjinn
 
-enDjinn (a play on “engine” and the invisible helper of myth) is a small,
-Dreamcast-first C runtime and build system. It handles recurring KOS/PVR
-boilerplate while keeping the Dreamcast rendering model visible: applications
-work with modes, PVR render lists, controllers, textures, fonts, sound, and
-VMU/rumble devices rather than a generic cross-platform scene API.
-
+## What is enDjinn?
+It is very obviously a play on the word 'engine', which enDjinn isn't quite, and an invocation of the Middle Eastern mythos of supernatural invisible beings, Djinn, or Genies as they are more commenly known as in the west.
 <div>
-<img style="height:220px" src="./docs/img/enDjinn.svg" alt="enDjinn logo" />
+<img style="height:220px" src="./docs/img/enDjinn.svg" alt="enDjinn logo" "/>
 </div>
 
-## What it provides
+So in short an invisible helper that sets heaven and earth in motion for you without any fuss and guides you along your quest to deliver software for the Dreamcast.
 
-- A frame loop that owns PVR scene setup and teardown.
-- A stack of `enj_mode_t` game modes, including activation callbacks and soft
-  reset support.
-- Render-list callbacks for opaque, punch-through, and translucent PVR lists.
-- Controller state transitions, abstract controllers, rumble, and VMU hooks.
-- Build-time conversion of supported texture, TrueType font, and sound assets.
-- A built-in quick font (`qfont`) for fast text rendering, plus generated
-  proportional `.enjfont` files.
-- `dctrace` and `dcprof` profiling helpers.
-
-The [examples](./examples/README.md) are the best source of working,
-feature-specific code.
-
-## Quick start: Dreamcast
-
-enDjinn expects an active KallistiOS environment. The repository’s
-[`environ.sh`](./environ.sh) is a local convenience script for its configured
-toolchain location; use your own KOS `environ.sh` if it lives elsewhere.
-
-Create a project with `code/`, optionally `assets/`, a `local.cfg.mk`, and a
-`Makefile` symlink to `base_link.mk`:
-
-```sh
-mkdir -p my-game/code
-cd my-game
-ln -s /path/to/enDjinn/base_link.mk Makefile
-printf 'ENJ_INJECT_QFONT:=1\n' > local.cfg.mk
-```
-
-Then build from the project directory with `make`. The default Dreamcast
-target is `bin/<project-name>.elf`. `make bin/<project-name>.cdi` creates a
-CDI image, and `make bin/<project-name>.bin` creates a raw binary.
-
-The minimal application is the [hello example](./examples/enj_hello/code/enj_hello.c):
+enDjinn really tries to do all the boilerplate stuff for you in a reasonable way, leading to that the following 29 lines of C code: 
 
 ```c
 #include <enDjinn/enj_enDjinn.h>
+#define MARGIN_LEFT (20 * ENJ_XSCALE)
 
-void render(void *__unused) {
-  enj_qfont_write("Hello, enDjinn!", 20, 20, PVR_LIST_PT_POLY);
+void render_PT(void *__unused) {
+  enj_font_scale_set(4);
+  enj_qfont_write("Hello, enDjinn!", MARGIN_LEFT, 20, PVR_LIST_PT_POLY);
+  enj_font_scale_set(1);
+  enj_qfont_write("Press A+B+X+Y+START to end program.", MARGIN_LEFT, 120,
+                  PVR_LIST_PT_POLY);
 }
-
-void update(void *__unused) {
-  enj_render_list_add(PVR_LIST_PT_POLY, render, NULL);
+void main_mode_updater(void *__unused) {
+  enj_render_list_add(PVR_LIST_PT_POLY, render_PT, NULL);
 }
-
 int main(__unused int argc, __unused char **argv) {
+  // initialize enDjinn state with default values
   enj_state_init_defaults();
-  if (enj_state_startup() != 0) return -1;
-
-  enj_mode_t mode = {.name = "Main", .mode_updater = update};
-  enj_mode_push(&mode);
+  if (enj_state_startup() != 0) {
+    ENJ_DEBUG_PRINT("enDjinn startup failed, exiting\n");
+    return -1;
+  }
+  enj_mode_t main_mode = {
+      .name = "Main Mode",
+      .mode_updater = main_mode_updater,
+      .data = NULL,
+  };
+  enj_mode_push(&main_mode);
   enj_state_run();
   return 0;
 }
 ```
+Gives you a functional program on the Dreamcast with this single screen: 
 
-## Runtime model
+![Screenshot of the simplest enDjinn program, enj_hello.c](docs/img/hello.png)
 
-Call `enj_state_init_defaults()`, then `enj_state_startup()`, push at least
-one mode, and call `enj_state_run()`. A mode’s `mode_updater` is called every
-frame. It should update its state and register renderer callbacks with
-`enj_render_list_add()`; enDjinn invokes each callback in the matching PVR
-phase.
+Notice that the **Makefile** for this program is just a symlink to the [enDjinn/Makefile.prime](Makefile.prime) that is amended with one line in the [Makefile.local.cfg](./examples//enj_hello/Makefile.local.cfg) for injecting enDjinns built in qfont. So one symlink and two files in total and a bit of adherence to how enDjinn expects things to be arranged and you're off to make things run on the Dreamcast!
 
-The mode stack is LIFO: push a pause/menu mode over the game, then call
-`enj_mode_flag_end_current()` to end it on the next loop iteration and resume
-the previous mode. `on_activation_fn` is called when a revealed mode becomes
-active. Use `enj_mode_soft_reset_target_set()` to choose where the default
-Start+A+B+X+Y soft-reset combination returns.
+The complete setup can be found in the examples folder in this repository: [enj_hello](./examples/enj_hello/)
 
-## Assets and build configuration
+And please don't worry about being strong armed into a rigoristic and very specific way to do things, because while one part of the design philosphy is "powerfull zero config features out of the gate", another part is "as much a as possible should be reconfigurable by the user". I'll have more on how to wrangle the make system to your tastes and needs later. 
 
-By default, source code is read from `code/`, textures from `assets/texture`,
-fonts from `assets/fonts`, and sound effects from `assets/sfx`. Generated
-Dreamcast assets are placed under `cdrom/<project-name>/` unless overridden.
+Apart from the build system alluded to above, another big part of enDjinn is the runtime that tries to alleviate some of quirks of the Dreamcast system while amplifying its strengths. In this runtime you'll find a gameplay loop driver, a powerful state machine, texture loading, a truetype based fonting system, controller and rumblepack handling and various other small things that I like to reuse between projects. 
 
-Texture conversion is selected by the directory below `assets/texture`:
-`pal4`, `pal8`, `pal4_vq_tw`, `pal8_vq_tw`, `rgb565_vq_tw`, and
-`argb1555_vq_tw` are supported. PAL4 and PAL8 textures are always twiddled by
-the hardware format; the `_vq_tw` variants additionally enable VQ compression.
-TrueType files in `assets/fonts/<pixel-height>/` become `.enjfont` files. Sound
-files in the supported ADPCM or PCM directory layouts become `.dca` files. The
-sound converter must be installed as `dcaconv` on `PATH`, or supplied as
-`SOUNDMACHINE=/path/to/dcaconv`. Builds never clone dependencies.
+I'll add more documentation to all of the above and some features I haven't mentioned it in due time.
 
-Put project-specific overrides in `local.cfg.mk`. The most useful current
-variables are:
+Until I get around to that task, I suggest going through [the many examples](./examples/README.md) included in this repository for reference and inspiration. 
 
-| Variable | Purpose |
-| --- | --- |
-| `ENJ_TARGET` | `dreamcast` (default), `pc-endjinn`, or `web-endjinn`. |
-| `ENJ_BASENAME` | Output/project name; defaults to the current directory name. |
-| `ENJ_CODEDIR` | C source directory; defaults to `./code`. |
-| `ENJ_ROMDIR` | CD-ROM asset root; defaults to `cdrom`. |
-| `ENJ_BUILDDIR`, `ENJ_BINDIR` | Object and output directories; default to `build` and `bin`. |
-| `ENJ_LDLIBS` | Extra libraries passed to the Dreamcast link step. |
-| `ENJ_PAL4_PVRTEX_FLAGS`, `ENJ_PAL8_PVRTEX_FLAGS` | Extra `pvrtex` flags for uncompressed palettized textures. |
-| `ENJ_PAL4_VQ_TW_PVRTEX_FLAGS`, `ENJ_PAL8_VQ_TW_PVRTEX_FLAGS` | Extra `pvrtex` flags for VQ-compressed palettized textures. |
-| `SOUNDMACHINE` | Path to the required `dcaconv` executable. |
-| `ENJ_CFLAGS` | Additional C compiler flags. |
-| `OPTLEVEL` | Optimisation level passed as `-O`; default is `g`. |
-| `ENJ_DEBUG` | Enables `ENJ_DEBUG_PRINT` and Dreamcast debug instrumentation. |
-| `ENJ_FSAA` | Enables FSAA and changes `ENJ_XSCALE` accordingly. |
-| `ENJ_FRAME_RATE` | Enables a frame-rate deadline when set to a positive value. |
-| `ENJ_WEB_SIMD` | Set to `1` to compile and link `web-endjinn` with WebAssembly SIMD128; defaults to `0`. |
-| `ENJ_USE_SH4ZAM` | Set to `1` to build and link the optional SH4ZAM integration for the selected target. |
-| `SH4ZAM_DIR` | Optional path to the SH4ZAM source tree when automatic discovery is unsuitable. |
-| `ENJ_INJECT_QFONT` | Builds and embeds the built-in quick font. |
-| `ENJ_ADD_LOGO_TEXTURE` | Adds enDjinn logo textures to the generated assets. |
+My current outline of topics to cover is as follows:
 
-When `ENJ_USE_SH4ZAM=1`, enDjinn builds SH4ZAM natively with CMake for
-`pc-endjinn`, compiles its software implementation with Emscripten for
-`web-endjinn`, and compiles its SH-4 implementation with KOS for `dreamcast`.
-The integration is disabled by default; applications that use `shz_*` APIs
-should enable it in `local.cfg.mk`. Set `SH4ZAM_DIR` explicitly or place the
-source tree next to the application or enDjinn, or under `third_party/` or
-`vendor/` in the application.
+## Build System
+### Automagic 
+### Absolutely Configurable
 
-Set `ENJ_WEB_SIMD=1` to pass `-msimd128` to every WebAssembly compilation and
-the final link, including optional integrations such as SH4ZAM. Leave it at
-the default `0` when producing a scalar compatibility build.
+### Generators
+#### Textures
+#### Fonts
+The simplicity of the qfont system is demonstrated in the [enj_hello](./examples/enj_hello/) example. 
 
-Run `make cfg_info` in a project directory to inspect the resolved build
-configuration, and `make auto_variables` to inspect generated asset and
-object lists. `make assets` generates the same declared asset blobs for either
-selected backend without linking an executable.
+For richer font requirements refer to the [enj_fonts example](./examples/enj_fonts/code/enj_fonts.c) for now. A more in depth description of this will follow. 
 
-## PC backend
+#### Sound Effects
+#### CDI Images
 
-Set `ENJ_TARGET=pc-endjinn` to compile the supported runtime subset against
-SDL2 and Vulkan/MoltenVK. It recompiles the same application against
-KOS-shaped compatibility headers and links PC implementations of the required
-KOS symbols; it is not a binary-only replacement for an already compiled
-Dreamcast executable. This is a development backend, not a full Dreamcast
-emulator.
+## Runtime
+### State Machine
 
-From an enDjinn application directory:
+### Texture Handling 
 
-```sh
-make ENJ_TARGET=pc-endjinn
-./build/pc-endjinn/my-game
-```
+### Font System
 
-The executable name defaults to the application directory name.
+### Hardware Abstraction
 
-The backend supports the geometry, texture and palette formats used by the
-examples, PCM sound effects, keyboard and SDL controllers, host save-file
-storage, and screen-space modifier masks. Rumble, VMU LCD output, and some PVR
-state remain unsupported. See the
-[PC backend README](./backends/pc-endjinn/README.md) for setup and usage and
-the [support matrix](./backends/pc-endjinn/SUPPORTED.md) for exact coverage.
+#### PVR rendering
+#### Controllers
+#### Rumble packs
+#### File System 
 
-## Browser backend
 
-Set `ENJ_TARGET=web-endjinn` to compile the same application and generated
-assets to WebAssembly with Emscripten, SDL2, and WebGL 2:
-
-```sh
-make ENJ_TARGET=web-endjinn
-emrun build/web-endjinn/my-game.html
-```
-
-The browser target reuses the PC backend's input, audio, filesystem, and PVR
-packet decoding shims. Its KOS-compatible sleep shim yields the unchanged
-engine loop to the browser through Emscripten Asyncify. See the
-[browser backend README](./backends/web-endjinn/README.md) for details.
+## Helper Methods
 
 ## Profiling
-
-The repository includes `profilers/dctrace.py`, `profilers/dcprof/`, and
-helper scripts under `profilers/`. Set `ENJ_DCTRACE` or `ENJ_DCPROF` in
-`local.cfg.mk` to include the corresponding Dreamcast-side instrumentation.
+### dctrace
+### dcprof 

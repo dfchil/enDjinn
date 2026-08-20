@@ -10,8 +10,11 @@
  *  \author    2025 Daniel Fairchild
  */
 
-#include <kos.h>
 #include <stdio.h>
+
+#ifdef ENJ_DEBUG
+#include <dc/perf_monitor.h>
+#endif
 
 #ifndef ENJ_MODE_STACK_SIZE
 #define ENJ_MODE_STACK_SIZE 16
@@ -31,7 +34,7 @@
 #define ENJ_XSCALE (int)1
 #endif
 
-#ifdef ENJ_DBG_PRINT
+#ifdef ENJ_DEBUG
 #define ENJ_DEBUG_PRINT(...)                                                       \
 do {                                                                         \
   fprintf(stdout, __VA_ARGS__);                                              \

@@ -2,6 +2,7 @@
 #define ENJ_RUMBLE_H
 
 #include <enDjinn/enj_ctrl.h>
+#include <dc/maple/purupuru.h>
 
 typedef enum uint8_t {
   enj_rumble_set = 1,

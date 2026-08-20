@@ -4,10 +4,10 @@
 #include <math.h>
 
 static const alignas(32) uint8_t enj_txr_blob[] = {
-#embed "../embeds/enj_modes/texture/pal8_vq_tw/enDjinn512.dt"
+#embed "../embeds/enj_modes/texture/pal8/enDjinn512.dt"
 };
 static const alignas(32) uint8_t enj_palette_blob[] = {
-#embed "../embeds/enj_modes/texture/pal8_vq_tw/enDjinn512.dt.pal"
+#embed "../embeds/enj_modes/texture/pal8/enDjinn512.dt.pal"
 };
 static enj_texture_info_t figure_texture_info;
 
@@ -77,7 +77,7 @@ void enDjinn_render(void* data) {
         corners[i][0] += mdata->center_x;
         corners[i][1] += mdata->center_y;
     }
-    enj_draw_sprite(corners, &mdata->hdr, NULL);
+    enj_draw_sprite(corners, NULL, &mdata->hdr, NULL);
 }
 
 void info_renderer(void* data) {
@@ -95,7 +95,7 @@ void info_renderer(void* data) {
         {max_x, min_y, 2.0f},
         {max_x, max_y, 2.0f},
     };
-    enj_draw_sprite(corners, &mdata->hdr, NULL);
+    enj_draw_sprite(corners, NULL, &mdata->hdr, NULL);
 }
 static inline void animate(main_data_t* mdata) {
     mdata->size_bump = MAX(0, mdata->size_bump - 1);
@@ -232,7 +232,7 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
     pvr_sprite_cxt_txr(&i_cxt, PVR_LIST_PT_POLY, help_texture_info.pvrformat,
                        help_texture_info.width, help_texture_info.height,
                        help_texture_info.ptr, PVR_FILTER_NEAREST);
-    i_cxt.gen.culling = PVR_CULLING_CCW;
+    i_cxt.gen.culling = PVR_CULLING_NONE;
     pvr_sprite_compile(&info_mode_data.hdr, &i_cxt);
     info_mode.data = &info_mode_data;
     info_mode.mode_updater = info_updater;
@@ -244,7 +244,7 @@ void setup_modes(enj_mode_t* main_mode, slide_data_t* slide_mode_data) {
     pvr_sprite_cxt_txr(&f_cxt, PVR_LIST_TR_POLY, figure_texture_info.pvrformat,
                        figure_texture_info.width, figure_texture_info.height,
                        figure_texture_info.ptr, PVR_FILTER_BILINEAR);
-    f_cxt.gen.culling = PVR_CULLING_CCW;
+    f_cxt.gen.culling = PVR_CULLING_NONE;
     f_cxt.gen.specular = PVR_SPECULAR_ENABLE;
     pvr_sprite_compile(&main_mode_data->hdr, &f_cxt);
     main_mode_data->hdr.argb = 0xffffffff;

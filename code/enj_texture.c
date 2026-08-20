@@ -12,14 +12,6 @@ static const uint32_t DcTx_chksm = (uint32_t)'D' << 0 | (uint32_t)'c' << 8 |
 static const uint32_t DPAL_chksm = (uint32_t)'D' << 0 | (uint32_t)'P' << 8 |
                                    (uint32_t)'A' << 16 | (uint32_t)'L' << 24;
 
-typedef struct {
-  char fourcc[4];
-  uint32_t colors;
-} enj_palette_header_t;
-
-_Static_assert(sizeof(enj_palette_header_t) == 8,
-               "DPAL headers are always 8 bytes");
-
 int enj_texture_load_blob(const void *data, enj_texture_info_t *texinfo) {
   memcpy(&texinfo->hdr, data, sizeof(dt_header_t));
 
@@ -112,7 +104,10 @@ int enj_texture_load_file(const char *filename, enj_texture_info_t *texinfo) {
 
 int enj_texture_load_palette_blob(const void *raw_data, int fmt,
                                   size_t offset) {
-  enj_palette_header_t palette_hdr;
+  struct {
+    char fourcc[4];
+    size_t colors;
+  } palette_hdr;
   memcpy(&palette_hdr, raw_data, sizeof(palette_hdr));
   if (*(uint32_t *)palette_hdr.fourcc != DPAL_chksm) {
     printf("Error: not valid DPAL data\n");
@@ -173,7 +168,10 @@ int enj_texture_load_palette_file(const char *filename, int fmt,
       success = 0;
       break;
     }
-    enj_palette_header_t palette_hdr;
+    struct {
+      char fourcc[4];
+      size_t colors;
+    } palette_hdr;
     if (fread(&palette_hdr, sizeof(palette_hdr), 1, file) != 1) {
       printf("Error reading palette header from file %s\n", filename);
       success = 0;
@@ -196,8 +194,7 @@ int enj_texture_load_palette_file(const char *filename, int fmt,
     if (fread((char *)raw_data + sizeof(palette_hdr),
               palette_hdr.colors * sizeof(uint32_t), 1, file) != 1) {
       printf("Error reading palette colors from file %s\n", filename);
-      success = 0;
-      break;
+      free(raw_data);
     }
     success = enj_texture_load_palette_blob(raw_data, fmt, offset);
   } while (0);

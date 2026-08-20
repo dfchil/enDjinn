@@ -1,14 +1,9 @@
 #include <enDjinn/enj_bitmap.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-
-#if defined(__APPLE__) || defined(__MACH__)
-#include <malloc/malloc.h>
-#define memalign(a, s) malloc(s)
-#else
 #include <malloc.h>
-#endif
 
 #ifndef ENJ_DEBUG_PRINT
 #define ENJ_DEBUG_PRINT(...)        \
@@ -22,28 +17,24 @@ do {                                \
 #define BIT_OFFSET(b) ((b) % ENJ_BITS_PER_BYTE)
 
 enj_bitmap_t *enj_bitmap_create(int width, int height) {
-  if (width <= 0 || width % 8 != 0) {
+  if (width % 8 != 0) {
     ENJ_DEBUG_PRINT("Width must be a multiple of 8");
     return NULL;
   }
-  if (height <= 0 || height % 8 != 0) {
+  if (height % 8 != 0) {
     ENJ_DEBUG_PRINT("Height must be a multiple of 8");
     return NULL;
   }
 
-  size_t row_size = (size_t)width / ENJ_BITS_PER_BYTE;
-  if ((size_t)height > (SIZE_MAX - sizeof(enj_bitmap_t)) / row_size) {
-    return NULL;
-  }
-  size_t allocation_size = sizeof(enj_bitmap_t) + row_size * (size_t)height;
-  enj_bitmap_t *bitmap = memalign(32, allocation_size);
+  enj_bitmap_t *bitmap =
+      memalign(32, sizeof(enj_bitmap_t) + ((width * height) / ENJ_BITS_PER_BYTE));
+  memset(bitmap, 0, sizeof(enj_bitmap_t) + ((width * height) / ENJ_BITS_PER_BYTE));
   if (bitmap == NULL) {
     return NULL;
   }
-  memset(bitmap, 0, allocation_size);
   bitmap->width = width;
   bitmap->height = height;
-  bitmap->data = (uint8_t *)bitmap + sizeof(enj_bitmap_t);
+  bitmap->data = (uint8_t *)((size_t)bitmap + sizeof(enj_bitmap_t));
   return bitmap;
 }
 
@@ -88,10 +79,10 @@ void enj_bitmap_clear(enj_bitmap_t *bmap, int x, int y) {
   if (x < 0 || x >= bmap->width || y < 0 || y >= bmap->height) {
     return;
   }
-  int bit_offset = (y * bmap->width) + x;
+  int bit_offset = (x * bmap->width + y) * ENJ_BITS_PER_BYTE;
   int byte_index = BYTE_OFFSET(bit_offset);
   int bit_index = BIT_OFFSET(bit_offset);
-  bmap->data[byte_index] &= ~(1 << (7 - bit_index));
+  bmap->data[byte_index] &= ~(1 << bit_index);
 }
 
 void enj_bitmap_write_line(enj_bitmap_t *bmap, enj_bitmap_line_t line) {

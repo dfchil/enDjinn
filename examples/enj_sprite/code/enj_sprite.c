@@ -4,10 +4,10 @@
 #include <math.h>
 
 static const alignas(32) uint8_t enj_txr_blob[] = {
-#embed "../embeds/enj_sprite/texture/pal8_vq_tw/enDjinn512.dt"
+#embed "../embeds/enj_sprite/texture/pal8/enDjinn512.dt"
 };
 static const alignas(32) uint8_t enj_palette_blob[] = {
-#embed "../embeds/enj_sprite/texture/pal8_vq_tw/enDjinn512.dt.pal"
+#embed "../embeds/enj_sprite/texture/pal8/enDjinn512.dt.pal"
 };
 static enj_texture_info_t figure_texture_info;
 typedef struct {
@@ -40,7 +40,7 @@ void render(void *data) {
     corners[i][0] += mdata->center_x;
     corners[i][1] += mdata->center_y;
   }
-  enj_draw_sprite(corners, &mdata->hdr, NULL);
+  enj_draw_sprite(corners, NULL, &mdata->hdr, NULL);
 }
 void main_mode_updater(void *data) {
   main_data_t *mdata = (main_data_t *)data;

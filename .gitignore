@@ -1,11 +1,9 @@
 # ---> C
 # Object files
 *.o
-*.d
 *.ko
 *.obj
 *.elf
-build/
 
 # Precompiled Headers
 *.gch
@@ -35,6 +33,3 @@ build/
 *.dSYM/
 .DS_Store
 tools/dcaconv/
-tools/font_enj/bin/
-tests/core_safety_test
-tests/texture_shim_test

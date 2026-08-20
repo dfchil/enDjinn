@@ -1,7 +1,7 @@
 #ifndef ENJ_TEXTURE_H 
 #define ENJ_TEXTURE_H
 
-#include <kos.h>
+#include <dc/pvr.h>
 #include <pvrtex/file_dctex.h>
 #include <stdint.h>
 

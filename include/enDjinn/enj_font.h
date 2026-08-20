@@ -1,7 +1,7 @@
 #ifndef ENJ_FONTS_H
 #define ENJ_FONTS_H
 
-#include <kos.h>
+#include <dc/pvr.h>
 #include <enDjinn/enj_font_types.h>
 #include <enDjinn/enj_types.h>
 
@@ -107,6 +107,7 @@ int enj_font_glyph_uv_coords(enj_font_header_t* font, char glyph, uint32_t* auv,
  * @param font Pointer to font header
  * @param x X position to draw at in pixels
  * @param y Y position to draw at in pixels
+ * @param state_ptr Optional pointer to PVR draw state
  *
  * @return width of rendered glyph in pixels
  *
@@ -114,7 +115,7 @@ int enj_font_glyph_uv_coords(enj_font_header_t* font, char glyph, uint32_t* auv,
  * before calling this function
  */
 int enj_font_render_glyph(char glyph, enj_font_header_t* font, int16_t x,
-                          int16_t y);
+                          int16_t y, pvr_dr_state_t* state_ptr);
 
 /**
  * Render a text string to the PVR command buffer
@@ -123,11 +124,13 @@ int enj_font_render_glyph(char glyph, enj_font_header_t* font, int16_t x,
  * @param x X position to draw at in pixels
  * @param y Y position to draw at in pixels
  * @param sprite_header Optional pointer PVR sprite header to use for rendering
- *
+ * @param state_ptr Optional pointer to PVR draw state
+
  * @return width of rendered text in pixels
  */
 int enj_font_string_render(const char* text, enj_font_header_t* font, int16_t x,
-                         int16_t y, pvr_sprite_hdr_t* sprite_header);
+                         int16_t y, pvr_sprite_hdr_t* sprite_header,
+                         pvr_dr_state_t* state_ptr);
 
 /** Calculate the width of a text string in pixels
  * @param text Null-terminated string to measure

@@ -4,10 +4,10 @@
 #include <math.h>
 
 static const alignas(32) uint8_t enj_txr_blob[] = {
-#embed "../embeds/enj_controls/texture/pal8_vq_tw/enDjinn512.dt"
+#embed "../embeds/enj_controls/texture/pal8/enDjinn512.dt"
 };
 static const alignas(32) uint8_t enj_palette_blob[] = {
-#embed "../embeds/enj_controls/texture/pal8_vq_tw/enDjinn512.dt.pal"
+#embed "../embeds/enj_controls/texture/pal8/enDjinn512.dt.pal"
 };
 static enj_texture_info_t figure_texture_info;
 
@@ -67,7 +67,7 @@ void render(void* data) {
         corners[i][0] += mdata->center_x;
         corners[i][1] += mdata->center_y;
     }
-    enj_draw_sprite(corners, &mdata->hdr, NULL);
+    enj_draw_sprite(corners, NULL, &mdata->hdr, NULL);
 }
 
 static inline void animate(main_data_t* mdata) {
@@ -129,7 +129,7 @@ void setup_modes(enj_mode_t* main_mode) {
     pvr_sprite_cxt_txr(&f_cxt, PVR_LIST_TR_POLY, figure_texture_info.pvrformat,
                        figure_texture_info.width, figure_texture_info.height,
                        figure_texture_info.ptr, PVR_FILTER_BILINEAR);
-    f_cxt.gen.culling = PVR_CULLING_CCW;
+    f_cxt.gen.culling = PVR_CULLING_NONE;
     f_cxt.gen.specular = PVR_SPECULAR_ENABLE;
     pvr_sprite_compile(&main_mode_data->hdr, &f_cxt);
     main_mode_data->hdr.argb = 0xffffffff;    

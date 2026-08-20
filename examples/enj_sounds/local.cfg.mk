@@ -1,2 +1,0 @@
-ENJ_INJECT_QFONT:=1
-ENJ_ROMDIR:=embeds

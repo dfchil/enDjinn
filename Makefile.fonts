@@ -14,7 +14,7 @@ ENJ_FONTINJECTTION=${ENJDIR}include/enDjinn/embeds/enj_qfont_data.h
 ${ENJDIR}include/enDjinn/embeds/enj_qfont_data.h: ${ENJ_BUILDDIR}/embeds/enj_qfont.enjfont
 	@mkdir -p $(shell dirname $@)
 	@echo "Embedding debug font $< into header $@..."
-	@{ printf 'alignas(32) '; xxd -n $(basename $(notdir $@)) -i $<; } > $@
+	xxd -n $(basename $(notdir $@)) -i $< > $@
 
 ${ENJ_BUILDDIR}/embeds/enj_qfont.enjfont: ${ENJDIR}assets/fonts/16/Dina-Regular.ttf ${FONTMACHINE}
 	@mkdir -p $(shell dirname $@)
