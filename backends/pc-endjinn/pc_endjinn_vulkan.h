@@ -16,6 +16,12 @@ void pvr_set_bg_color(float r, float g, float b);
 void pvr_wait_ready();
 void pvr_scene_begin();
 void pvr_scene_finish();
+/* Host-only observation hook.  This deliberately reports the count of fully
+ * presented PVR scenes and has no effect on collection or rendering. */
+uint64_t pvr_presented_frame_count();
+/* Arms readback for the scene currently being collected.  This is a
+ * pc-enDjinn diagnostic extension, not part of the KOS PVR API. */
+void pvr_request_current_scene_screenshot(const char *path);
 void pvr_list_begin(pvr_list_t list);
 void pvr_list_finish();
 void pvr_wait_render_done();

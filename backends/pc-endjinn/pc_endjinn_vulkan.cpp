@@ -1959,6 +1959,24 @@ void pvr_scene_finish(void)
     }
 }
 
+uint64_t pvr_presented_frame_count(void)
+{
+    return g_presented_frames;
+}
+
+void pvr_request_current_scene_screenshot(const char *path)
+{
+    if (path == nullptr || *path == '\0') {
+        return;
+    }
+    /* draw_frame() sees this before pvr_scene_finish() increments the
+     * completed count, so its >= comparison selects the scene in flight. */
+    g_screenshot_checked = true;
+    g_screenshot_path = path;
+    g_screenshot_frame = g_presented_frames;
+    g_screenshot_captured = false;
+}
+
 void pvr_list_begin(pvr_list_t list) { pc_endjinn_pvr::list_begin(list); }
 void pvr_list_finish(void) {}
 void pvr_wait_render_done(void) {}

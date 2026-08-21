@@ -213,6 +213,11 @@ void pvr_set_bg_color(float r, float g, float b);
 void pvr_wait_ready(void);
 void pvr_scene_begin(void);
 void pvr_scene_finish(void);
+/* pc-enDjinn-only observation hook: number of completed scene presentations.
+ * It is intentionally outside the KOS pvr_* API so Dreamcast code cannot
+ * acquire a dependency on it. */
+uint64_t pc_endjinn_pvr_presented_frame_count(void);
+void pc_endjinn_pvr_request_current_scene_screenshot(const char *path);
 void pvr_list_begin(pvr_list_t list);
 void pvr_list_finish(void);
 void pvr_wait_render_done(void);

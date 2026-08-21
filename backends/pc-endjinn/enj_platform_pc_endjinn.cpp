@@ -42,6 +42,12 @@ void pvr_set_bg_color(float r, float g, float b) {
 void pvr_wait_ready(void) { pc_endjinn::pvr_wait_ready(); }
 void pvr_scene_begin(void) { pc_endjinn::pvr_scene_begin(); }
 void pvr_scene_finish(void) { pc_endjinn::pvr_scene_finish(); }
+uint64_t pc_endjinn_pvr_presented_frame_count(void) {
+  return pc_endjinn::pvr_presented_frame_count();
+}
+void pc_endjinn_pvr_request_current_scene_screenshot(const char *path) {
+  pc_endjinn::pvr_request_current_scene_screenshot(path);
+}
 void pvr_list_begin(pvr_list_t list) { pc_endjinn::pvr_list_begin(list); }
 void pvr_list_finish(void) { pc_endjinn::pvr_list_finish(); }
 void pvr_wait_render_done(void) { pc_endjinn::pvr_wait_render_done(); }
