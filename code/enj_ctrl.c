@@ -61,7 +61,7 @@ size_t enj_ctrl_map_states(void) {
 }
 
 /* Return the first device of the requested type on port p */
-maple_device_t *enj_maple_port_type(int p, uint32 func) {
+maple_device_t *enj_maple_port_type(int p, uint32_t func) {
   maple_device_t *dev;
   for (int u = 0; u < MAPLE_UNIT_COUNT; u++) {
     dev = maple_enum_dev(p, u);

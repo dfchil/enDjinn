@@ -117,7 +117,7 @@ size_t enj_ctrl_map_states(void);
  * @return Pointer to the first device of the requested type on port p, or NULL
  * if no such device is found
  */
-maple_device_t *enj_maple_port_type(int p, uint32 func);
+maple_device_t *enj_maple_port_type(int p, uint32_t func);
 
 /**
  * Get the list of controller states
