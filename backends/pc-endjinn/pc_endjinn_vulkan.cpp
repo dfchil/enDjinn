@@ -7,6 +7,7 @@
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -64,6 +65,10 @@ uint64_t g_presented_frames = 0u;
 bool g_translucent_autosort = true;
 bool g_fsaa_enabled = false;
 bool g_fullscreen_toggle_requested = false;
+bool g_hdr_requested = false;
+bool g_hdr_colorspace_available = false;
+bool g_hdr_enabled = false;
+bool g_output_mode_reported = false;
 int g_last_window_width = 1280;
 int g_last_window_height = 960;
 
@@ -79,7 +84,7 @@ struct TexturePush {
     uint32_t indexed;
     uint32_t palette_base;
     uint32_t filter_mode;
-    uint32_t unused;
+    uint32_t hdr_mode;
 };
 
 struct DrawBatch {
@@ -250,6 +255,34 @@ std::vector<char> read_shader_file(const char *name)
 float clamp01(float value)
 {
     return std::min(std::max(value, 0.0f), 1.0f);
+}
+
+bool hdr_output_requested()
+{
+    const char *setting = std::getenv("PC_ENDJINN_HDR");
+    return setting != nullptr &&
+        (std::strcmp(setting, "1") == 0 ||
+         std::strcmp(setting, "on") == 0 ||
+         std::strcmp(setting, "true") == 0);
+}
+
+float srgb_to_linear(float value)
+{
+    value = clamp01(value);
+    return value <= 0.04045f
+        ? value / 12.92f
+        : std::pow((value + 0.055f) / 1.055f, 2.4f);
+}
+
+void hdr_clear_color(const float srgb[3], float linear[3])
+{
+    // In scRGB, 1.0 represents 80 nits. Keep non-emissive content at a
+    // comfortable 203-nit reference white; shaders reserve higher values for
+    // translucent glow and particle highlights.
+    constexpr float paper_white_scale = 203.0f / 80.0f;
+    for (uint32_t i = 0u; i < 3u; i++) {
+        linear[i] = srgb_to_linear(srgb[i]) * paper_white_scale;
+    }
 }
 
 bool argb_is_road_decal(uint32_t argb)
@@ -820,12 +853,36 @@ bool create_swapchain()
         ? VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}
         : formats[0];
     for (const VkSurfaceFormatKHR &format : formats) {
-        if (format.format == VK_FORMAT_B8G8R8A8_UNORM) {
+        if (format.format == VK_FORMAT_B8G8R8A8_UNORM &&
+            format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             chosen = format;
             break;
         }
     }
+
+    bool hdr_enabled = false;
+#ifdef VK_EXT_swapchain_colorspace
+    if (g_hdr_requested && g_hdr_colorspace_available) {
+        for (const VkSurfaceFormatKHR &format : formats) {
+            if (format.format == VK_FORMAT_R16G16B16A16_SFLOAT &&
+                format.colorSpace == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT) {
+                chosen = format;
+                hdr_enabled = true;
+                break;
+            }
+        }
+    }
+#endif
     g_swapchain_format = chosen.format;
+    if (!g_output_mode_reported || hdr_enabled != g_hdr_enabled) {
+        const char *mode = hdr_enabled ? "HDR scRGB"
+            : (g_hdr_requested ? "HDR unavailable; SDR" : "SDR");
+        std::fprintf(stderr, "pc-enDjinn: %s output (%d, colorspace %d)\n",
+            mode,
+            static_cast<int>(chosen.format), static_cast<int>(chosen.colorSpace));
+    }
+    g_hdr_enabled = hdr_enabled;
+    g_output_mode_reported = true;
     if (caps.currentExtent.width != UINT32_MAX) {
         g_extent = caps.currentExtent;
     } else {
@@ -1486,9 +1543,13 @@ bool draw_frame(const FrameDrawData &frame)
     VkClearAttachment content_clear{};
     content_clear.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     content_clear.colorAttachment = 0u;
-    content_clear.clearValue.color.float32[0] = g_bg_color[0];
-    content_clear.clearValue.color.float32[1] = g_bg_color[1];
-    content_clear.clearValue.color.float32[2] = g_bg_color[2];
+    float clear_rgb[3] = {g_bg_color[0], g_bg_color[1], g_bg_color[2]};
+    if (g_hdr_enabled) {
+        hdr_clear_color(g_bg_color, clear_rgb);
+    }
+    content_clear.clearValue.color.float32[0] = clear_rgb[0];
+    content_clear.clearValue.color.float32[1] = clear_rgb[1];
+    content_clear.clearValue.color.float32[2] = clear_rgb[2];
     content_clear.clearValue.color.float32[3] = 1.0f;
     VkClearRect content_clear_rect{};
     content_clear_rect.rect = g_content_rect;
@@ -1526,6 +1587,10 @@ bool draw_frame(const FrameDrawData &frame)
             push.indexed = texture != nullptr && texture->indexed ? 1u : 0u;
             push.palette_base = batch.palette_base;
             push.filter_mode = static_cast<uint32_t>(batch.texture_filter);
+            push.hdr_mode = g_hdr_enabled ? 1u : 0u;
+            if (g_hdr_enabled && batch.list == PVR_LIST_TR_POLY) {
+                push.hdr_mode |= 2u;
+            }
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     g_pipeline_layout, 0u, 1u, &descriptor,
@@ -1693,6 +1758,7 @@ bool create_vulkan_context()
     }
     SDL_AddEventWatch(pc_endjinn_event_watch, nullptr);
     set_window_title("pc-enDjinn - creating Vulkan instance");
+    g_hdr_requested = hdr_output_requested();
 
     unsigned int sdl_extension_count = 0u;
     if (!SDL_Vulkan_GetInstanceExtensions(g_window, &sdl_extension_count, nullptr)) {
@@ -1712,6 +1778,13 @@ bool create_vulkan_context()
     if (has_instance_extension(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {
         extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
         flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+    }
+#endif
+#ifdef VK_EXT_swapchain_colorspace
+    g_hdr_colorspace_available =
+        has_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+    if (g_hdr_requested && g_hdr_colorspace_available) {
+        extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
     }
 #endif
 
@@ -1853,7 +1926,8 @@ void pvr_scene_finish(void)
         std::snprintf(
             title,
             sizeof(title),
-            "pc-enDjinn - pvr primitives %zu - vk verts %zu",
+            "pc-enDjinn%s - pvr primitives %zu - vk verts %zu",
+            g_hdr_enabled ? " HDR" : "",
             pc_endjinn_pvr::primitives().size(),
             frame.vertices.size());
         SDL_SetWindowTitle(g_window, title);

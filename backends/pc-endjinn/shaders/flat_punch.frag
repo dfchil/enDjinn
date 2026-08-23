@@ -11,8 +11,26 @@ layout(push_constant) uniform TextureState {
     uint indexed;
     uint palette_base;
     uint filter_mode;
-    uint unused;
+    uint hdr_mode;
 } state;
+
+vec3 srgb_to_linear(vec3 value)
+{
+    bvec3 cutoff = lessThanEqual(value, vec3(0.04045));
+    vec3 low = value / 12.92;
+    vec3 high = pow((value + 0.055) / 1.055, vec3(2.4));
+    return mix(high, low, cutoff);
+}
+
+vec4 output_color(vec4 color)
+{
+    if ((state.hdr_mode & 1u) == 0u) {
+        return color;
+    }
+    const float paper_white_scale = 203.0 / 80.0;
+    return vec4(srgb_to_linear(clamp(color.rgb, 0.0, 1.0)) * paper_white_scale,
+                color.a);
+}
 
 vec4 palette_color(ivec2 pixel)
 {
@@ -46,5 +64,5 @@ void main()
     if (color.a < 0.5) {
         discard;
     }
-    out_color = color;
+    out_color = output_color(color);
 }

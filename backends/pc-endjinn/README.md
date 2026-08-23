@@ -131,6 +131,13 @@ another Homebrew location. `QSB`, `SDL2_CONFIG`, `PKG_CONFIG`, `SDL_CFLAGS`,
 - Escape: quit
 - F11 or Alt+Enter: toggle fullscreen
 
+pc-enDjinn uses its SDR swapchain by default. Set `PC_ENDJINN_HDR=1` to request
+a linear FP16 scRGB swapchain on an HDR-capable desktop. Ordinary artwork is
+anchored to a 203-nit reference white, while bright translucent effects can
+use headroom up to roughly 1000 nits. Rendering and alpha blending happen in
+linear light in this mode. Unsupported displays and Vulkan drivers fall back
+to SDR automatically. See `HDR.md` for limitations and follow-up work.
+
 Up to four SDL GameControllers are assigned to Maple ports A-D in connection
 order. They use SDL's standard buttons, D-pad, left stick, and triggers.
 

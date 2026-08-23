@@ -11,8 +11,33 @@ layout(push_constant) uniform TextureState {
     uint indexed;
     uint palette_base;
     uint filter_mode;
-    uint unused;
+    uint hdr_mode;
 } state;
+
+vec3 srgb_to_linear(vec3 value)
+{
+    bvec3 cutoff = lessThanEqual(value, vec3(0.04045));
+    vec3 low = value / 12.92;
+    vec3 high = pow((value + 0.055) / 1.055, vec3(2.4));
+    return mix(high, low, cutoff);
+}
+
+vec4 output_color(vec4 color)
+{
+    if ((state.hdr_mode & 1u) == 0u) {
+        return color;
+    }
+
+    const float paper_white_scale = 203.0 / 80.0;
+    const float peak_scale = 1000.0 / 80.0;
+    vec3 linear = srgb_to_linear(clamp(color.rgb, 0.0, 1.0));
+    float scale = paper_white_scale;
+    if ((state.hdr_mode & 2u) != 0u) {
+        float highlight = smoothstep(0.65, 1.0, max(max(linear.r, linear.g), linear.b));
+        scale = mix(paper_white_scale, peak_scale, highlight);
+    }
+    return vec4(linear * scale, color.a);
+}
 
 vec4 palette_color(ivec2 pixel)
 {
@@ -42,5 +67,5 @@ vec4 texture_color()
 
 void main()
 {
-    out_color = texture_color() * frag_color;
+    out_color = output_color(texture_color() * frag_color);
 }

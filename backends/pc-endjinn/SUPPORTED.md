@@ -10,6 +10,7 @@ the selected backend owns SDL, Vulkan, and host input details.
 - SDL window and event initialization from the normal `pvr_init()` call
 - Vulkan instance, MoltenVK portability, surface, device, and swapchain setup
 - Swapchain recreation after resize or out-of-date presentation
+- Opt-in linear FP16 scRGB HDR output with an SDR compatibility fallback
 - Color and inverse-Z depth attachments
 - 640x480 PVR coordinates (1280x480 with FSAA) scaled to the Vulkan viewport
 - `timer_ns_gettime64`, `vid_mode`, and fixed 640x480 `vid_set_mode`
