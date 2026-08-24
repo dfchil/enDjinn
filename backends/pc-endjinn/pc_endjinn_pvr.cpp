@@ -33,9 +33,11 @@ struct HeaderState {
   bool modifier{};
   bool modifier_volume{};
   uint32_t modifier_mode{};
+  bool model1_painter{};
   bool modifier_textured{};
   pvr_context_txr_t modifier_texture{};
   pvr_cull_mode_t culling{PVR_CULLING_NONE};
+  bool alpha_cutout{};
 };
 
 alignas(32) std::array<uint8_t, 96> g_dr_packet{};
@@ -77,6 +79,8 @@ void copy_header_state(pc_endjinn_pvr::QueuedPrimitive &primitive) {
   primitive.argb = g_header.argb;
   primitive.list = g_current_list;
   primitive.culling = g_header.culling;
+  primitive.alpha_cutout = g_header.alpha_cutout;
+  primitive.model1_painter = g_header.model1_painter;
   primitive.textured = g_header.textured;
   primitive.texture = g_header.texture;
   primitive.texture_format = g_header.format;
@@ -566,6 +570,10 @@ void dr_commit(void *ptr) {
   g_header.height = header->mode3 >> 16u;
   g_header.filter = static_cast<pvr_filter_mode_t>(header->oargb);
   g_header.sprite = (header->mode1 & PC_ENDJINN_PVR_HEADER_SPRITE) != 0u;
+  g_header.alpha_cutout =
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u;
+  g_header.model1_painter =
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER) != 0u;
   g_header.modifier = (header->mode1 & 0x40000000u) != 0u;
   g_header.modifier_volume = (header->mode1 & 0x20000000u) != 0u;
   g_header.culling = static_cast<pvr_cull_mode_t>(

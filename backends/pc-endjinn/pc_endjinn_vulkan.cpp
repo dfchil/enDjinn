@@ -35,6 +35,14 @@ VkExtent2D g_extent{1280u, 960u};
 VkRect2D g_content_rect{{0, 0}, {1280u, 960u}};
 std::vector<VkImage> g_swapchain_images;
 std::vector<VkImageView> g_swapchain_views;
+/* The replay-raster gate may run from a macOS GUI launcher whose drawable is
+ * not presentable to the process.  This explicit opt-in target preserves the
+ * Vulkan/PVR render path but never calls acquire/present. */
+bool g_offscreen_capture = false;
+bool g_offscreen_color_initialized = false;
+VkImage g_offscreen_color_image = VK_NULL_HANDLE;
+VkDeviceMemory g_offscreen_color_memory = VK_NULL_HANDLE;
+VkImageView g_offscreen_color_view = VK_NULL_HANDLE;
 VkImage g_depth_image = VK_NULL_HANDLE;
 VkDeviceMemory g_depth_memory = VK_NULL_HANDLE;
 VkImageView g_depth_view = VK_NULL_HANDLE;
@@ -43,6 +51,7 @@ VkRenderPass g_render_pass = VK_NULL_HANDLE;
 std::vector<VkFramebuffer> g_framebuffers;
 VkPipelineLayout g_pipeline_layout = VK_NULL_HANDLE;
 VkPipeline g_opaque_pipeline = VK_NULL_HANDLE;
+VkPipeline g_model1_painter_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_pipeline = VK_NULL_HANDLE;
 VkPipeline g_translucent_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_volume_pipeline = VK_NULL_HANDLE;
@@ -99,6 +108,8 @@ struct DrawBatch {
     bool modifier;
     bool modifier_volume;
     uint32_t modifier_mode;
+    bool alpha_cutout;
+    bool model1_painter;
 };
 
 struct FrameDrawData {
@@ -138,6 +149,12 @@ VkDescriptorSet g_default_texture_descriptor = VK_NULL_HANDLE;
 uint64_t g_uploaded_palette_revision = 0u;
 
 bool create_draw_resources();
+
+bool offscreen_capture_requested()
+{
+    const char *const value = std::getenv("ENJ_OFFSCREEN_CAPTURE");
+    return value != nullptr && std::strcmp(value, "1") == 0;
+}
 
 int SDLCALL pc_endjinn_event_watch(void *, SDL_Event *event)
 {
@@ -785,6 +802,10 @@ void destroy_frame_resources()
         vkDestroyPipeline(g_device, g_opaque_pipeline, nullptr);
         g_opaque_pipeline = VK_NULL_HANDLE;
     }
+    if (g_model1_painter_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_model1_painter_pipeline, nullptr);
+        g_model1_painter_pipeline = VK_NULL_HANDLE;
+    }
     if (g_punch_through_pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(g_device, g_punch_through_pipeline, nullptr);
         g_punch_through_pipeline = VK_NULL_HANDLE;
@@ -833,6 +854,19 @@ void destroy_frame_resources()
         vkFreeMemory(g_device, g_depth_memory, nullptr);
         g_depth_memory = VK_NULL_HANDLE;
     }
+    if (g_offscreen_color_view != VK_NULL_HANDLE) {
+        vkDestroyImageView(g_device, g_offscreen_color_view, nullptr);
+        g_offscreen_color_view = VK_NULL_HANDLE;
+    }
+    if (g_offscreen_color_image != VK_NULL_HANDLE) {
+        vkDestroyImage(g_device, g_offscreen_color_image, nullptr);
+        g_offscreen_color_image = VK_NULL_HANDLE;
+    }
+    if (g_offscreen_color_memory != VK_NULL_HANDLE) {
+        vkFreeMemory(g_device, g_offscreen_color_memory, nullptr);
+        g_offscreen_color_memory = VK_NULL_HANDLE;
+    }
+    g_offscreen_color_initialized = false;
     for (VkImageView view : g_swapchain_views) {
         vkDestroyImageView(g_device, view, nullptr);
     }
@@ -924,6 +958,57 @@ bool create_swapchain()
     return true;
 }
 
+bool create_offscreen_color_resources()
+{
+    /* Match the regular 4:3 host target.  The diagnostic comparator scales
+     * native Model-1's 496x384 raster to this target deterministically. */
+    g_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
+    g_extent = {1280u, 960u};
+    g_swapchain_readback_supported = true;
+    update_content_rect();
+    VkImageCreateInfo image{};
+    image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image.imageType = VK_IMAGE_TYPE_2D;
+    image.extent = {g_extent.width, g_extent.height, 1u};
+    image.mipLevels = 1u;
+    image.arrayLayers = 1u;
+    image.format = g_swapchain_format;
+    image.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    image.samples = VK_SAMPLE_COUNT_1_BIT;
+    image.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateImage(g_device, &image, nullptr, &g_offscreen_color_image) != VK_SUCCESS) {
+        return false;
+    }
+    VkMemoryRequirements req{};
+    vkGetImageMemoryRequirements(g_device, g_offscreen_color_image, &req);
+    VkMemoryAllocateInfo memory{};
+    memory.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    memory.allocationSize = req.size;
+    memory.memoryTypeIndex = find_memory_type(
+        req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (vkAllocateMemory(g_device, &memory, nullptr, &g_offscreen_color_memory) != VK_SUCCESS ||
+        vkBindImageMemory(g_device, g_offscreen_color_image, g_offscreen_color_memory, 0u) !=
+            VK_SUCCESS) {
+        return false;
+    }
+    VkImageViewCreateInfo view{};
+    view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view.image = g_offscreen_color_image;
+    view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view.format = g_swapchain_format;
+    view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view.subresourceRange.levelCount = 1u;
+    view.subresourceRange.layerCount = 1u;
+    if (vkCreateImageView(g_device, &view, nullptr, &g_offscreen_color_view) != VK_SUCCESS) {
+        return false;
+    }
+    std::fprintf(stderr, "pc-enDjinn: offscreen Vulkan capture target=%ux%u\n",
+                 g_extent.width, g_extent.height);
+    return true;
+}
+
 bool recreate_draw_resources()
 {
     if (g_device == VK_NULL_HANDLE) {
@@ -998,8 +1083,11 @@ bool create_render_pipeline()
     color.samples = VK_SAMPLE_COUNT_1_BIT;
     color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color.finalLayout = screenshot_requested_path() != nullptr && g_swapchain_readback_supported
+    color.initialLayout = g_offscreen_capture
+        ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+    color.finalLayout = g_offscreen_capture
+        ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        : screenshot_requested_path() != nullptr && g_swapchain_readback_supported
         ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     VkAttachmentDescription depth{};
     depth.format = g_depth_format;
@@ -1042,9 +1130,11 @@ bool create_render_pipeline()
     if (vkCreateRenderPass(g_device, &render_pass, nullptr, &g_render_pass) != VK_SUCCESS) {
         return false;
     }
-    g_framebuffers.resize(g_swapchain_views.size());
-    for (size_t i = 0; i < g_swapchain_views.size(); i++) {
-        VkImageView attachments_for_fb[2] = {g_swapchain_views[i], g_depth_view};
+    const size_t framebuffer_count = g_offscreen_capture ? 1u : g_swapchain_views.size();
+    g_framebuffers.resize(framebuffer_count);
+    for (size_t i = 0; i < framebuffer_count; i++) {
+        VkImageView attachments_for_fb[2] = {
+            g_offscreen_capture ? g_offscreen_color_view : g_swapchain_views[i], g_depth_view};
         VkFramebufferCreateInfo fb{};
         fb.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         fb.renderPass = g_render_pass;
@@ -1191,6 +1281,15 @@ bool create_render_pipeline()
         g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_punch_through_pipeline) == VK_SUCCESS;
 
     stages[1].module = frag_module;
+    /* A Model-1 painter pass is already sorted by the application. It must
+     * not acquire Vulkan's inverse-depth ownership while it is drawn. */
+    depth_state.depthTestEnable = VK_FALSE;
+    depth_state.depthWriteEnable = VK_FALSE;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_model1_painter_pipeline) == VK_SUCCESS;
+
+    depth_state.depthTestEnable = VK_TRUE;
     depth_state.depthWriteEnable = VK_FALSE;
     blend_att.blendEnable = VK_TRUE;
     blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
@@ -1240,7 +1339,10 @@ bool create_render_pipeline()
 
 bool create_draw_resources()
 {
-    if (!create_swapchain() || !create_depth_resources() || !create_render_pipeline()) {
+    g_offscreen_capture = offscreen_capture_requested();
+    if ((!g_offscreen_capture && !create_swapchain()) ||
+        (g_offscreen_capture && !create_offscreen_color_resources()) ||
+        !create_depth_resources() || !create_render_pipeline()) {
         return false;
     }
     VkCommandPoolCreateInfo pool{};
@@ -1383,12 +1485,13 @@ FrameDrawData build_frame_draw_data()
     frame.vertices.reserve(queued.size() * 6u);
 
     const auto append_list = [&](pvr_list_t list, bool sort_back_to_front,
-                                 bool modifier_volume) {
+                                 bool modifier_volume, bool model1_painter) {
         std::vector<const QueuedPrimitive *> primitives;
         primitives.reserve(queued.size());
         for (const QueuedPrimitive &primitive : queued) {
             if (primitive.list == list &&
-                primitive.modifier_volume == modifier_volume) {
+                primitive.modifier_volume == modifier_volume &&
+                primitive.model1_painter == model1_painter) {
                 primitives.push_back(&primitive);
             }
         }
@@ -1412,7 +1515,9 @@ FrameDrawData build_frame_draw_data()
                 frame.batches.back().texture_filter == primitive->texture_filter &&
                 frame.batches.back().modifier == primitive->modifier &&
                 frame.batches.back().modifier_volume == primitive->modifier_volume &&
-                frame.batches.back().modifier_mode == primitive->modifier_mode;
+                frame.batches.back().modifier_mode == primitive->modifier_mode &&
+                frame.batches.back().alpha_cutout == primitive->alpha_cutout &&
+                frame.batches.back().model1_painter == primitive->model1_painter;
             if (!same_batch) {
                 DrawBatch batch{};
                 batch.list = list;
@@ -1426,6 +1531,8 @@ FrameDrawData build_frame_draw_data()
                 batch.modifier = primitive->modifier;
                 batch.modifier_volume = primitive->modifier_volume;
                 batch.modifier_mode = primitive->modifier_mode;
+                batch.alpha_cutout = primitive->alpha_cutout;
+                batch.model1_painter = primitive->model1_painter;
                 const uint32_t pixel_format = (primitive->texture_format >> 27u) & 7u;
                 batch.palette_base = pixel_format == PVR_PIXEL_MODE_PAL_4BPP
                     ? ((primitive->texture_format >> 21u) & 0x3fu) * 16u
@@ -1439,18 +1546,22 @@ FrameDrawData build_frame_draw_data()
         }
     };
 
-    append_list(PVR_LIST_OP_MOD, false, true);
-    append_list(PVR_LIST_TR_MOD, false, true);
-    append_list(PVR_LIST_OP_POLY, false, false);
-    append_list(PVR_LIST_PT_POLY, false, false);
-    append_list(PVR_LIST_TR_POLY, g_translucent_autosort, false);
+    append_list(PVR_LIST_OP_MOD, false, true, false);
+    append_list(PVR_LIST_TR_MOD, false, true, false);
+    append_list(PVR_LIST_OP_POLY, false, false, false);
+    /* Model-1 world faces are painted after ordinary opaque world geometry
+     * but before punch-through/translucent presentation overlays (HUD/text). */
+    append_list(PVR_LIST_OP_POLY, true, false, true);
+    append_list(PVR_LIST_PT_POLY, false, false, false);
+    append_list(PVR_LIST_TR_POLY, g_translucent_autosort, false, false);
     return frame;
 }
 
 bool draw_frame(const FrameDrawData &frame)
 {
-    if (g_device == VK_NULL_HANDLE || g_swapchain == VK_NULL_HANDLE ||
+    if (g_device == VK_NULL_HANDLE || (!g_offscreen_capture && g_swapchain == VK_NULL_HANDLE) ||
         g_opaque_pipeline == VK_NULL_HANDLE ||
+        g_model1_painter_pipeline == VK_NULL_HANDLE ||
         g_punch_through_pipeline == VK_NULL_HANDLE ||
         g_translucent_pipeline == VK_NULL_HANDLE ||
         g_modifier_volume_pipeline == VK_NULL_HANDLE ||
@@ -1472,14 +1583,16 @@ bool draw_frame(const FrameDrawData &frame)
     vkResetFences(g_device, 1u, &g_in_flight);
 
     uint32_t image_index = 0u;
-    VkResult acquire = vkAcquireNextImageKHR(
-        g_device, g_swapchain, UINT64_MAX, g_image_available, VK_NULL_HANDLE, &image_index);
-    if (acquire == VK_ERROR_OUT_OF_DATE_KHR) {
-        return recreate_draw_resources();
-    }
-    if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR) {
-        set_window_title("pc-enDjinn - vkAcquireNextImageKHR failed");
-        return false;
+    if (!g_offscreen_capture) {
+        VkResult acquire = vkAcquireNextImageKHR(
+            g_device, g_swapchain, UINT64_MAX, g_image_available, VK_NULL_HANDLE, &image_index);
+        if (acquire == VK_ERROR_OUT_OF_DATE_KHR) {
+            return recreate_draw_resources();
+        }
+        if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR) {
+            set_window_title("pc-enDjinn - vkAcquireNextImageKHR failed");
+            return false;
+        }
     }
 
     if (!ensure_vertex_buffer(frame.vertices.size())) {
@@ -1500,7 +1613,7 @@ bool draw_frame(const FrameDrawData &frame)
 
     const char *const requested_screenshot = screenshot_path();
     const bool screenshot_enabled = screenshot_requested_path() != nullptr &&
-        g_swapchain_readback_supported;
+        (g_offscreen_capture || g_swapchain_readback_supported);
     const bool capture_screenshot = requested_screenshot != nullptr &&
         screenshot_enabled;
     VkBuffer screenshot_buffer = VK_NULL_HANDLE;
@@ -1521,6 +1634,21 @@ bool draw_frame(const FrameDrawData &frame)
     if (vkBeginCommandBuffer(cmd, &begin) != VK_SUCCESS) {
         set_window_title("pc-enDjinn - command begin failed");
         return false;
+    }
+    if (g_offscreen_capture && !g_offscreen_color_initialized) {
+        VkImageMemoryBarrier initialize{};
+        initialize.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        initialize.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        initialize.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        initialize.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        initialize.image = g_offscreen_color_image;
+        initialize.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        initialize.subresourceRange.levelCount = 1u;
+        initialize.subresourceRange.layerCount = 1u;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0u,
+                             0u, nullptr, 0u, nullptr, 1u, &initialize);
+        g_offscreen_color_initialized = true;
     }
     VkClearValue clears[2]{};
     clears[0].color.float32[0] = 0.0f;
@@ -1555,14 +1683,16 @@ bool draw_frame(const FrameDrawData &frame)
                 continue;
             }
             VkPipeline pipeline = g_opaque_pipeline;
-            if (batch.modifier_volume) {
+            if (batch.model1_painter) {
+                pipeline = g_model1_painter_pipeline;
+            } else if (batch.modifier_volume) {
                 // ponytail: this is a 2D stencil mask; add PVR 3D winding only
                 // when a project needs closed OTHER_POLY shadow volumes.
                 pipeline = batch.modifier_mode == PVR_MODIFIER_EXCLUDE_LAST_POLY
                     ? g_modifier_exclude_pipeline : g_modifier_volume_pipeline;
             } else if (batch.modifier) {
                 pipeline = g_modifier_pipeline;
-            } else if (batch.list == PVR_LIST_PT_POLY) {
+            } else if (batch.alpha_cutout || batch.list == PVR_LIST_PT_POLY) {
                 pipeline = g_punch_through_pipeline;
             } else if (batch.list == PVR_LIST_TR_POLY) {
                 pipeline = g_translucent_pipeline;
@@ -1588,7 +1718,43 @@ bool draw_frame(const FrameDrawData &frame)
         }
     }
     vkCmdEndRenderPass(cmd);
-    if (screenshot_enabled) {
+    if (g_offscreen_capture) {
+        if (capture_screenshot) {
+            VkImageMemoryBarrier to_transfer{};
+            to_transfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            to_transfer.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            to_transfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            to_transfer.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            to_transfer.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            to_transfer.image = g_offscreen_color_image;
+            to_transfer.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            to_transfer.subresourceRange.levelCount = 1u;
+            to_transfer.subresourceRange.layerCount = 1u;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0u,
+                                 0u, nullptr, 0u, nullptr, 1u, &to_transfer);
+            VkBufferImageCopy copy{};
+            copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copy.imageSubresource.layerCount = 1u;
+            copy.imageExtent = {g_extent.width, g_extent.height, 1u};
+            vkCmdCopyImageToBuffer(cmd, g_offscreen_color_image,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   screenshot_buffer, 1u, &copy);
+            VkImageMemoryBarrier restore{};
+            restore.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            restore.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            restore.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            restore.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            restore.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            restore.image = g_offscreen_color_image;
+            restore.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            restore.subresourceRange.levelCount = 1u;
+            restore.subresourceRange.layerCount = 1u;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0u,
+                                 0u, nullptr, 0u, nullptr, 1u, &restore);
+        }
+    } else if (screenshot_enabled) {
         VkBufferImageCopy copy{};
         if (capture_screenshot) {
             copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1623,13 +1789,13 @@ bool draw_frame(const FrameDrawData &frame)
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.waitSemaphoreCount = 1u;
-    submit.pWaitSemaphores = &g_image_available;
-    submit.pWaitDstStageMask = &wait_stage;
+    submit.waitSemaphoreCount = g_offscreen_capture ? 0u : 1u;
+    submit.pWaitSemaphores = g_offscreen_capture ? nullptr : &g_image_available;
+    submit.pWaitDstStageMask = g_offscreen_capture ? nullptr : &wait_stage;
     submit.commandBufferCount = 1u;
     submit.pCommandBuffers = &cmd;
-    submit.signalSemaphoreCount = 1u;
-    submit.pSignalSemaphores = &g_render_finished;
+    submit.signalSemaphoreCount = g_offscreen_capture ? 0u : 1u;
+    submit.pSignalSemaphores = g_offscreen_capture ? nullptr : &g_render_finished;
     if (vkQueueSubmit(g_graphics_queue, 1u, &submit, g_in_flight) != VK_SUCCESS) {
         if (screenshot_buffer != VK_NULL_HANDLE) {
             vkDestroyBuffer(g_device, screenshot_buffer, nullptr);
@@ -1656,6 +1822,9 @@ bool draw_frame(const FrameDrawData &frame)
         g_screenshot_captured = true;
     }
 
+    if (g_offscreen_capture) {
+        return true;
+    }
     VkPresentInfoKHR present{};
     present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present.waitSemaphoreCount = 1u;
@@ -1779,16 +1948,35 @@ bool create_vulkan_context()
         std::fprintf(stderr, "pc-enDjinn: SDL_InitSubSystem failed: %s\n", SDL_GetError());
         return false;
     }
+    /* A Vulkan surface still needs an SDL window on macOS, even when the
+     * packet stream is rendered into our opt-in readback image.  Keep that
+     * implementation detail out of the user's desktop for replay capture:
+     * ENJ_OFFSCREEN_CAPTURE never acquires/presents a swapchain drawable.
+     * Normal interactive launches retain SDL's visible-window default. */
+    const Uint32 window_flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE |
+        SDL_WINDOW_ALLOW_HIGHDPI |
+        (offscreen_capture_requested() ? SDL_WINDOW_HIDDEN : 0u);
     g_window = SDL_CreateWindow(
         "pc-enDjinn",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
         g_last_window_width,
         g_last_window_height,
-        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+        window_flags);
     if (g_window == nullptr) {
         std::fprintf(stderr, "pc-enDjinn: SDL_CreateWindow failed: %s\n", SDL_GetError());
         return false;
+    }
+    /* A Terminal-launched Vulkan acceptance run may otherwise remain behind
+     * its launcher window on macOS, leaving CAMetalLayer::nextDrawable()
+     * indefinitely blocked.  Keep normal window focus unchanged; the replay
+     * raster gate opts in explicitly and still renders through the ordinary
+     * shimmed PVR swapchain path. */
+    const char *const raise_window = std::getenv("ENJ_RAISE_WINDOW");
+    if (!offscreen_capture_requested() && raise_window != nullptr &&
+        std::strcmp(raise_window, "1") == 0) {
+        SDL_ShowWindow(g_window);
+        SDL_RaiseWindow(g_window);
     }
     SDL_AddEventWatch(pc_endjinn_event_watch, nullptr);
     set_window_title("pc-enDjinn - creating Vulkan instance");

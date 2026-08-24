@@ -180,8 +180,19 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
   return (up.i & 0xffff0000u) | (vp.i >> 16u);
 }
 #define PC_ENDJINN_PVR_HEADER_SPRITE 0x10000000u
+/* Private pc-enDjinn marker for an emulated Model-1 painter pass. It is not a
+ * KOS/PVR bit and is emitted only by a host-specific opt-in adapter. */
+#define PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER 0x02000000u
+/* Host-only opaque-list alpha-test marker.  It preserves PVR list ordering
+ * while routing ARGB1555 zero-alpha texels through Vulkan's cutout pipeline. */
+#define PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT 0x01000000u
 #define PC_ENDJINN_PVR_HEADER_CULL_SHIFT 26u
 #define PC_ENDJINN_PVR_HEADER_CULL_MASK (0x3u << PC_ENDJINN_PVR_HEADER_CULL_SHIFT)
+#if ((PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER | \
+      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) & \
+     PC_ENDJINN_PVR_HEADER_CULL_MASK) != 0u
+#error "pc-enDjinn private PVR header flags overlap the culling field"
+#endif
 
 #define PVR_TXRFMT_MIPMAP (1u << 31)
 #define PVR_TXRFMT_VQ_DISABLE (0u << 30)
@@ -304,6 +315,7 @@ static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
   hdr->cmd = 0x80000000u;
   hdr->mode1 = PC_ENDJINN_PVR_HEADER_SPRITE | (uint32_t)cxt->list_type |
       (cxt->txr.enable ? 0x80000000u : 0u) |
+      (cxt->gen.alpha ? PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT : 0u) |
       (((uint32_t)cxt->gen.culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   hdr->mode2 = (uint32_t)cxt->txr.format;
   hdr->mode3 = (uint32_t)cxt->txr.width | ((uint32_t)cxt->txr.height << 16u);

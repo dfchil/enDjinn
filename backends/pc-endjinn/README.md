@@ -87,6 +87,14 @@ executable.
 normal `pvr_init()` call creates the SDL window and Vulkan instance/surface/device
 owned by the backend.
 
+For replay-raster diagnostics only, `ENJ_OFFSCREEN_CAPTURE=1` retains that
+same PVR packet collection and Vulkan graphics pipeline but replaces the
+swapchain color attachment with a 1280x960 offscreen image.  It deliberately
+does not acquire a drawable or present a frame, and creates the required SDL
+Vulkan surface window hidden, avoiding macOS GUI-session blocking or a visible
+test window while an explicit `ENJ_SCREENSHOT_PATH` readback is requested.  It
+is not a separate renderer and is not enabled for normal interactive runs.
+
 Dreamcast builds resolve normal KOS includes to the real toolchain headers.
 PC builds prepend `backends/pc-endjinn/include`, resolving those same includes
 to the compatibility declarations supplied by this backend.
