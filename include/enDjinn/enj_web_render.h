@@ -19,6 +19,11 @@ typedef struct {
 typedef void (*enj_web_render_pass_callback_t)(
     const enj_web_render_pass_context_t *context, const void *data);
 
+typedef enum {
+  ENJ_WEB_RENDER_PASS_BACKGROUND = 0,
+  ENJ_WEB_RENDER_PASS_FOREGROUND = 1,
+} enj_web_render_pass_phase_t;
+
 typedef struct {
   uint32_t textured;
   void *texture;
@@ -37,10 +42,28 @@ void enj_web_render_pass_submit(enj_web_render_pass_callback_t callback,
                                 const void *data, uint32_t data_size);
 
 /*
+ * Queue a pass at an explicit scene phase. Foreground passes run after all
+ * queued PVR primitives and are intended for depth-tested translucent effects.
+ */
+void enj_web_render_pass_submit_at(enj_web_render_pass_phase_t phase,
+                                   enj_web_render_pass_callback_t callback,
+                                   const void *data, uint32_t data_size);
+
+/*
  * Resolve and bind a PVR texture through enDjinn's WebGL texture cache.
  * The active texture unit is left unchanged.
  */
 void enj_web_texture_bind(const enj_web_texture_t *texture);
+
+/*
+ * Bind an indexed PVR texture and the emulated palette as separate WebGL
+ * textures. Returns non-zero for a valid indexed texture and writes its
+ * palette base. Texture units are numeric GL texture-unit indices.
+ */
+int enj_web_indexed_texture_bind(const enj_web_texture_t *texture,
+                                 uint32_t index_texture_unit,
+                                 uint32_t palette_texture_unit,
+                                 uint32_t *palette_base);
 
 #ifdef __cplusplus
 }

@@ -90,9 +90,11 @@ fonts from `assets/fonts`, and sound effects from `assets/sfx`. Generated
 Dreamcast assets are placed under `cdrom/<project-name>/` unless overridden.
 
 Texture conversion is selected by the directory below `assets/texture`:
-`pal4`, `pal8`, `rgb565_vq_tw`, and `argb1555_vq_tw` are supported. TrueType
-files in `assets/fonts/<pixel-height>/` become `.enjfont` files. Sound files
-in the supported ADPCM or PCM directory layouts become `.dca` files. The
+`pal4`, `pal8`, `pal4_vq_tw`, `pal8_vq_tw`, `rgb565_vq_tw`, and
+`argb1555_vq_tw` are supported. PAL4 and PAL8 textures are always twiddled by
+the hardware format; the `_vq_tw` variants additionally enable VQ compression.
+TrueType files in `assets/fonts/<pixel-height>/` become `.enjfont` files. Sound
+files in the supported ADPCM or PCM directory layouts become `.dca` files. The
 sound converter must be installed as `dcaconv` on `PATH`, or supplied as
 `SOUNDMACHINE=/path/to/dcaconv`. Builds never clone dependencies.
 
@@ -107,6 +109,8 @@ variables are:
 | `ENJ_ROMDIR` | CD-ROM asset root; defaults to `cdrom`. |
 | `ENJ_BUILDDIR`, `ENJ_BINDIR` | Object and output directories; default to `build` and `bin`. |
 | `ENJ_LDLIBS` | Extra libraries passed to the Dreamcast link step. |
+| `ENJ_PAL4_PVRTEX_FLAGS`, `ENJ_PAL8_PVRTEX_FLAGS` | Extra `pvrtex` flags for uncompressed palettized textures. |
+| `ENJ_PAL4_VQ_TW_PVRTEX_FLAGS`, `ENJ_PAL8_VQ_TW_PVRTEX_FLAGS` | Extra `pvrtex` flags for VQ-compressed palettized textures. |
 | `SOUNDMACHINE` | Path to the required `dcaconv` executable. |
 | `ENJ_CFLAGS` | Additional C compiler flags. |
 | `OPTLEVEL` | Optimisation level passed as `-O`; default is `g`. |

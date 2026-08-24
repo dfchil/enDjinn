@@ -58,6 +58,9 @@ void enj_state_init_defaults(void) {
 #endif
 #ifdef ENJ_DBG_PRINT
   ENJ_DEBUG_PRINT("ENJ_CBASEPATH %s\n", ENJ_CBASEPATH);
+  ENJ_DEBUG_PRINT("ENJ_FSAA %d\n", ENJ_FSAA);
+  ENJ_DEBUG_PRINT("ENJ_MODE_STACK_SIZE %d\n", ENJ_MODE_STACK_SIZE);
+  ENJ_DEBUG_PRINT("ENJ_SHOWFRAMETIMES %d\n", ENJ_SHOWFRAMETIMES);
 #endif
 
   // _vmu_splash_screen();

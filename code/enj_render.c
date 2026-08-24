@@ -29,35 +29,6 @@ static void (*_render_post_call)(void *) = NULL;
 
 static pvr_palfmt_t enj_palette_mode_switch = -1;
 
-#if ENJ_SHOWFRAMETIMES == 1
-static uint64_t profile_update_ns;
-static uint64_t profile_wait_ns;
-static uint64_t profile_render_ns;
-static uint32_t profile_frames;
-
-static void enj_render_profile_record(uint64_t update_ns, uint64_t wait_ns,
-                                      uint64_t render_ns) {
-  profile_update_ns += update_ns;
-  profile_wait_ns += wait_ns;
-  profile_render_ns += render_ns;
-  if (++profile_frames < 60) {
-    return;
-  }
-
-  printf("frame profile avg: update %llu us, pvr wait %llu us, render %llu us, "
-         "busy %llu us\n",
-         (unsigned long long)(profile_update_ns / profile_frames / 1000),
-         (unsigned long long)(profile_wait_ns / profile_frames / 1000),
-         (unsigned long long)(profile_render_ns / profile_frames / 1000),
-         (unsigned long long)((profile_update_ns + profile_render_ns) /
-                              profile_frames / 1000));
-  profile_update_ns = 0;
-  profile_wait_ns = 0;
-  profile_render_ns = 0;
-  profile_frames = 0;
-}
-#endif
-
 void enj_render_palette_mode_set(pvr_palfmt_t mode) {
   enj_palette_mode_switch = mode;
 }
@@ -203,7 +174,6 @@ void enj_render_next_frame(enj_mode_t *current_updater) {
 #if ENJ_SHOWFRAMETIMES == 1
   phase_end_ns = timer_ns_gettime64();
   render_ns += phase_end_ns - phase_start_ns;
-  enj_render_profile_record(update_ns, wait_ns, render_ns);
   vid_border_color(255, 0, 0);
 #endif
 }

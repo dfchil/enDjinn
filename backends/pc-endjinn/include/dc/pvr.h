@@ -51,6 +51,17 @@ typedef enum pvr_cull_mode {
   PVR_CULLING_CW,
 } pvr_cull_mode_t;
 
+typedef enum pvr_depthcmp_mode {
+  PVR_DEPTHCMP_NEVER,
+  PVR_DEPTHCMP_LESS,
+  PVR_DEPTHCMP_EQUAL,
+  PVR_DEPTHCMP_LEQUAL,
+  PVR_DEPTHCMP_GREATER,
+  PVR_DEPTHCMP_NOTEQUAL,
+  PVR_DEPTHCMP_GEQUAL,
+  PVR_DEPTHCMP_ALWAYS,
+} pvr_depthcmp_mode_t;
+
 typedef enum pvr_txr_shading_mode {
   PVR_TXRENV_REPLACE,
   PVR_TXRENV_MODULATE,
@@ -97,9 +108,14 @@ typedef struct pvr_context_blend {
   int src;
   int dst;
 } pvr_context_blend_t;
+typedef struct pvr_context_depth {
+  pvr_depthcmp_mode_t comparison;
+  int write;
+} pvr_context_depth_t;
 typedef struct pvr_sprite_cxt {
   pvr_context_gen_t gen;
   pvr_list_t list_type;
+  pvr_context_depth_t depth;
   pvr_context_txr_t txr;
 } pvr_sprite_cxt_t;
 typedef struct pvr_poly_cxt {
@@ -108,6 +124,7 @@ typedef struct pvr_poly_cxt {
   pvr_context_txr_t txr;
   pvr_context_txr_t txr2;
   pvr_context_blend_t blend;
+  pvr_context_depth_t depth;
   int modifier;
 } pvr_poly_cxt_t;
 
@@ -180,18 +197,19 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
   return (up.i & 0xffff0000u) | (vp.i >> 16u);
 }
 #define PC_ENDJINN_PVR_HEADER_SPRITE 0x10000000u
-/* Private pc-enDjinn marker for an emulated Model-1 painter pass. It is not a
- * KOS/PVR bit and is emitted only by a host-specific opt-in adapter. */
-#define PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER 0x02000000u
-/* Host-only opaque-list alpha-test marker.  It preserves PVR list ordering
- * while routing ARGB1555 zero-alpha texels through Vulkan's cutout pipeline. */
+#define PC_ENDJINN_PVR_HEADER_DEPTH_WRITE 0x02000000u
+/* Keep origin's depth-write encoding authoritative. These two host-private
+ * flags occupy separate unused bits for Dream Driving's retained painter and
+ * opaque alpha-cutout paths. */
 #define PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT 0x01000000u
+#define PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER 0x00800000u
 #define PC_ENDJINN_PVR_HEADER_CULL_SHIFT 26u
 #define PC_ENDJINN_PVR_HEADER_CULL_MASK (0x3u << PC_ENDJINN_PVR_HEADER_CULL_SHIFT)
-#if ((PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER | \
+#if ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE | \
+      PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER | \
       PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) & \
-     PC_ENDJINN_PVR_HEADER_CULL_MASK) != 0u
-#error "pc-enDjinn private PVR header flags overlap the culling field"
+     (PC_ENDJINN_PVR_HEADER_CULL_MASK | PC_ENDJINN_PVR_HEADER_SPRITE)) != 0u
+#error "pc-enDjinn private PVR header flags overlap another header field"
 #endif
 
 #define PVR_TXRFMT_MIPMAP (1u << 31)
@@ -252,6 +270,8 @@ static inline void pvr_sprite_cxt_col(pvr_sprite_cxt_t *cxt,
   cxt->gen.culling = PVR_CULLING_CCW;
   cxt->gen.fog_type = PVR_FOG_TABLE;
   cxt->gen.specular = 0;
+  cxt->depth.comparison = PVR_DEPTHCMP_GREATER;
+  cxt->depth.write = 1;
 }
 
 static inline void pvr_sprite_cxt_txr(pvr_sprite_cxt_t *cxt,
@@ -273,6 +293,8 @@ static inline void pvr_poly_cxt_col(pvr_poly_cxt_t *cxt, pvr_list_t list) {
   cxt->gen.culling = PVR_CULLING_CCW;
   cxt->gen.fog_type = PVR_FOG_TABLE;
   cxt->gen.specular = 0;
+  cxt->depth.comparison = PVR_DEPTHCMP_GREATER;
+  cxt->depth.write = 1;
 }
 
 static inline void pvr_poly_cxt_txr(pvr_poly_cxt_t *cxt, pvr_list_t list,
@@ -315,6 +337,7 @@ static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
   hdr->cmd = 0x80000000u;
   hdr->mode1 = PC_ENDJINN_PVR_HEADER_SPRITE | (uint32_t)cxt->list_type |
       (cxt->txr.enable ? 0x80000000u : 0u) |
+      (cxt->depth.write ? PC_ENDJINN_PVR_HEADER_DEPTH_WRITE : 0u) |
       (cxt->gen.alpha ? PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT : 0u) |
       (((uint32_t)cxt->gen.culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   hdr->mode2 = (uint32_t)cxt->txr.format;
@@ -332,6 +355,7 @@ static inline void pvr_poly_compile(pvr_poly_hdr_t *hdr,
                                     const pvr_poly_cxt_t *cxt) {
   pvr_sprite_cxt_t sprite = {.gen = cxt->gen,
                              .list_type = cxt->list_type,
+                             .depth = cxt->depth,
                              .txr = cxt->txr};
   pvr_sprite_compile(hdr, &sprite);
   hdr->mode1 &= ~PC_ENDJINN_PVR_HEADER_SPRITE;

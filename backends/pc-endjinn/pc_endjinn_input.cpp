@@ -26,6 +26,13 @@ std::array<cont_state_t, MAPLE_PORT_COUNT> g_controller_states{};
 #ifdef ENJ_TARGET_WEB_ENDJINN
 std::array<int, MAPLE_PORT_COUNT> g_web_gamepad_indices = {{-1, -1, -1, -1}};
 #endif
+struct MapleCallback {
+    uint32_t function;
+    maple_user_callback_t callback;
+    void *user_data;
+};
+std::vector<MapleCallback> g_maple_attach_callbacks;
+std::vector<MapleCallback> g_maple_detach_callbacks;
 bool g_controllers_initialized = false;
 bool g_quit_requested = false;
 
@@ -102,21 +109,105 @@ int open_controller_port(SDL_JoystickID instance)
     return -1;
 }
 
+bool controller_has_rumble(size_t port, SDL_GameController *controller)
+{
+    if (controller == nullptr) {
+        return false;
+    }
+#ifdef ENJ_TARGET_WEB_ENDJINN
+    return web_endjinn::gamepad_has_rumble(g_web_gamepad_indices[port]);
+#elif SDL_VERSION_ATLEAST(2, 0, 18)
+    (void)port;
+    return SDL_GameControllerHasRumble(controller) == SDL_TRUE;
+#else
+    (void)port;
+    return false;
+#endif
+}
+
+void stop_controller_rumble(size_t port, SDL_GameController *controller)
+{
+    if (controller == nullptr) {
+        return;
+    }
+#ifdef ENJ_TARGET_WEB_ENDJINN
+    (void)web_endjinn::gamepad_rumble(
+        g_web_gamepad_indices[port], 0.0, 0.0, 0);
+#elif SDL_VERSION_ATLEAST(2, 0, 9)
+    (void)port;
+    (void)SDL_GameControllerRumble(controller, 0u, 0u, 0u);
+#else
+    (void)port;
+#endif
+}
+
+void close_game_controllers()
+{
+    for (size_t port = 0; port < g_game_controllers.size(); port++) {
+        SDL_GameController *&controller = g_game_controllers[port];
+        if (controller != nullptr) {
+            stop_controller_rumble(port, controller);
+            SDL_GameControllerClose(controller);
+            controller = nullptr;
+        }
+        g_devices[port].valid = port == 0;
+        g_devices[port].info.functions = MAPLE_FUNC_CONTROLLER;
+    }
+#ifdef ENJ_TARGET_WEB_ENDJINN
+    g_web_gamepad_indices.fill(-1);
+#endif
+}
+
+void notify_maple_callbacks(
+    const std::array<bool, MAPLE_PORT_COUNT> &previous_valid,
+    const std::array<uint32_t, MAPLE_PORT_COUNT> &previous_functions)
+{
+    for (size_t port = 0; port < g_devices.size(); port++) {
+        const maple_device_t &device = g_devices[port];
+        for (const MapleCallback &entry : g_maple_detach_callbacks) {
+            const bool was_present =
+                previous_valid[port] &&
+                (previous_functions[port] & entry.function) != 0u;
+            const bool is_present =
+                device.valid && (device.info.functions & entry.function) != 0u;
+            if (was_present && !is_present && entry.callback != nullptr) {
+                entry.callback(&g_devices[port], entry.user_data);
+            }
+        }
+        for (const MapleCallback &entry : g_maple_attach_callbacks) {
+            const bool was_present =
+                previous_valid[port] &&
+                (previous_functions[port] & entry.function) != 0u;
+            const bool is_present =
+                device.valid && (device.info.functions & entry.function) != 0u;
+            if (!was_present && is_present && entry.callback != nullptr) {
+                entry.callback(&g_devices[port], entry.user_data);
+            }
+        }
+    }
+}
+
 void refresh_game_controllers()
 {
+    std::array<bool, MAPLE_PORT_COUNT> previous_valid{};
+    std::array<uint32_t, MAPLE_PORT_COUNT> previous_functions{};
+    for (size_t port = 0; port < g_devices.size(); port++) {
+        previous_valid[port] = g_devices[port].valid;
+        previous_functions[port] = g_devices[port].info.functions;
+    }
 #ifdef ENJ_TARGET_WEB_ENDJINN
     web_endjinn::gamepads_sample();
 #endif
     for (size_t port = 0; port < g_game_controllers.size(); port++) {
         SDL_GameController *&controller = g_game_controllers[port];
         if (controller != nullptr && !SDL_GameControllerGetAttached(controller)) {
+            stop_controller_rumble(port, controller);
             SDL_GameControllerClose(controller);
             controller = nullptr;
 #ifdef ENJ_TARGET_WEB_ENDJINN
             g_web_gamepad_indices[port] = -1;
 #endif
         }
-        g_devices[port].valid = port == 0 || controller != nullptr;
     }
 #ifdef ENJ_TARGET_WEB_ENDJINN
     size_t controller_ordinal = 0u;
@@ -143,7 +234,7 @@ void refresh_game_controllers()
         }
         const auto slot = std::find(g_game_controllers.begin(), g_game_controllers.end(), nullptr);
         if (slot == g_game_controllers.end()) {
-            return;
+            break;
         }
         *slot = SDL_GameControllerOpen(i);
         if (*slot != nullptr) {
@@ -151,13 +242,21 @@ void refresh_game_controllers()
 #ifdef ENJ_TARGET_WEB_ENDJINN
             g_web_gamepad_indices[port] = web_gamepad_index;
 #endif
-            g_devices[port].valid = true;
             std::fprintf(
                 stderr,
                 "pc-enDjinn: controller connected on port %zu: %s\n", port,
                 SDL_GameControllerName(*slot));
         }
     }
+    for (size_t port = 0; port < g_devices.size(); port++) {
+        SDL_GameController *controller = g_game_controllers[port];
+        g_devices[port].valid = port == 0 || controller != nullptr;
+        g_devices[port].info.functions = MAPLE_FUNC_CONTROLLER;
+        if (controller_has_rumble(port, controller)) {
+            g_devices[port].info.functions |= MAPLE_FUNC_PURUPURU;
+        }
+    }
+    notify_maple_callbacks(previous_valid, previous_functions);
 }
 
 int8_t axis_to_i8(Sint16 axis)
@@ -217,15 +316,9 @@ void pc_endjinn_input_request_quit(void)
 void pc_endjinn_input_shutdown(void)
 {
     audio_shutdown();
-    for (SDL_GameController *&controller : g_game_controllers) {
-        if (controller != nullptr) {
-            SDL_GameControllerClose(controller);
-            controller = nullptr;
-        }
-    }
-#ifdef ENJ_TARGET_WEB_ENDJINN
-    g_web_gamepad_indices.fill(-1);
-#endif
+    close_game_controllers();
+    g_maple_attach_callbacks.clear();
+    g_maple_detach_callbacks.clear();
     g_controllers_initialized = false;
     g_quit_requested = false;
     SDL_Quit();
@@ -251,15 +344,7 @@ int pc_endjinn_controllers_init(void)
 
 void pc_endjinn_controllers_shutdown(void)
 {
-    for (SDL_GameController *&controller : g_game_controllers) {
-        if (controller != nullptr) {
-            SDL_GameControllerClose(controller);
-            controller = nullptr;
-        }
-    }
-#ifdef ENJ_TARGET_WEB_ENDJINN
-    g_web_gamepad_indices.fill(-1);
-#endif
+    close_game_controllers();
 }
 
 size_t pc_endjinn_controllers_poll(
@@ -313,9 +398,20 @@ size_t pc_endjinn_controllers_poll(
 maple_device_t *maple_enum_type(int index, uint32_t function)
 {
     (void)pc_endjinn_controllers_init();
-    return index >= 0 && index < MAPLE_PORT_COUNT && g_devices[index].valid &&
-        (g_devices[index].info.functions & function) != 0u ? &g_devices[index]
-        : nullptr;
+    if (index < 0) {
+        return nullptr;
+    }
+    int match = 0;
+    for (maple_device_t &device : g_devices) {
+        if (!device.valid || (device.info.functions & function) == 0u) {
+            continue;
+        }
+        if (match == index) {
+            return &device;
+        }
+        match++;
+    }
+    return nullptr;
 }
 
 maple_device_t *maple_enum_dev(int port, int unit)
@@ -335,12 +431,38 @@ void *maple_dev_status(maple_device_t *device)
     return connected[device->port] != 0u ? &g_controller_states[device->port] : nullptr;
 }
 
-void maple_attach_callback(uint32_t, maple_user_callback_t, void *)
+void maple_attach_callback(uint32_t function, maple_user_callback_t callback,
+                           void *user_data)
 {
+    if (callback == nullptr) {
+        return;
+    }
+    const auto duplicate = std::find_if(
+        g_maple_attach_callbacks.begin(), g_maple_attach_callbacks.end(),
+        [=](const MapleCallback &entry) {
+            return entry.function == function && entry.callback == callback &&
+                entry.user_data == user_data;
+        });
+    if (duplicate == g_maple_attach_callbacks.end()) {
+        g_maple_attach_callbacks.push_back({function, callback, user_data});
+    }
 }
 
-void maple_detach_callback(uint32_t, maple_user_callback_t, void *)
+void maple_detach_callback(uint32_t function, maple_user_callback_t callback,
+                           void *user_data)
 {
+    if (callback == nullptr) {
+        return;
+    }
+    const auto duplicate = std::find_if(
+        g_maple_detach_callbacks.begin(), g_maple_detach_callbacks.end(),
+        [=](const MapleCallback &entry) {
+            return entry.function == function && entry.callback == callback &&
+                entry.user_data == user_data;
+        });
+    if (duplicate == g_maple_detach_callbacks.end()) {
+        g_maple_detach_callbacks.push_back({function, callback, user_data});
+    }
 }
 
 void snd_init(void)
@@ -416,7 +538,55 @@ int snd_sfx_play(sfxhnd_t handle, uint8_t volume, uint8_t pan)
     return 0;
 }
 
-void purupuru_rumble_raw(maple_device_t *, uint32_t) {}
+void purupuru_rumble_raw(maple_device_t *device, uint32_t raw)
+{
+    if (device == nullptr || device->port < 0 ||
+        device->port >= MAPLE_PORT_COUNT) {
+        return;
+    }
+    const size_t port = static_cast<size_t>(device->port);
+    SDL_GameController *controller = g_game_controllers[port];
+    if (controller == nullptr) {
+        return;
+    }
+
+    const uint32_t motor = (raw >> 4u) & 0x0fu;
+    const uint32_t backward_power = (raw >> 8u) & 0x07u;
+    const uint32_t forward_power = (raw >> 12u) & 0x07u;
+    const uint32_t power = std::max(backward_power, forward_power);
+    if (motor == 0u || power == 0u) {
+        stop_controller_rumble(port, controller);
+        return;
+    }
+
+    const uint32_t frequency = (raw >> 16u) & 0xffu;
+    const uint32_t inclination = (raw >> 24u) & 0xffu;
+    const bool continuous = (raw & 1u) != 0u;
+    const double magnitude = static_cast<double>(power) / 7.0;
+    const double high_mix = std::clamp(
+        (static_cast<double>(frequency) - 4.0) / 55.0, 0.0, 1.0);
+    const double low_frequency = magnitude * (1.0 - high_mix);
+    const double high_frequency = magnitude * high_mix;
+    const uint32_t duration_ms = continuous
+        ? 60000u
+        : inclination != 0u
+            ? std::clamp(inclination * 8u, 45u, 2000u)
+            : 120u;
+
+#ifdef ENJ_TARGET_WEB_ENDJINN
+    (void)web_endjinn::gamepad_rumble(
+        g_web_gamepad_indices[port], low_frequency, high_frequency,
+        static_cast<int>(duration_ms));
+#elif SDL_VERSION_ATLEAST(2, 0, 9)
+    const Uint16 low = static_cast<Uint16>(low_frequency * 65535.0 + 0.5);
+    const Uint16 high = static_cast<Uint16>(high_frequency * 65535.0 + 0.5);
+    (void)SDL_GameControllerRumble(controller, low, high, duration_ms);
+#else
+    (void)low_frequency;
+    (void)high_frequency;
+    (void)duration_ms;
+#endif
+}
 void gdb_init(void) {}
 void perf_monitor_init(int, int) {}
 void perf_monitor_print(FILE *) {}

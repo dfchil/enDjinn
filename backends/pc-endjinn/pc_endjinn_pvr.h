@@ -21,6 +21,7 @@ struct QueuedPrimitive {
   uint32_t argb;
   pvr_list_t list;
   pvr_cull_mode_t culling;
+  bool depth_write;
   bool alpha_cutout;
   bool model1_painter;
   bool textured;

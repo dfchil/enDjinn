@@ -286,14 +286,19 @@ static bool write_samples(const char* path) {
     for(int i = 0; i < BUCKET_SIZE; ++i) {
         if(root->pc) {
             // printf("Incrementing %d for %x. ", (root->pc - lowest_address) / bin_size, (unsigned int) root->pc);
-            bins[(root->pc - lowest_address) / bin_size]++;
+            const uint32_t bin = (root->pc - lowest_address) / bin_size;
+            const uint32_t samples = bins[bin] + root->count;
+            bins[bin] = samples > UINT16_MAX ? UINT16_MAX : (uint16_t)samples;
             // printf("Now: %d\n", (int) bins[(root->pc - lowest_address) / bin_size]);
 
             /* If there's a next pointer, traverse the list */
             Arc* s = root->next;
             while(s) {
                 assert(s->pc);
-                bins[(s->pc - lowest_address) / bin_size]++;
+                const uint32_t bin = (s->pc - lowest_address) / bin_size;
+                const uint32_t samples = bins[bin] + s->count;
+                bins[bin] =
+                    samples > UINT16_MAX ? UINT16_MAX : (uint16_t)samples;
                 s = s->next;
             }
         }
@@ -307,7 +312,7 @@ static bool write_samples(const char* path) {
     hist_header.low_pc = lowest_address;
     hist_header.high_pc = highest_address;
     hist_header.hist_size = BIN_COUNT;
-    hist_header.prof_rate = INTERVAL_IN_MS;
+    hist_header.prof_rate = 1000 / INTERVAL_IN_MS;
     strcpy(hist_header.dimen, "seconds");
     hist_header.dimen_abbrev = 's';
 
