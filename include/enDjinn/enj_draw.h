@@ -1,6 +1,9 @@
 #ifndef ENJ_DRAW_H
 #define ENJ_DRAW_H
 #include <kos.h>
+#include <enDjinn/enj_api.h>
+
+ENJ_BEGIN_DECLS
 
 /** Initialize the store queue system for 64 byte PVR structs, like
  * sprites and modifier volumes headers.
@@ -24,7 +27,7 @@ void enj_draw_pvr_dr64_commit_1st(void);
  */
 void enj_draw_pvr_dr64_commit_2nd(void);
 
-/** Reset the DR64 drawing system */
+/** Reset the DR64 drawing system. Has no effect before successful init. */
 void enj_draw_pvr_dr64_reset(void);
 
 /**
@@ -36,5 +39,7 @@ void enj_draw_pvr_dr64_reset(void);
  */
 void enj_draw_sprite(float corners[4][3], pvr_sprite_hdr_t *hdr,
                      uint32_t UVs[3]);
+
+ENJ_END_DECLS
 
 #endif /* ENJ_DRAW_H */

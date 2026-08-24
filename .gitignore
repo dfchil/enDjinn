@@ -37,4 +37,6 @@ build/
 tools/dcaconv/
 tools/font_enj/bin/
 tests/core_safety_test
+tests/public_api_cpp_test
+tests/resource_safety_test
 tests/texture_shim_test

@@ -2,22 +2,41 @@ CC ?= clang
 ROOT := ..
 TARGET := core_safety_test
 TEXTURE_TARGET := texture_shim_test
+CPP_API_TARGET := public_api_cpp_test
+RESOURCE_TARGET := resource_safety_test
+PUBLIC_HEADERS := $(notdir $(wildcard $(ROOT)/include/enDjinn/*.h))
 CFLAGS := -std=gnu23 -Wall -Wextra -Werror \
 	-I$(ROOT)/backends/pc-endjinn/include -I$(ROOT)/include \
 	-DENJ_CBASEPATH=\"/tmp/\"
 
-check: $(TARGET) $(TEXTURE_TARGET)
+check: public-headers $(CPP_API_TARGET) $(TARGET) $(RESOURCE_TARGET) $(TEXTURE_TARGET)
+	./$(CPP_API_TARGET)
 	./$(TARGET)
+	./$(RESOURCE_TARGET)
 	./$(TEXTURE_TARGET)
+
+public-headers:
+	@for header in $(PUBLIC_HEADERS); do \
+		$(CC) $(CFLAGS) -DENJ_INJECT_QFONT=1 -fsyntax-only \
+			-include enDjinn/$$header -x c /dev/null || exit 1; \
+	done
 
 $(TARGET): core_safety_test.c $(ROOT)/code/enj_mode.c $(ROOT)/code/enj_bitmap.c
 	$(CC) $(CFLAGS) $^ -o $@ -lm
+
+$(RESOURCE_TARGET): resource_safety_test.c $(ROOT)/code/enj_texture.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 $(TEXTURE_TARGET): texture_shim_test.cpp $(ROOT)/backends/pc-endjinn/pc_endjinn_pvr.cpp
 	$(CXX) -std=c++17 -Wall -Wextra -Werror \
 		-I$(ROOT)/backends/pc-endjinn/include $^ -o $@
 
-clean:
-	rm -f $(TARGET) $(TEXTURE_TARGET)
+$(CPP_API_TARGET): public_api_cpp_test.cpp
+	$(CXX) -std=c++17 -Wall -Wextra -Werror \
+		-I$(ROOT)/backends/pc-endjinn/include -I$(ROOT)/include \
+		-DENJ_CBASEPATH=\"/tmp/\" -DENJ_INJECT_QFONT=1 $< -o $@
 
-.PHONY: check clean
+clean:
+	rm -f $(TARGET) $(TEXTURE_TARGET) $(CPP_API_TARGET) $(RESOURCE_TARGET)
+
+.PHONY: check clean public-headers

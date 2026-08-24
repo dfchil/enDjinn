@@ -23,11 +23,11 @@ do {                                \
 
 enj_bitmap_t *enj_bitmap_create(int width, int height) {
   if (width <= 0 || width % 8 != 0) {
-    ENJ_DEBUG_PRINT("Width must be a multiple of 8");
+    ENJ_DEBUG_PRINT("Width must be a positive multiple of 8\n");
     return NULL;
   }
   if (height <= 0 || height % 8 != 0) {
-    ENJ_DEBUG_PRINT("Height must be a multiple of 8");
+    ENJ_DEBUG_PRINT("Height must be a positive multiple of 8\n");
     return NULL;
   }
 
@@ -61,7 +61,8 @@ void enj_bitmap_destroy(enj_bitmap_t *bitmap) {
 }
 
 void enj_bitmap_set(enj_bitmap_t *bmap, int x, int y) {
-  if (x < 0 || x >= bmap->width || y < 0 || y >= bmap->height) {
+  if (bmap == NULL || bmap->data == NULL || x < 0 || x >= bmap->width ||
+      y < 0 || y >= bmap->height) {
     return;
   }
   int bit_offset = ((y * bmap->width) + x);
@@ -74,8 +75,9 @@ void enj_bitmap_set(enj_bitmap_t *bmap, int x, int y) {
   bmap->data[byte_index] |= (1 << (7 - bit_index));
 }
 
-int enj_bitmap_get(enj_bitmap_t *bmap, int x, int y) {
-  if (x < 0 || x >= bmap->width || y < 0 || y >= bmap->height) {
+int enj_bitmap_get(const enj_bitmap_t *bmap, int x, int y) {
+  if (bmap == NULL || bmap->data == NULL || x < 0 || x >= bmap->width ||
+      y < 0 || y >= bmap->height) {
     return 0;
   }
   int bit_offset = (y * bmap->width + x);
@@ -85,7 +87,8 @@ int enj_bitmap_get(enj_bitmap_t *bmap, int x, int y) {
 }
 
 void enj_bitmap_clear(enj_bitmap_t *bmap, int x, int y) {
-  if (x < 0 || x >= bmap->width || y < 0 || y >= bmap->height) {
+  if (bmap == NULL || bmap->data == NULL || x < 0 || x >= bmap->width ||
+      y < 0 || y >= bmap->height) {
     return;
   }
   int bit_offset = (y * bmap->width) + x;
@@ -95,13 +98,19 @@ void enj_bitmap_clear(enj_bitmap_t *bmap, int x, int y) {
 }
 
 void enj_bitmap_write_line(enj_bitmap_t *bmap, enj_bitmap_line_t line) {
+  if (bmap == NULL) {
+    return;
+  }
   for (int j = 0; j <= line.length; j++) {
     enj_bitmap_set(bmap, line.start_x + j * line.direction_x,
                    line.start_y + j * line.direction_y);
   }
 }
 
-void enj_bitmap_to_pnm(const char *filename, enj_bitmap_t *bitmap) {
+void enj_bitmap_to_pnm(const char *filename, const enj_bitmap_t *bitmap) {
+  if (filename == NULL || bitmap == NULL || bitmap->data == NULL) {
+    return;
+  }
 
   FILE *file = fopen(filename, "wb");
   if (file == NULL) {

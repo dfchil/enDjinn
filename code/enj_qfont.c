@@ -22,37 +22,47 @@ static inline void enj_qfont_set_header(pvr_list_type_t mode) {
     enj_qf_prev_mode = mode;
 }
 
-pvr_ptr_t enj_qfont_get_pvr_ptr() {
+pvr_ptr_t enj_qfont_get_pvr_ptr(void) {
     return enj_qf_pvr_data;
 }
 
-enj_font_header_t* enj_qfont_get_header() {
+enj_font_header_t* enj_qfont_get_header(void) {
     return enj_qf_hdr;
 }
 
-pvr_sprite_hdr_t *enj_qfont_get_sprite_hdr() {
+pvr_sprite_hdr_t *enj_qfont_get_sprite_hdr(void) {
     return &enj_qf_sprite_hdr;
 }
 
 
 void enj_qfont_color_set(uint8_t r, uint8_t g, uint8_t b) {
+  if (enj_qf_hdr == NULL) {
+    return;
+  }
   enj_qfont_get_sprite_hdr()->argb = 0xff000000 | (r << 16) | (g << 8) | b;
 }
 
 
-int enj_qfont_init() {
+int enj_qfont_init(void) {
 
     enj_qf_hdr = (enj_font_header_t*)enj_qfont_data;
 
     enj_qf_pvr_data = enj_font_to_16bit_texture(
         enj_qf_hdr, enj_qfont_data + sizeof(enj_font_header_t), PVR_PIXEL_MODE_ARGB1555,
         (enj_color_t){.raw = 0xffffffff}, (enj_color_t){.raw = 0x00000000});
+    if (enj_qf_pvr_data == NULL) {
+        enj_qf_hdr = NULL;
+        return -1;
+    }
     enj_qf_hdr->pvr_data = (uint32_t)(uintptr_t)enj_qf_pvr_data;
     enj_qfont_set_header(PVR_LIST_PT_POLY);
     return 0;
 }
 
 int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode) {
+    if (str == NULL || enj_qf_hdr == NULL || enj_qf_pvr_data == NULL) {
+        return 0;
+    }
 
     if (cur_mode != enj_qf_prev_mode) {
         // rewrite the header if the mode has changed
@@ -64,11 +74,12 @@ int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode) {
                                        &enj_qf_sprite_hdr);
     return renderwidth;
 }
-void enj_qfont_shutdown() {
+void enj_qfont_shutdown(void) {
     if (enj_qf_pvr_data){
         pvr_mem_free(enj_qf_pvr_data);
     }
     enj_qf_pvr_data = NULL;
+    enj_qf_hdr = NULL;
 }
 
 #endif  // ENJ_INJECT_QFONT

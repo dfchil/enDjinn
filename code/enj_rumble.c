@@ -30,23 +30,25 @@ void enj_rumble_init_local_devices(void) {
 }
 
 size_t enj_rumble_states_length(void) { return MAPLE_PORT_COUNT; }
-void enj_rumble_rate_limit_set(int frames) { enj_rumble_rate_limit = frames; }
+void enj_rumble_rate_limit_set(int frames) {
+  enj_rumble_rate_limit = frames < 0 ? 0 : frames;
+}
 
 enj_rumble_reply_e enj_rumble_effect_set_raw(enj_ctrl_port_name_e ctrloffset,
                                              uint32_t raw) {
   if ((unsigned)ctrloffset >= MAPLE_PORT_COUNT) {
-    return enj_rumble_no_device;
+    return ENJ_RUMBLE_NO_DEVICE;
   }
   maple_device_t *rumble_dev = local_rumbles[ctrloffset];
   if (rumble_dev == NULL) {
-    return enj_rumble_no_device;
+    return ENJ_RUMBLE_NO_DEVICE;
   }
-  enj_rumble_reply_e reply = enj_rumble_set;
+  enj_rumble_reply_e reply = ENJ_RUMBLE_SET;
   if (pending_rumble_effects[ctrloffset] != 0) {
-    reply |= enj_rumble_overwrote_previous;
+    reply |= ENJ_RUMBLE_OVERWROTE_PREVIOUS;
   }
   if (rumble_rate_limits[ctrloffset] > 0) {
-    reply |= enj_rumble_rate_limited;
+    reply |= ENJ_RUMBLE_RATE_LIMITED;
   }
   pending_rumble_effects[ctrloffset] = raw;
   return reply;
@@ -57,7 +59,7 @@ enj_rumble_reply_e enj_rumble_effect_set(enj_ctrl_port_name_e ctrloffset,
   return enj_rumble_effect_set_raw(ctrloffset, effect.raw);
 }
 
-maple_device_t **enj_rumble_states_get() { return local_rumbles; }
+maple_device_t **enj_rumble_states_get(void) { return local_rumbles; }
 
 void enj_rumble_update(void) {
   for (int i = 0; i < MAPLE_PORT_COUNT; i++) {

@@ -62,6 +62,9 @@ size_t enj_ctrl_map_states(void) {
 
 /* Return the first device of the requested type on port p */
 maple_device_t *enj_maple_port_type(int p, uint32_t func) {
+  if (p < 0 || p >= MAPLE_PORT_COUNT) {
+    return NULL;
+  }
   maple_device_t *dev;
   for (int u = 0; u < MAPLE_UNIT_COUNT; u++) {
     dev = maple_enum_dev(p, u);
@@ -96,6 +99,9 @@ static inline uint8_t enj_update_button_state(uint8_t prev_btnstate,
 }
 
 void enj_ctrl_kos2enj_state(cont_state_t *c_state, enj_ctrlr_state_t *ctrlr) {
+  if (c_state == NULL || ctrlr == NULL) {
+    return;
+  }
   ctrlr->button.A = enj_update_button_state(ctrlr->button.A, c_state->a);
   ctrlr->button.B = enj_update_button_state(ctrlr->button.B, c_state->b);
   ctrlr->button.X = enj_update_button_state(ctrlr->button.X, c_state->x);
@@ -118,7 +124,7 @@ void enj_ctrl_kos2enj_state(cont_state_t *c_state, enj_ctrlr_state_t *ctrlr) {
 
 void enj_read_controller(enj_abstract_ctrlr_t *ctrlref,
                          enj_ctrlr_state_t *cstate) {
-  if (ctrlref != NULL && ctrlref->updatefun != NULL) {
+  if (ctrlref != NULL && ctrlref->updatefun != NULL && cstate != NULL) {
     ctrlref->updatefun(ctrlref->state, cstate);
   }
 }
@@ -134,8 +140,11 @@ int enj_ctrlr_button_combo_raw(uint32_t raw_buttons, uint32_t combo) {
   return 0;
 }
 
-int enj_ctrlr_button_combo(enj_ctrlr_state_t *cstate,
-                           enj_ctrlr_state_t *combo) {
+int enj_ctrlr_button_combo(const enj_ctrlr_state_t *cstate,
+                           const enj_ctrlr_state_t *combo) {
+  if (cstate == NULL || combo == NULL) {
+    return 0;
+  }
   return enj_ctrlr_button_combo_raw(cstate->button.raw, combo->button.raw);
 }
 

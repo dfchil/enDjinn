@@ -5,7 +5,7 @@ static int current_mode_index = -1;
 alignas(32) static enj_mode_t* mode_stack[ENJ_MODE_STACK_SIZE] = {NULL};
 
 void enj_mode_set(enj_mode_t* mode) {
-    if (current_mode_index < 0 || mode == NULL) {
+    if (current_mode_index < 0 || mode == NULL || mode->mode_updater == NULL) {
         ENJ_DEBUG_PRINT("No active mode to replace\n");
         return;
     }
@@ -14,8 +14,8 @@ void enj_mode_set(enj_mode_t* mode) {
 
 
 int enj_mode_push(enj_mode_t* mode) {
-    if (mode == NULL) {
-        ENJ_DEBUG_PRINT("Cannot push a NULL mode\n");
+    if (mode == NULL || mode->mode_updater == NULL) {
+        ENJ_DEBUG_PRINT("Cannot push a NULL mode or updater\n");
         return 0;
     }
     if (current_mode_index >= ENJ_MODE_STACK_SIZE - 1) {
@@ -59,12 +59,13 @@ enj_mode_t* enj_mode_pop(void) {
 }
 
 void enj_mode_goto_index(int target) {
-#ifdef ENJ_DBG_PRINT
-    if (target > current_mode_index) {
+    if (target < 0 || target > current_mode_index) {
         ENJ_DEBUG_PRINT("Mode stack index out of bounds\n");
         return;
     }
-#endif
+    if (target == current_mode_index) {
+        return;
+    }
     enj_mode_t* prev = mode_stack[current_mode_index];
     while (current_mode_index > target) {
         mode_stack[current_mode_index--] = NULL;
@@ -85,9 +86,8 @@ void enj_mode_soft_reset_target_set(int index) {
 
 int enj_mode_cut_to_soft_reset_target(void) {
     int index = enj_state_get()->soft_reset_target_index;
-    if (index < 0) {
-        ENJ_DEBUG_PRINT("Title screen index not set!\n");
-        enj_state_flag_shutdown(NULL);
+    if (index < 0 || index > current_mode_index) {
+        ENJ_DEBUG_PRINT("Soft reset target is not a valid mode index\n");
         return 0;
     }
     enj_mode_goto_index(index);

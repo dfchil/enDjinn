@@ -3,6 +3,9 @@
 
 #include <kos.h>
 #include <stdint.h>
+#include <enDjinn/enj_api.h>
+
+ENJ_BEGIN_DECLS
 
 /**
  * Controller port names,
@@ -79,7 +82,7 @@ typedef struct {
  *
  * @note The reasoning behind this is to allow an AI bot, a replay stream or
  * controllers linked on a remote dreamcast via network or serial to be used
- * interchangable with local maple controllers.
+ * interchangeably with local Maple controllers.
  */
 typedef struct enj_abstract_controller_s {
   struct {
@@ -91,11 +94,11 @@ typedef struct enj_abstract_controller_s {
 } enj_abstract_ctrlr_t;
 
 /**
- * Get the length of the controllers state
+ * Get the length of the controller-state array.
  *
  * @return Length of the controller list, currently always MAPLE_PORT_COUNT
  *
- * @note This will be make more sense once controllers on other consoles can be
+ * @note This will make more sense once controllers on other consoles can be
  * mapped via network or serial cable
  */
 size_t enj_ctrl_states_length(void);
@@ -123,7 +126,8 @@ maple_device_t *enj_maple_port_type(int p, uint32_t func);
  * Get the list of controller states
  * @return Pointer to an array of pointers to enj_ctrlr_state_t structures
  * representing the current state of each controller port
- * @note NULL pointers in list represent disconnected controllers
+ * @note NULL entries represent disconnected controllers. The array and its
+ * entries are owned by enDjinn and updated once per frame.
  */
 enj_ctrlr_state_t **enj_ctrl_get_states(void);
 
@@ -187,10 +191,13 @@ int enj_ctrlr_button_combo_raw(uint32_t raw_buttons, uint32_t combo);
  * @param combo Pointer to the button combination to check for
  * @return 1 if the combination is pressed, 0 otherwise
  *
- * @note Set each button that are part of the combo to ENJ_BUTTON_DOWN
+ * @note Set each button that is part of the combo to ENJ_BUTTON_DOWN.
  * @note This is a convenience wrapper around enj_ctrlr_button_combo_raw, using
  * named buttons instead of raw bitfields
  */
-int enj_ctrlr_button_combo(enj_ctrlr_state_t *cstate, enj_ctrlr_state_t *combo);
+int enj_ctrlr_button_combo(const enj_ctrlr_state_t *cstate,
+                           const enj_ctrlr_state_t *combo);
+
+ENJ_END_DECLS
 
 #endif // ENJ_CTRLR_H

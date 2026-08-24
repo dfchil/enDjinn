@@ -10,6 +10,8 @@ static int activations;
 enj_state_t *enj_state_get(void) { return &test_state; }
 void enj_state_flag_shutdown(void *unused) { (void)unused; }
 
+static void update(void *unused) { (void)unused; }
+
 static void activated(enj_mode_t *previous, enj_mode_t *next) {
   assert(previous != NULL);
   assert(next != NULL);
@@ -37,10 +39,18 @@ int main(void) {
   enj_mode_set(NULL);
   enj_mode_goto_index(-1);
 
-  enj_mode_t base = {.name = "base", .on_activation_fn = activated};
-  enj_mode_t overlay = {.name = "overlay"};
+  enj_mode_t base = {
+      .name = "base", .mode_updater = update, .on_activation_fn = activated};
+  enj_mode_t overlay = {.name = "overlay", .mode_updater = update};
   assert(enj_mode_push(NULL) == 0);
+  assert(enj_mode_push(&(enj_mode_t){0}) == 0);
   assert(enj_mode_push(&base) == 1);
+  enj_mode_goto_index(-1);
+  assert(enj_mode_get() == &base);
+  enj_mode_goto_index(1);
+  assert(enj_mode_get() == &base);
+  test_state.soft_reset_target_index = 1;
+  assert(enj_mode_cut_to_soft_reset_target() == 0);
   assert(enj_mode_pop() == NULL);
   assert(enj_mode_get() == &base);
   assert(enj_mode_push(&overlay) == 1);
@@ -52,6 +62,10 @@ int main(void) {
   assert(enj_bitmap_create(8, -8) == NULL);
   enj_bitmap_t *bitmap = enj_bitmap_create(8, 8);
   assert(bitmap != NULL);
+  enj_bitmap_set(NULL, 0, 0);
+  enj_bitmap_clear(NULL, 0, 0);
+  enj_bitmap_write_line(NULL, (enj_bitmap_line_t){0});
+  assert(enj_bitmap_get(NULL, 0, 0) == 0);
   enj_bitmap_set(bitmap, 3, 4);
   assert(enj_bitmap_get(bitmap, 3, 4) == 1);
   enj_bitmap_destroy(bitmap);

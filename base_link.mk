@@ -45,7 +45,13 @@ ENJ_IPLOGO ?= ${ENJDIR}assets/iplogo.mr
 ENJ_MAKEIP ?= $(if $(KOS_BASE),$(KOS_BASE)/utils/makeip/makeip,makeip)
 ENJ_DEPFLAGS ?= -MMD -MP -MF $(@:.o=.d)
 
-assets: $(ENJ_ASSETS) $(ENJ_IPLOGO)
+assets: $(ENJ_ASSETS) $(ENJ_IPLOGO) | $(ROMBASEPATH)
+
+# Keep empty-asset projects valid. Emscripten's file packager and CDI tooling
+# both require the configured asset directory to exist even when there is
+# nothing to place in it.
+$(ROMBASEPATH):
+	mkdir -p $@
 
 $(ENJ_IPLOGO): $(ENJ_IPLOGO_SRC)
 	@mkdir -p $(dir $@)
@@ -138,7 +144,9 @@ ENJ_WEB_CFLAGS ?= -std=gnu23 -O2 -g -Wall -Wextra \
 	-Wno-unused-function -Wno-unused-variable
 ENJ_WEB_CXXFLAGS ?= -std=c++17 -O2 -g -Wall -Wextra
 ENJ_WEB_CPPFLAGS += -I$(shell pwd)/include -I${ENJDIR}include
-ENJ_WEB_PRELOAD_FLAGS ?= --preload-file $(ROMBASEPATH)@/$(ROMBASEPATH)
+# Emscripten's packager treats an empty directory as an error. Evaluate this
+# lazily at link time, after generated assets have been built.
+ENJ_WEB_PRELOAD_FLAGS ?= $(if $(shell find $(ROMBASEPATH) -type f -print -quit 2>/dev/null),--preload-file $(ROMBASEPATH)@/$(ROMBASEPATH),)
 
 ENJ_WEB_CORE_SRCS := $(sort $(wildcard ${ENJDIR}code/*.c))
 ENJ_WEB_APP_SRCS := $(patsubst ./%,%,$(shell find $(ENJ_CODEDIR) -name '*.c' -not -path "./.git/*"))
@@ -182,7 +190,7 @@ $(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/%.o: ${ENJDIR}backends/web-end
 	@mkdir -p $(dir $@)
 	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
 
-$(ENJ_WEB_TARGET): $(ENJ_WEB_OBJS) $(ENJ_ASSETS) $(ENJ_WEB_EXTRA_DEPS)
+$(ENJ_WEB_TARGET): $(ENJ_WEB_OBJS) $(ENJ_ASSETS) $(ENJ_WEB_EXTRA_DEPS) | $(ROMBASEPATH)
 	@mkdir -p $(dir $@)
 	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) \
 		$(ENJ_WEB_OBJS) -o $@ $(ENJ_WEB_LDFLAGS) $(ENJ_WEB_PRELOAD_FLAGS)
@@ -228,7 +236,7 @@ $(ENJ_BINDIR)/${ENJ_BASENAME}.elf: $(OBJS)
 	@echo "Linking $@..."
 	$(ENJ_CC) $(ENJ_INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(ENJ_LDLIBS) 
 
-$(ENJ_BINDIR)/${ENJ_BASENAME}.cdi: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf $(ENJ_IPLOGO)
+$(ENJ_BINDIR)/${ENJ_BASENAME}.cdi: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf $(ENJ_IPLOGO) | $(ROMBASEPATH)
 	mkdcdisc \
 	--name ${ENJ_BASENAME} \
 	--elf $< \
