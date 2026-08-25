@@ -3,13 +3,16 @@
 
 #include <kos.h>
 #include <stdint.h>
+#include <enDjinn/enj_api.h>
+
+ENJ_BEGIN_DECLS
 
 /**
  * Load a DCA sound effect from a memory blob
  * @param data Pointer to the DCA data in memory
  * @return The sound effect handle, or SFXHND_INVALID on error
  */
-sfxhnd_t enj_sound_dca_load_blob(uint8_t* data);
+sfxhnd_t enj_sound_dca_load_blob(const uint8_t *data);
 
 /**
  * Load a DCA sound effect from a file
@@ -19,14 +22,15 @@ sfxhnd_t enj_sound_dca_load_blob(uint8_t* data);
 sfxhnd_t enj_sound_dca_load_file(const char* filename);
 
 /**
- * Unload a sound effect previously loaded with enj_sound_dca_load_file or enj_sound_dca_load_blob
+ * Unload a sound effect previously loaded with enj_sound_dca_load_file() or
+ * enj_sound_dca_load_blob().
  * @param handle The sound effect handle to unload
- * @return void
  */
 void enj_sound_unload(sfxhnd_t handle);
 
 /**
- * Play a sound effect previously loaded with enj_sound_dca_load_file or enj_sound_dca_load_blob
+ * Play a sound effect previously loaded with enj_sound_dca_load_file() or
+ * enj_sound_dca_load_blob().
  * @param handle The sound effect handle to play
  * @param volume Volume to play the sound effect at (0-255)
  * @param pan Pan to play the sound effect at (0-255, 128 is center)
@@ -34,5 +38,6 @@ void enj_sound_unload(sfxhnd_t handle);
  */
 int enj_sound_play(sfxhnd_t handle, uint8_t volume, uint8_t pan);
 
+ENJ_END_DECLS
 
 #endif // ENJ_SOUND_H

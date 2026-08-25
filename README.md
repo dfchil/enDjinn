@@ -6,6 +6,8 @@ boilerplate while keeping the Dreamcast rendering model visible: applications
 work with modes, PVR render lists, controllers, textures, fonts, sound, and
 VMU/rumble devices rather than a generic cross-platform scene API.
 
+It is available under the permissive [MIT License](./LICENSE).
+
 <div>
 <img style="height:220px" src="./docs/img/enDjinn.svg" alt="enDjinn logo" />
 </div>
@@ -24,6 +26,23 @@ VMU/rumble devices rather than a generic cross-platform scene API.
 
 The [examples](./examples/README.md) are the best source of working,
 feature-specific code.
+
+If you are adopting enDjinn in another repository, start with
+[Using enDjinn in another project](./docs/USING_ENDJINN.md). It documents the
+current compatibility policy, source layout, lifecycle, callback lifetimes,
+resource ownership, and a portability checklist.
+
+## Requirements and project status
+
+enDjinn uses GNU C23 and is integrated as source rather than as a prebuilt
+library. Dreamcast/KallistiOS is the reference target. Native and browser
+development builds additionally require the dependencies listed in their
+respective backend READMEs.
+
+The API is still evolving and there is no versioned stable ABI yet. External
+projects should pin a known Git commit (for example with a submodule) and review
+public-header changes when updating. Public C headers are independently
+includable and provide C linkage when used from C++.
 
 ## Quick start: Dreamcast
 
@@ -185,3 +204,17 @@ engine loop to the browser through Emscripten Asyncify. See the
 The repository includes `profilers/dctrace.py`, `profilers/dcprof/`, and
 helper scripts under `profilers/`. Set `ENJ_DCTRACE` or `ENJ_DCPROF` in
 `local.cfg.mk` to include the corresponding Dreamcast-side instrumentation.
+
+## Tests
+
+Run the host-side safety, public-header, and backend-shim checks with:
+
+```sh
+make -C tests check
+```
+
+Build every example against the native development backend with:
+
+```sh
+make -C examples ENJ_TARGET=pc-endjinn
+```

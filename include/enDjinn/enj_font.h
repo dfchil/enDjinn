@@ -1,9 +1,12 @@
-#ifndef ENJ_FONTS_H
-#define ENJ_FONTS_H
+#ifndef ENJ_FONT_H
+#define ENJ_FONT_H
 
 #include <kos.h>
+#include <enDjinn/enj_api.h>
 #include <enDjinn/enj_font_types.h>
 #include <enDjinn/enj_types.h>
+
+ENJ_BEGIN_DECLS
 
 /**
  * Set the integer scale for font rendering
@@ -12,7 +15,6 @@
 void enj_font_scale_set(uint8_t scale);
 
 /**
-
  * Set the Z value used for font rendering
  * @param zvalue The Z value to use for rendering
  */
@@ -27,28 +29,37 @@ void enj_font_letter_spacing_set(uint8_t spacing);
 /**
  * Load an enDjinn font from a memory blob
  * @param blob Pointer to font data blob
- * @param out_font Pointer to store loaded font header
+ * @param out_font Output font descriptor; inspect it only on success
  * @return 1 on success, 0 on failure
+ * @note blob must point to a complete converter-generated font. It is not
+ * retained after this call.
  */
 int enj_font_from_blob(const uint8_t* blob, enj_font_header_t* out_font);
 
 /** Load an enDjinn font from a file
  * @param path Path to font file
- * @param out_font Pointer to store loaded font header
+ * @param out_font Output font descriptor; inspect it only on success
  * @return 1 on success, 0 on failure
  */
 int enj_font_from_file(const char* path, enj_font_header_t* out_font);
+
+/** Release texture memory owned by a loaded font.
+ * @param font Font previously initialized by enj_font_from_blob() or
+ * enj_font_from_file()
+ * @return 1 when texture memory was released, 0 for NULL or unloaded fonts
+ */
+int enj_font_unload(enj_font_header_t *font);
 
 /** Configure a PVR sprite header for rendering text glyphs
  * @param font Pointer to font header
  * @param hdr Pointer to PVR sprite header to configure
  * @param palette_entry Palette offset to use for the font
  * @param front_color Color to use for the front of the glyphs
- * @param pal_fmt Palette format to be used in, 4bit or 8bit
+ * @param pal_fmt Palette format to use, 4-bit or 8-bit
  * @return 1 on success, 0 on failure
  *
- * @note The number of useable palettes depends on the palette format: 64 for
- * 4bit and 4 for 8bit
+ * @note The number of usable palettes depends on the palette format: 64 for
+ * 4-bit and 4 for 8-bit.
  */
 
 int enj_font_PAL_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
@@ -61,12 +72,11 @@ int enj_font_PAL_TR_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
  * @param palette_entry Palette offset to use for the font
  * @param front_color Color to use for as glyph fill
  * @param back_color Color to blend towards for the outline
- * @param pal_fmt Palette format to be used in, 4bit or 8bit
+ * @param pal_fmt Palette format to use, 4-bit or 8-bit
  * @return 1 on success, 0 on failure
  *
- * @note The number of useable palettes depends on the palette format: 64 for
- 4bit and 4 for 8bit
-
+ * @note The number of usable palettes depends on the palette format: 64 for
+ * 4-bit and 4 for 8-bit.
  */
 int enj_font_PAL_OP_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
                            uint8_t palette_entry, enj_color_t front_color,
@@ -78,12 +88,12 @@ int enj_font_PAL_OP_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
  * @param palette_entry Palette offset to use for the font
  * @param front_color Color to use for as glyph fill
  * @param back_color Color to blend towards for the outline
- * @param pal_fmt Palette format to be used in, 4bit or 8bit
+ * @param pal_fmt Palette format to use, 4-bit or 8-bit
  * @return 1 on success, 0 on failure
  *
  *
- * @note The number of useable palettes depends on the palette format: 64 for
- * 4bit and 4 for 8bit
+ * @note The number of usable palettes depends on the palette format: 64 for
+ * 4-bit and 4 for 8-bit.
  */
 int enj_font_PAL_PT_header(enj_font_header_t* font, pvr_sprite_hdr_t* hdr,
                            uint8_t palette_entry, enj_color_t front_color,
@@ -150,4 +160,6 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t* font, uint8_t* data_4bpp,
                                     enj_color_t front_color,
                                     enj_color_t back_color);
 
-#endif  // ENJ_FONTS_H
+ENJ_END_DECLS
+
+#endif  // ENJ_FONT_H

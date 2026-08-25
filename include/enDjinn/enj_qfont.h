@@ -1,28 +1,33 @@
-#ifndef ENJ_DEBUG_H
-#define ENJ_DEBUG_H
+#ifndef ENJ_QFONT_H
+#define ENJ_QFONT_H
 
 #ifdef ENJ_INJECT_QFONT
 
-
 #include <kos.h>
+#include <enDjinn/enj_api.h>
 #include <enDjinn/enj_font_types.h>
 
-int enj_qfont_init();
-void enj_qfont_shutdown();
+ENJ_BEGIN_DECLS
+
+/** Initialize the injected quick font. @return 0 on success, -1 on failure. */
+int enj_qfont_init(void);
+
+/** Release the injected quick font's PVR texture. Safe to call repeatedly. */
+void enj_qfont_shutdown(void);
 
 /**
- * Writes a string to the screen using a injected font.
+ * Write a string using the injected font.
  * @param str The string to write
  * @param x The x position in pixels
  * @param y The y position in pixels
  * @param cur_mode The PVR list that is currently being submitted to
  * @return The width of the rendered string in pixels
  *
- * @note The intended time to use this function is when while submitting to the
- * same list as the cur_mode argument. PVR_LIST_PT_POLY is recommended.
+ * @note Call this while submitting the same list as cur_mode.
+ * PVR_LIST_PT_POLY is recommended.
  * 
- * @note The built in font is 1 bit without gradients and is very suitable for integer scaling by calling
- * @see  @link enj_font_scale_set @endlink.
+ * @note The built-in font is one-bit and well suited to integer scaling with
+ * enj_font_scale_set().
  */
 int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode);
 
@@ -30,13 +35,13 @@ int enj_qfont_write(const char* str, int x, int y, pvr_list_type_t cur_mode);
  * Get the pointer to the injected font's PVR texture data
  * @return Pointer to PVR texture data
  */
-pvr_ptr_t enj_qfont_get_pvr_ptr();
+pvr_ptr_t enj_qfont_get_pvr_ptr(void);
 
 /**
  * Get the pointer to the injected font's header
  * @return Pointer to font header
  */
-enj_font_header_t* enj_qfont_get_header();
+enj_font_header_t* enj_qfont_get_header(void);
 
 /**
  * Get the pointer to the injected font's sprite header
@@ -46,7 +51,7 @@ enj_font_header_t* enj_qfont_get_header();
  * but will be reconfigured if used with enj_qfont_write with a different list
  * type.
  */
-pvr_sprite_hdr_t* enj_qfont_get_sprite_hdr();
+pvr_sprite_hdr_t* enj_qfont_get_sprite_hdr(void);
 
 /**
  * Set the color of the sprite that glyphs are rendered with
@@ -57,6 +62,8 @@ pvr_sprite_hdr_t* enj_qfont_get_sprite_hdr();
  * @note The effect depends on the texture mode and pvr_list_type being used.
  */
 void enj_qfont_color_set(uint8_t r, uint8_t g, uint8_t b);
+
+ENJ_END_DECLS
 #endif  // ENJ_INJECT_QFONT
 
-#endif  // ENJ_DEBUG_H
+#endif  // ENJ_QFONT_H

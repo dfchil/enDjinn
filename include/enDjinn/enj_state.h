@@ -2,9 +2,12 @@
 #define ENJ_STATE_H
 
 #include <kos.h>
+#include <enDjinn/enj_api.h>
 #include <enDjinn/enj_ctrl.h>
 #include <enDjinn/enj_mode.h>
 #include <enDjinn/enj_types.h>
+
+ENJ_BEGIN_DECLS
 
 typedef struct enj_state_s {
   union {
@@ -42,17 +45,15 @@ enj_state_t *enj_state_get(void);
  */
 void enj_state_soft_reset_set(uint32_t pattern);
 
-/** Set the enDjinn state to default values */
+/** Set the enDjinn state to default values. Call before changing state fields. */
 void enj_state_init_defaults(void);
 
 /** Initialize enDjinn subsystems based on the current state
  * @return 0 on success, -1 on failure
  */
-int enj_state_startup();
+int enj_state_startup(void);
 
-/** 
- * Main enDjinn loop, runs until shutdown is signaled 
- * */
+/** Main enDjinn loop. Runs until shutdown is signaled and then cleans up. */
 void enj_state_run(void);
 
 /** Flag enDjinn to shut down at the next opportunity
@@ -60,5 +61,7 @@ void enj_state_run(void);
  * function
  */
 void enj_state_flag_shutdown(void *__unused);
+
+ENJ_END_DECLS
 
 #endif // ENJ_STATE_H

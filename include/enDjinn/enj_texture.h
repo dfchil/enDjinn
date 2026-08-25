@@ -1,9 +1,12 @@
-#ifndef ENJ_TEXTURE_H 
+#ifndef ENJ_TEXTURE_H
 #define ENJ_TEXTURE_H
 
 #include <kos.h>
 #include <pvrtex/file_dctex.h>
 #include <stdint.h>
+#include <enDjinn/enj_api.h>
+
+ENJ_BEGIN_DECLS
 
 typedef fDtHeader dt_header_t;
 
@@ -34,17 +37,19 @@ typedef struct {
  * @brief Load a texture from a memory blob
  *
  * @param data Pointer to the raw texture data
- * @param texinfo The texture texinfo struct
- * @return int 1 on success, 0 on failure
+ * @param texinfo Output texture descriptor; inspect it only on success
+ * @return 1 on success, 0 on failure
+ * @note data must point to a complete converter-generated DcTx blob. The
+ * source blob is not retained after this call.
  */
-int enj_texture_load_blob(const void* data, enj_texture_info_t* texinfo);
+int enj_texture_load_blob(const void *data, enj_texture_info_t *texinfo);
 
 /**
  * @brief Load a palette from a memory blob
  * @param raw_data Pointer to the raw palette data
  * @param fmt The format of the palette
  * @param offset The offset to load the palette
- * @return int 1 on success, 0 on failure
+ * @return 1 on success, 0 on failure
  * @note Valid format defines are:
 
  * - PVR_PAL_ARGB8888: 32-bit ARGB
@@ -55,43 +60,21 @@ int enj_texture_load_blob(const void* data, enj_texture_info_t* texinfo);
 
  * - PVR_PAL_ARGB1555: 16-bit ARGB
  */
-int enj_texture_load_palette_blob(const void* raw_data, int fmt, size_t offset);
+int enj_texture_load_palette_blob(const void *raw_data, int fmt, size_t offset);
 
-/**
- * @brief Load a texture from a memory blob
- *
- * @param data Pointer to the raw texture data
- * @param texinfo The texture texinfo struct
- * @return int 1 on success, 0 on failure
+/** Bind a loaded palettized texture to a palette-RAM offset.
+ * @param texinfo Loaded palettized texture descriptor
+ * @param offset Palette-RAM entry offset
+ * @return 1 on success, 0 for NULL or non-palettized textures
  */
-int enj_texture_load_blob(const void* data, enj_texture_info_t* texinfo);
-
-/**
- * @brief Load a palette from a memory blob
- * @param raw_data Pointer to the raw palette data
- * @param fmt The format of the palette
- * @param offset The offset to load the palette
- * @return int 1 on success, 0 on failure
- * @note Valid format defines are:
-
- * - PVR_PAL_ARGB8888: 32-bit ARGB
-
- * - PVR_PAL_ARGB4444: 16-bit ARGB
-
- * - PVR_PAL_RGB565: 16-bit RGB
-
- * - PVR_PAL_ARGB1555: 16-bit ARGB
- */
-int enj_texture_load_palette_blob(const void* raw_data, int fmt, size_t offset);
-
-int enj_texture_bind_palette(enj_texture_info_t* texinfo, size_t offset);
+int enj_texture_bind_palette(enj_texture_info_t *texinfo, size_t offset);
 
 /**
  * @brief Load a palette from a file
  * @param filename The filename of the palette
  * @param fmt The format of the palette
  * @param offset The offset to load the palette
- * @return int 1 on success, 0 on failure
+ * @return 1 on success, 0 on failure
  * @note Valid format defines are:
 
  * - PVR_PAL_ARGB8888: 32-bit ARGB
@@ -109,8 +92,8 @@ int enj_texture_load_palette_file(const char *filename, int fmt, size_t offset);
  * @brief Load a texture from a file
  *
  * @param filename The filename of the texture
- * @param texinfo The texture texinfo struct
- * @return int 1 on success, 0 on failure
+ * @param texinfo Output texture descriptor; inspect it only on success
+ * @return 1 on success, 0 on failure
  */
 int enj_texture_load_file(const char *filename, enj_texture_info_t *texinfo);
 
@@ -118,8 +101,10 @@ int enj_texture_load_file(const char *filename, enj_texture_info_t *texinfo);
 /**
  * @brief Unload a texture from memory
  * @param texinfo The texture texinfo struct
- * @return int 1 on success, 0 on failure
+ * @return 1 when texture memory was released, 0 for NULL or unloaded textures
  */
 int enj_texture_unload(enj_texture_info_t *texinfo);
+
+ENJ_END_DECLS
 
 #endif // ENJ_TEXTURE_H

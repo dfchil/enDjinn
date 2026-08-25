@@ -119,12 +119,16 @@ static void enj_state_wait_for_frame_deadline(uint64_t *deadline_ns) {
 }
 #endif
 
-int enj_state_startup() {
+int enj_state_startup(void) {
   enj_state_t *state = enj_state_get();
 
   if (!state->flags.initialized) {
     ENJ_DEBUG_PRINT(
         "enDjinn not initialized! Call enj_state_init_defaults() first.\n");
+    return -1;
+  }
+  if (state->flags.started) {
+    ENJ_DEBUG_PRINT("enDjinn is already started.\n");
     return -1;
   }
 
@@ -145,7 +149,11 @@ int enj_state_startup() {
 #endif
 
 #ifdef ENJ_INJECT_QFONT
-  enj_qfont_init();
+  if (enj_qfont_init() != 0) {
+    ENJ_DEBUG_PRINT("Could not initialize the injected quick font.\n");
+    pvr_shutdown();
+    return -1;
+  }
 #endif
 
   state->flags.started = 1;
@@ -208,6 +216,10 @@ static void enj_state_shutdown(void) {
   profiler_stop();
   profiler_clean_up();
 #endif
+
+#ifdef ENJ_INJECT_QFONT
+  enj_qfont_shutdown();
+#endif
   pvr_shutdown();
 
 #ifdef ENJ_DBG_PRINT
@@ -247,7 +259,9 @@ static void enj_state_shutdown(void) {
 }
 
 #ifdef __EMSCRIPTEN__
+#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
 static double enj_state_web_next_frame_ms;
+#endif
 
 static void enj_state_web_frame(void *arg) {
 #if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
@@ -288,7 +302,9 @@ void enj_state_run(void) {
   enj_ctrlr_state_t **cstates = enj_ctrl_get_states();
 
 #ifdef __EMSCRIPTEN__
+#if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
   enj_state_web_next_frame_ms = 0.0;
+#endif
   emscripten_set_main_loop_arg(enj_state_web_frame, cstates, 0, 1);
 #else
 #if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0

@@ -6,12 +6,6 @@
 #include <string.h>
 #include <sys/param.h>
 
-// notice KallistiOS runs in little-endian mode
-static const uint32_t DcTx_chksm = (uint32_t)'D' << 0 | (uint32_t)'c' << 8 |
-                                   (uint32_t)'T' << 16 | (uint32_t)'x' << 24;
-static const uint32_t DPAL_chksm = (uint32_t)'D' << 0 | (uint32_t)'P' << 8 |
-                                   (uint32_t)'A' << 16 | (uint32_t)'L' << 24;
-
 typedef struct {
   char fourcc[4];
   uint32_t colors;
@@ -21,48 +15,64 @@ _Static_assert(sizeof(enj_palette_header_t) == 8,
                "DPAL headers are always 8 bytes");
 
 int enj_texture_load_blob(const void *data, enj_texture_info_t *texinfo) {
-  memcpy(&texinfo->hdr, data, sizeof(dt_header_t));
+  if (data == NULL || texinfo == NULL) {
+    return 0;
+  }
 
-  if (*((uint32_t *)&texinfo->hdr.fourcc) != DcTx_chksm) {
+  enj_texture_info_t parsed = {0};
+  memcpy(&parsed.hdr, data, sizeof(dt_header_t));
+
+  if (memcmp(parsed.hdr.fourcc, "DcTx", 4) != 0) {
     ENJ_DEBUG_PRINT("Error: blob is not a valid DcTx texture!\n");
     return 0;
   }
-  size_t tdatasize =
-      texinfo->hdr.chunk_size - ((1 + texinfo->hdr.header_size) << 5);
+  size_t metadata_size = ((size_t)1 + parsed.hdr.header_size) << 5;
+  if (parsed.hdr.chunk_size <= metadata_size) {
+    ENJ_DEBUG_PRINT("Error: DcTx texture has an invalid chunk size!\n");
+    return 0;
+  }
+  size_t tdatasize = parsed.hdr.chunk_size - metadata_size;
 
-  texinfo->flags.compressed = fDtIsCompressed(&texinfo->hdr);
-  texinfo->flags.mipmapped = fDtIsMipmapped(&texinfo->hdr);
-  texinfo->flags.palettised = fDtIsPalettized(&texinfo->hdr);
-  texinfo->flags.num_palette_colors = fDtGetColorsUsed(&texinfo->hdr);
+  parsed.flags.compressed = fDtIsCompressed(&parsed.hdr);
+  parsed.flags.mipmapped = fDtIsMipmapped(&parsed.hdr);
+  parsed.flags.palettised = fDtIsPalettized(&parsed.hdr);
+  parsed.flags.num_palette_colors = fDtGetColorsUsed(&parsed.hdr);
 
-  if (texinfo->flags.palettised) {
-    texinfo->flags.palette_format = texinfo->flags.num_palette_colors == 16
-                                        ? PVR_PAL_ARGB4444
-                                        : PVR_PAL_ARGB8888;
+  if (parsed.flags.palettised) {
+    parsed.flags.palette_format = parsed.flags.num_palette_colors == 16
+                                      ? PVR_PAL_ARGB4444
+                                      : PVR_PAL_ARGB8888;
   } else {
-    texinfo->flags.palette_format = 0;
+    parsed.flags.palette_format = 0;
   }
 
-  texinfo->flags.strided = fDtIsStrided(&texinfo->hdr);
-  texinfo->flags.twiddled = fDtIsTwiddled(&texinfo->hdr);
-  texinfo->width = fDtGetPvrWidth(&texinfo->hdr);
-  texinfo->height = fDtGetPvrHeight(&texinfo->hdr);
+  parsed.flags.strided = fDtIsStrided(&parsed.hdr);
+  parsed.flags.twiddled = fDtIsTwiddled(&parsed.hdr);
+  parsed.width = fDtGetPvrWidth(&parsed.hdr);
+  parsed.height = fDtGetPvrHeight(&parsed.hdr);
 
-  texinfo->pvrformat = texinfo->hdr.pvr_type & 0xFFC00000;
+  parsed.pvrformat = parsed.hdr.pvr_type & 0xFFC00000;
 
-  texinfo->ptr = pvr_mem_malloc(tdatasize);
-  if (texinfo->ptr == NULL) {
+  parsed.ptr = pvr_mem_malloc(tdatasize);
+  if (parsed.ptr == NULL) {
     printf("Error: pvr_mem_malloc failed\n");
     return 0;
   }
-  pvr_txr_load(data + sizeof(dt_header_t), texinfo->ptr, tdatasize);
+  pvr_txr_load((const uint8_t *)data + metadata_size, parsed.ptr,
+               tdatasize);
+  parsed.flags.loaded = 1;
+  *texinfo = parsed;
   return 1;
 }
 
 int enj_texture_load_file(const char *filename, enj_texture_info_t *texinfo) {
+  if (filename == NULL || texinfo == NULL) {
+    return 0;
+  }
   int success = 1;
   void *buffer = NULL;
   FILE *file = NULL;
+  dt_header_t header;
   do {
     file = fopen(filename, "rb");
     if (!file) {
@@ -71,29 +81,35 @@ int enj_texture_load_file(const char *filename, enj_texture_info_t *texinfo) {
       break;
     }
 
-    if (fread(texinfo, sizeof(dt_header_t), 1, file) != 1) {
+    if (fread(&header, sizeof(header), 1, file) != 1) {
       printf("Error reading header from file %s\n", filename);
       success = 0;
       break;
     }
-    if (*((uint32_t *)&texinfo->hdr.fourcc) != DcTx_chksm) {
+    if (memcmp(header.fourcc, "DcTx", 4) != 0) {
       printf("Error: not valid DcTx data in file %s\n", filename);
       success = 0;
       break;
     }
 
-    size_t tdatasize =
-        texinfo->hdr.chunk_size - ((1 + texinfo->hdr.header_size) << 5);
+    size_t metadata_size = ((size_t)1 + header.header_size) << 5;
+    if (header.chunk_size <= metadata_size) {
+      printf("Error: invalid DcTx chunk size in file %s\n", filename);
+      success = 0;
+      break;
+    }
+    size_t tdatasize = header.chunk_size - metadata_size;
 
-    buffer = memalign(32, tdatasize + sizeof(dt_header_t));
+    buffer = memalign(32, header.chunk_size);
     if (!buffer) {
       printf("Error allocating memory for texture data from file %s\n",
              filename);
       success = 0;
       break;
     }
-    memcpy(buffer, texinfo, sizeof(dt_header_t));
-    if (fread(buffer + sizeof(dt_header_t), tdatasize, 1, file) != 1) {
+    memcpy(buffer, &header, sizeof(header));
+    if (fseek(file, (long)metadata_size, SEEK_SET) != 0 ||
+        fread((uint8_t *)buffer + metadata_size, tdatasize, 1, file) != 1) {
       printf("Error reading texture data from file %s\n", filename);
       success = 0;
       break;
@@ -112,10 +128,23 @@ int enj_texture_load_file(const char *filename, enj_texture_info_t *texinfo) {
 
 int enj_texture_load_palette_blob(const void *raw_data, int fmt,
                                   size_t offset) {
+  if (raw_data == NULL) {
+    return 0;
+  }
+  if (fmt != PVR_PAL_ARGB8888 && fmt != PVR_PAL_ARGB4444 &&
+      fmt != PVR_PAL_RGB565 && fmt != PVR_PAL_ARGB1555) {
+    ENJ_DEBUG_PRINT("Error: unsupported palette format\n");
+    return 0;
+  }
   enj_palette_header_t palette_hdr;
   memcpy(&palette_hdr, raw_data, sizeof(palette_hdr));
-  if (*(uint32_t *)palette_hdr.fourcc != DPAL_chksm) {
+  if (memcmp(palette_hdr.fourcc, "DPAL", 4) != 0) {
     printf("Error: not valid DPAL data\n");
+    return 0;
+  }
+  if (palette_hdr.colors == 0 || palette_hdr.colors > 1024 ||
+      offset > 1024 - palette_hdr.colors) {
+    ENJ_DEBUG_PRINT("Error: palette range exceeds PVR palette RAM\n");
     return 0;
   }
 
@@ -148,12 +177,16 @@ int enj_texture_load_palette_blob(const void *raw_data, int fmt,
 }
 
 int enj_texture_bind_palette(enj_texture_info_t *texinfo, size_t palette_offset) {
+  if (texinfo == NULL) {
+    return 0;
+  }
   if (!texinfo->flags.palettised) {
     ENJ_DEBUG_PRINT("Error: texture is not palettised!\n");
     return 0;
   }
-  size_t pal_num = texinfo->flags.palette_format == PVR_PAL_ARGB8888 ? palette_offset >> 8
-                                                                     : palette_offset >> 4;
+  size_t pal_num = texinfo->flags.palette_format == PVR_PAL_ARGB8888
+                       ? palette_offset >> 8
+                       : palette_offset >> 4;
 
   texinfo->pvrformat |=
       (pal_num << (texinfo->flags.palette_format == PVR_PAL_ARGB8888 ? 25 : 21));
@@ -163,6 +196,9 @@ int enj_texture_bind_palette(enj_texture_info_t *texinfo, size_t palette_offset)
 
 int enj_texture_load_palette_file(const char *filename, int fmt,
                                   size_t offset) {
+  if (filename == NULL) {
+    return 0;
+  }
   int success = 1;
   FILE *file = NULL;
   void *raw_data = NULL;
@@ -179,8 +215,15 @@ int enj_texture_load_palette_file(const char *filename, int fmt,
       success = 0;
       break;
     }
-    if (*(uint32_t *)palette_hdr.fourcc != DPAL_chksm) {
+    if (memcmp(palette_hdr.fourcc, "DPAL", 4) != 0) {
       printf("Error: not valid DPAL data in file %s\n", filename);
+      success = 0;
+      break;
+    }
+    if (palette_hdr.colors == 0 || palette_hdr.colors > 1024 ||
+        offset > 1024 - palette_hdr.colors) {
+      printf("Error: palette range exceeds PVR palette RAM in file %s\n",
+             filename);
       success = 0;
       break;
     }
@@ -212,9 +255,13 @@ int enj_texture_load_palette_file(const char *filename, int fmt,
 }
 
 int enj_texture_unload(enj_texture_info_t *texinfo) {
+  if (texinfo == NULL) {
+    return 0;
+  }
   if (texinfo->ptr != NULL) {
     pvr_mem_free(texinfo->ptr);
     texinfo->ptr = NULL;
+    texinfo->flags.loaded = 0;
     return 1;
   }
   return 0;

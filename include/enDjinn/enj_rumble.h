@@ -1,16 +1,27 @@
 #ifndef ENJ_RUMBLE_H
 #define ENJ_RUMBLE_H
 
+#include <enDjinn/enj_api.h>
 #include <enDjinn/enj_ctrl.h>
 
-typedef enum uint8_t {
-  enj_rumble_set = 1,
-  enj_rumble_no_device = 2,
-  enj_rumble_rate_limited = 4,
-  enj_rumble_overwrote_previous = 8,
-  enj_rumble_unspecified_error = 16,
+ENJ_BEGIN_DECLS
+
+typedef enum {
+  ENJ_RUMBLE_SET = 1,
+  ENJ_RUMBLE_NO_DEVICE = 2,
+  ENJ_RUMBLE_RATE_LIMITED = 4,
+  ENJ_RUMBLE_OVERWROTE_PREVIOUS = 8,
+  ENJ_RUMBLE_UNSPECIFIED_ERROR = 16,
+
+  /* Source-compatible aliases for the original pre-convention names. */
+  enj_rumble_set = ENJ_RUMBLE_SET,
+  enj_rumble_no_device = ENJ_RUMBLE_NO_DEVICE,
+  enj_rumble_rate_limited = ENJ_RUMBLE_RATE_LIMITED,
+  enj_rumble_overwrote_previous = ENJ_RUMBLE_OVERWROTE_PREVIOUS,
+  enj_rumble_unspecified_error = ENJ_RUMBLE_UNSPECIFIED_ERROR,
 } enj_rumble_reply_e;
 
+/** Set the minimum number of frames between commands. Negative values become 0. */
 void enj_rumble_rate_limit_set(int frames);
 
 /**
@@ -46,6 +57,8 @@ size_t enj_rumble_states_length(void);
  * @return Array of maple_device_t pointers for each rumble device
  * @note A NULL pointer indicates no rumble device is connected on that port.
  */
-maple_device_t** enj_rumble_states_get(void);
+maple_device_t **enj_rumble_states_get(void);
+
+ENJ_END_DECLS
 
 #endif // ENJ_RUMBLE_H

@@ -7,6 +7,9 @@
 #include <enDjinn/ext/dca_file.h>
 
 sfxhnd_t enj_sound_dca_load_file(const char* filename) {
+  if (filename == NULL) {
+    return SFXHND_INVALID;
+  }
   sfxhnd_t handle = SFXHND_INVALID;
   uint8_t *buffer = NULL;
   FILE* sndfile = fopen(filename, "rb");
@@ -39,8 +42,13 @@ sfxhnd_t enj_sound_dca_load_file(const char* filename) {
   return handle;
 }
 
-sfxhnd_t enj_sound_dca_load_blob(uint8_t* dca_data) {
-  fDcAudioHeader* data = (fDcAudioHeader*)dca_data;
+sfxhnd_t enj_sound_dca_load_blob(const uint8_t *dca_data) {
+  if (dca_data == NULL) {
+    return SFXHND_INVALID;
+  }
+  /* KOS's raw-buffer loader and the DCA accessor predate const-correctness;
+     neither mutates the caller's blob. */
+  fDcAudioHeader *data = (fDcAudioHeader *)(uintptr_t)dca_data;
 
   if (fDaValidateHeader(data)) {
     uint8_t bitsize = (uint8_t[]){16, 8, 4}[fDaGetSampleFormat(data)];

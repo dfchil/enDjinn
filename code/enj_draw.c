@@ -6,27 +6,43 @@ static void **_dr64_1st_half = NULL;
 static void **_dr64_2nd_half = NULL;
 
 void enj_draw_pvr_dr64_reset(void) {
+  if (_dr64_1st_half == NULL || _dr64_2nd_half == NULL) {
+    return;
+  }
   *_dr64_1st_half = pvr_dr_target();
   *_dr64_2nd_half = NULL;
 }
 
 void enj_draw_pvr_dr64_init(void **first_half, void **second_half) {
+  if (first_half == NULL || second_half == NULL) {
+    return;
+  }
   _dr64_1st_half = first_half;
   _dr64_2nd_half = second_half;
   enj_draw_pvr_dr64_reset();
 }
 
 void enj_draw_pvr_dr64_commit_1st(void) {
+  if (_dr64_1st_half == NULL || _dr64_2nd_half == NULL ||
+      *_dr64_1st_half == NULL) {
+    return;
+  }
   pvr_dr_commit(*_dr64_1st_half);
   *_dr64_2nd_half = (void *)(((intptr_t)pvr_dr_target()) - 32);
 }
 
 void enj_draw_pvr_dr64_commit_2nd(void) {
+  if (_dr64_2nd_half == NULL || *_dr64_2nd_half == NULL) {
+    return;
+  }
   pvr_dr_commit((void *)(((intptr_t)(*_dr64_2nd_half)) + 32));
 }
 
 void enj_draw_sprite(float corners[4][3], pvr_sprite_hdr_t *hdr,
                      uint32_t UVs[3]) {
+  if (corners == NULL) {
+    return;
+  }
   // skipping the header is ok if a header was committed outside of this
   // function
   if (hdr != NULL) {

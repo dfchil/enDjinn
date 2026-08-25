@@ -1,9 +1,11 @@
 #ifndef ENJ_BITMAP_H
 #define ENJ_BITMAP_H
 #include <stdint.h>
-
+#include <enDjinn/enj_api.h>
 
 #define ENJ_BITS_PER_BYTE 8
+
+ENJ_BEGIN_DECLS
 
 typedef struct {
   uint32_t start_x : 9;
@@ -48,7 +50,7 @@ void enj_bitmap_set(enj_bitmap_t *bmap, int x, int y);
  * @param y Y coordinate of the pixel to get
  * @return 1 if the pixel is set, 0 if it is clear
  */
-int enj_bitmap_get(enj_bitmap_t* bmap, int x, int y);
+int enj_bitmap_get(const enj_bitmap_t *bmap, int x, int y);
 
 /**
  * Clear a pixel in the bitmap
@@ -78,6 +80,8 @@ void enj_bitmap_reset(enj_bitmap_t *bmap);
  * @param filename Name of the file to save to
  * @param bitmap Pointer to the bitmap
  */
-void enj_bitmap_to_pnm(const char *filename, enj_bitmap_t *bitmap);
+void enj_bitmap_to_pnm(const char *filename, const enj_bitmap_t *bitmap);
+
+ENJ_END_DECLS
 
 #endif // ENJ_BITMAP_H

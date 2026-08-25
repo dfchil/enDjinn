@@ -16,6 +16,10 @@ compile against pc-enDjinn:
 make -C examples ENJ_TARGET=pc-endjinn
 ```
 
+Most examples also build for the browser with
+`ENJ_TARGET=web-endjinn`; browser prerequisites and invocation are covered in
+the [web backend README](../backends/web-endjinn/README.md).
+
 Textures, fonts, PCM sound effects, controllers, and screen-space modifier
 masks work on PC. Rumble and VMU LCD output remain no-ops; see the
 [pc-enDjinn support matrix](../backends/pc-endjinn/SUPPORTED.md) for the exact

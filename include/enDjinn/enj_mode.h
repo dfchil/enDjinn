@@ -1,5 +1,12 @@
-#ifndef ENJ_GAME_MODE_H
-#define ENJ_GAME_MODE_H
+#ifndef ENJ_MODE_H
+#define ENJ_MODE_H
+
+#include <stdint.h>
+#include <enDjinn/enj_api.h>
+
+#define ENJ_MODE_NAME_CAPACITY 32
+
+ENJ_BEGIN_DECLS
 
 typedef struct enj_mode_s {
   void (*mode_updater)(void *data);
@@ -10,25 +17,29 @@ typedef struct enj_mode_s {
     uint8_t no_soft_reset : 1;
 	uint8_t : 7;
   };
-  char name[19];
+  /** Diagnostic name: at most ENJ_MODE_NAME_CAPACITY - 1 visible characters. */
+  char name[ENJ_MODE_NAME_CAPACITY];
 } enj_mode_t;
 
 /**
  * Push a new mode onto the mode stack and make it the current mode
  * @param mode Pointer to the mode to push onto the stack
- * @return 1 on success, 0 on failure (stack overflow)
+ * @return 1 on success, 0 for NULL/invalid modes or stack overflow
  */
 int enj_mode_push(enj_mode_t *mode);
 
 /**
- * Replace the current active mode with the given mode
+ * Replace the current active mode with the given mode.
+ *
+ * The replacement does not call either mode's activation callback. If no mode
+ * has been pushed, or mode is NULL, this function has no effect.
  * @param mode Pointer to the mode to set as current
  */
 void enj_mode_set(enj_mode_t *mode);
 
 /**
  * Get the current active mode
- * @return Pointer to the current mode
+ * @return Pointer to the current mode, or NULL when the stack is empty
  */
 enj_mode_t *enj_mode_get(void);
 
@@ -40,10 +51,13 @@ enj_mode_t *enj_mode_get(void);
 enj_mode_t *enj_mode_get_by_index(int index);
 
 /**
- * Pop the current mode off the mode stack
- * @return Pointer to the popped mode, or NULL if stack underflow
+ * Pop the current mode off the mode stack.
+ *
+ * The base mode at index zero is retained. Revealing a previous mode invokes
+ * that mode's activation callback.
+ * @return Pointer to the popped mode, or NULL when only the base mode remains
  */
-enj_mode_t *enj_mode_pop();
+enj_mode_t *enj_mode_pop(void);
 
 /**
  * Get the current index of the mode stack
@@ -52,8 +66,8 @@ enj_mode_t *enj_mode_pop();
 int enj_mode_get_current_index(void);
 
 /**
- * Set the target index for soft resets
- * @param index Index to set as the soft reset target
+ * Set the target index for soft resets.
+ * @param index Existing stack index, or -1 to disable a fixed target
  */
 void enj_mode_soft_reset_target_set(int index);
 
@@ -64,7 +78,10 @@ void enj_mode_soft_reset_target_set(int index);
 int enj_mode_cut_to_soft_reset_target(void);
 
 /**
- * Goto a specific index in the mode stack, popping modes as necessary
+ * Go to a specific index in the mode stack, discarding higher modes.
+ *
+ * An invalid index has no effect. The target mode's activation callback is
+ * called after the higher modes are removed.
  * @param index Target index to go to
  */
 void enj_mode_goto_index(int index);
@@ -74,4 +91,6 @@ void enj_mode_goto_index(int index);
  */
 void enj_mode_flag_end_current(void);
 
-#endif // ENJ_GAME_MODE_H
+ENJ_END_DECLS
+
+#endif // ENJ_MODE_H

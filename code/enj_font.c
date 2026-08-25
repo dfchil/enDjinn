@@ -27,9 +27,14 @@ void enj_font_letter_spacing_set(uint8_t spacing) {
 }
 
 int enj_font_from_blob(const uint8_t *blob, enj_font_header_t *out_font) {
-  memcpy(out_font, blob, sizeof(enj_font_header_t));
-  int height = 1 << out_font->log2height;
-  int width = 1 << out_font->log2width;
+  if (blob == NULL || out_font == NULL) {
+    return 0;
+  }
+  enj_font_header_t parsed;
+  memcpy(&parsed, blob, sizeof(parsed));
+  parsed.pvr_data = 0;
+  int height = 1 << parsed.log2height;
+  int width = 1 << parsed.log2width;
 
   size_t pvr_mem_size = ((width * height) >> 1);
   pvr_ptr_t pvr_data = pvr_mem_malloc(pvr_mem_size);
@@ -38,16 +43,21 @@ int enj_font_from_blob(const uint8_t *blob, enj_font_header_t *out_font) {
     return 0;
   }
   pvr_txr_load_ex(blob + sizeof(enj_font_header_t), pvr_data,
-                  1 << out_font->log2width, 1 << out_font->log2height,
+                  1 << parsed.log2width, 1 << parsed.log2height,
                   PVR_TXRLOAD_4BPP);
-  out_font->pvr_data = (uint32_t)(uintptr_t)pvr_data;
+  parsed.pvr_data = (uint32_t)(uintptr_t)pvr_data;
+  *out_font = parsed;
 
   return 1;
 }
 
 int enj_font_from_file(const char *path, enj_font_header_t *out_font) {
+  if (path == NULL || out_font == NULL) {
+    return 0;
+  }
   int success = 1;
   FILE *file = NULL;
+  enj_font_header_t header;
   do {
     file = fopen(path, "rb");
     if (!file) {
@@ -56,13 +66,13 @@ int enj_font_from_file(const char *path, enj_font_header_t *out_font) {
       break;
     }
 
-    if (fread(out_font, sizeof(enj_font_header_t), 1, file) != 1) {
+    if (fread(&header, sizeof(header), 1, file) != 1) {
       printf("Error reading font header from file %s\n", path);
       success = 0;
       break;
     }
-    size_t texture_size = (((size_t)1 << out_font->log2width) *
-                           ((size_t)1 << out_font->log2height)) >> 1;
+    size_t texture_size = (((size_t)1 << header.log2width) *
+                           ((size_t)1 << header.log2height)) >> 1;
     size_t blobsize = sizeof(enj_font_header_t) + texture_size;
     uint8_t *font_blob = memalign(32, blobsize);
     if (!font_blob) {
@@ -70,7 +80,7 @@ int enj_font_from_file(const char *path, enj_font_header_t *out_font) {
       success = 0;
       break;
     }
-    memcpy(font_blob, out_font, sizeof(enj_font_header_t));
+    memcpy(font_blob, &header, sizeof(header));
     if (fread(font_blob + sizeof(enj_font_header_t),
               blobsize - sizeof(enj_font_header_t), 1, file) != 1) {
       printf("Error reading font blob from file %s\n", path);
@@ -88,9 +98,21 @@ int enj_font_from_file(const char *path, enj_font_header_t *out_font) {
   return success;
 }
 
+int enj_font_unload(enj_font_header_t *font) {
+  if (font == NULL || font->pvr_data == 0) {
+    return 0;
+  }
+  pvr_mem_free((pvr_ptr_t)(uintptr_t)font->pvr_data);
+  font->pvr_data = 0;
+  return 1;
+}
+
 int enj_font_PAL_TR_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
                            uint8_t palette_entry, enj_color_t front_color,
                            pvr_palfmt_t pal_fmt) {
+  if (font == NULL || hdr == NULL) {
+    return 0;
+  }
   // generate transparent palette
   pvr_set_pal_format(pal_fmt);
   uint32_t palette_offset = palette_entry
@@ -139,6 +161,9 @@ static inline void palette_color_mixer(enj_color_t front_color,
 int enj_font_PAL_OP_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
                            uint8_t palette_entry, enj_color_t front_color,
                            enj_color_t back_color, pvr_palfmt_t pal_fmt) {
+  if (font == NULL || hdr == NULL) {
+    return 0;
+  }
   // generate opaque palette
   palette_color_mixer(front_color, back_color, palette_entry, pal_fmt);
 
@@ -157,6 +182,9 @@ int enj_font_PAL_OP_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
 int enj_font_PAL_PT_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
                            uint8_t palette_entry, enj_color_t front_color,
                            enj_color_t back_color, pvr_palfmt_t pal_fmt) {
+  if (font == NULL || hdr == NULL) {
+    return 0;
+  }
   // generate punchthrough palette
   palette_color_mixer(front_color, back_color, palette_entry, pal_fmt);
   pvr_set_pal_entry(palette_entry << (pal_fmt == PVR_PAL_ARGB8888 ? 8 : 4), 0);
@@ -175,6 +203,9 @@ int enj_font_PAL_PT_header(enj_font_header_t *font, pvr_sprite_hdr_t *hdr,
 
 int enj_font_glyph_uv_coords(enj_font_header_t *font, char glyph, uint32_t *auv,
                              uint32_t *buv, uint32_t *cuv) {
+  if (font == NULL || auv == NULL || buv == NULL || cuv == NULL) {
+    return 0;
+  }
   if (glyph > '~' || glyph < '!') {
     // out of range
     printf("Glyph '%c' out of range for font\n", glyph);
@@ -217,6 +248,9 @@ static inline int enj_font_space_width(enj_font_header_t *font) {
 
 int enj_font_render_glyph(char glyph, enj_font_header_t *font, int16_t x,
                           int16_t y) {
+  if (font == NULL) {
+    return 0;
+  }
   if (glyph < ' ' || glyph > '~') {
     ENJ_DEBUG_PRINT("Glyph '%c' out of range for font\n", glyph);
     return 0;
@@ -246,6 +280,9 @@ int enj_font_render_glyph(char glyph, enj_font_header_t *font, int16_t x,
 }
 
 int enj_font_string_width(const char *text, enj_font_header_t *font) {
+  if (text == NULL || font == NULL) {
+    return 0;
+  }
   int output = 0;
   while (*text != '\0') {
     if (*text < ' ' || *text > '~') {
@@ -273,6 +310,9 @@ int enj_font_string_width(const char *text, enj_font_header_t *font) {
 int enj_font_string_render(const char *text, enj_font_header_t *font,
                            int16_t x, int16_t y,
                            pvr_sprite_hdr_t *sprite_header) {
+  if (text == NULL || font == NULL) {
+    return 0;
+  }
   if (sprite_header != NULL) {
     pvr_sprite_hdr_t *hdr_ptr = (pvr_sprite_hdr_t *)pvr_dr_target();
     *hdr_ptr = *sprite_header;
@@ -302,6 +342,9 @@ pvr_ptr_t enj_font_to_16bit_texture(enj_font_header_t *font, uint8_t *data_4bpp,
                                     pvr_pixel_mode_t mode,
                                     enj_color_t front_color,
                                     enj_color_t back_color) {
+  if (font == NULL || data_4bpp == NULL) {
+    return NULL;
+  }
   if (mode == PVR_PIXEL_MODE_PAL_4BPP || mode == PVR_PIXEL_MODE_PAL_8BPP) {
     ENJ_DEBUG_PRINT("cannot convert to paletted texture\n");
     return NULL;
