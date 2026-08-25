@@ -1598,6 +1598,7 @@ bool draw_frame(const FrameDrawData &frame)
     if (g_device == VK_NULL_HANDLE || (!g_offscreen_capture && g_swapchain == VK_NULL_HANDLE) ||
         g_opaque_pipeline == VK_NULL_HANDLE ||
         g_opaque_no_depth_write_pipeline == VK_NULL_HANDLE ||
+        g_model1_painter_pipeline == VK_NULL_HANDLE ||
         g_punch_through_pipeline == VK_NULL_HANDLE ||
         g_punch_through_no_depth_write_pipeline == VK_NULL_HANDLE ||
         g_translucent_pipeline == VK_NULL_HANDLE ||
@@ -1729,7 +1730,7 @@ bool draw_frame(const FrameDrawData &frame)
                     ? g_modifier_exclude_pipeline : g_modifier_volume_pipeline;
             } else if (batch.modifier) {
                 pipeline = g_modifier_pipeline;
-            } else if (batch.list == PVR_LIST_PT_POLY) {
+            } else if (batch.alpha_cutout || batch.list == PVR_LIST_PT_POLY) {
                 pipeline = batch.depth_write
                     ? g_punch_through_pipeline
                     : g_punch_through_no_depth_write_pipeline;
