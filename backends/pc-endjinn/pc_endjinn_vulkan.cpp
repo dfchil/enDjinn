@@ -1608,6 +1608,16 @@ bool draw_frame(const FrameDrawData &frame)
         set_window_title("pc-enDjinn - draw unavailable");
         return false;
     }
+    /* Palette refreshes and gpu_texture_for() can replace/destroy cached
+     * images.  The preceding frame may still reference those images, so its
+     * fence must be complete before either operation mutates the cache.  Do
+     * not reset the fence until all fallible uploads below have succeeded;
+     * an early return must leave a signalled fence for the next frame. */
+    if (vkWaitForFences(g_device, 1u, &g_in_flight, VK_TRUE, UINT64_MAX) !=
+        VK_SUCCESS) {
+        set_window_title("pc-enDjinn - frame fence wait failed");
+        return false;
+    }
     if (!update_palette_texture()) {
         set_window_title("pc-enDjinn - palette upload failed");
         return false;
@@ -1617,7 +1627,6 @@ bool draw_frame(const FrameDrawData &frame)
             std::fprintf(stderr, "pc-enDjinn: texture decode/upload failed\n");
         }
     }
-    vkWaitForFences(g_device, 1u, &g_in_flight, VK_TRUE, UINT64_MAX);
     vkResetFences(g_device, 1u, &g_in_flight);
 
     uint32_t image_index = 0u;
