@@ -1586,8 +1586,13 @@ FrameDrawData build_frame_draw_data()
     append_list(PVR_LIST_TR_MOD, false, true, false);
     append_list(PVR_LIST_OP_POLY, false, false, false);
     /* Model-1 world faces are painted after ordinary opaque world geometry
-     * but before punch-through/translucent presentation overlays (HUD/text). */
-    append_list(PVR_LIST_OP_POLY, true, false, true);
+     * but before punch-through/translucent presentation overlays (HUD/text).
+     * Their submission order is the arcade painter order retained by the
+     * caller.  Re-sorting individual triangles by average Z here breaks that
+     * order (and makes animated coplanar scenery such as the cloth START
+     * banner flicker as its per-triangle averages cross), so preserve it
+     * byte-for-byte. */
+    append_list(PVR_LIST_OP_POLY, false, false, true);
     append_list(PVR_LIST_PT_POLY, false, false, false);
     append_list(PVR_LIST_TR_POLY, g_translucent_autosort, false, false);
     return frame;
