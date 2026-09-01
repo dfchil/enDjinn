@@ -30,8 +30,10 @@ struct QueuedPrimitive {
   uint32_t texture_width;
   uint32_t texture_height;
   pvr_filter_mode_t texture_filter;
+  bool modifier_receiver;
   bool modifier;
   bool modifier_volume;
+  bool modifier_volume_last;
   uint32_t modifier_mode;
 };
 

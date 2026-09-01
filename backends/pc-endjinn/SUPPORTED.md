@@ -32,7 +32,8 @@ the selected backend owns SDL, Vulkan, and host input details.
 - opaque (`PVR_LIST_OP_POLY`) depth-tested, depth-writing draws
 - punch-through (`PVR_LIST_PT_POLY`) depth-writing draws with alpha cutoff
 - translucent (`PVR_LIST_TR_POLY`) alpha blending without depth writes
-- stable back-to-front translucent sorting when PVR autosort is enabled
+- overlap-aware back-to-front translucent sorting when PVR autosort is enabled,
+  with stable average-depth fallback for intersecting or cyclic geometry
 - submission-order translucent drawing when PVR autosort is disabled
 - OP, PT, then TR Vulkan draw ordering
 - caller-owned projected depth, including Dream Driving's road-only decal bias
@@ -42,20 +43,33 @@ the selected backend owns SDL, Vulkan, and host input details.
 - live ARGB1555, RGB565, ARGB4444, and ARGB8888 palette updates
 - nearest and bilinear filtering, texture alpha blending, and punch-through
 - 32-bit VRAM-style texture handles matching KOS pointer storage
-- modifier-volume headers and 64-byte packets via a Vulkan stencil mask
+- modifier-volume headers and 64-byte packets via opaque Vulkan stencil and
+  transparent per-fragment event evaluation
 - modifier polygon outside/inside colors, UVs, and second texture state
 
 ## Modifier-Volume Semantics
 
-`PVR_MODIFIER_INCLUDE_LAST_POLY` and `PVR_MODIFIER_EXCLUDE_LAST_POLY` map to
-a screen-space Vulkan stencil mask. This covers the ordinary modifier-mask use
-case and applies the modifier polygon's inside color, UVs, and optional second
-texture within the mask.
+Opaque modifier volumes use a depth-aware two-bit Vulkan stencil state machine.
+Closed volumes accumulate triangle crossings with XOR/parity, open or planar
+volumes can accumulate coverage with OR, and the final polygon folds that
+volume into the area result using inclusion or exclusion semantics. The
+modifier polygon's inside color, UVs, and optional second texture are then
+drawn only at the visible receiver depth.
 
-Closed 3D PVR shadow volumes built from `PVR_MODIFIER_OTHER_POLY` sequences do
-not yet use PVR's depth-aware stencil winding; they currently act as inclusion
-masks. Add that winding path only for a project that depends on shadow-volume
-semantics.
+Translucent modifier triangles are retained in submission order in a
+host-visible GPU storage buffer. Each modifier-enabled translucent fragment
+evaluates triangle coverage and interpolated inverse depth, reconstructs the
+current volume with XOR or OR, and folds completed volumes into its area result
+with inclusion or exclusion. Area 0 and area 1 are separate draws with
+complementary fragment rejection, so exactly one is blended at each fragment;
+overlapping translucent layers can therefore receive different classifications
+at the same pixel. The event buffer accepts up to 65,536 modifier triangles and
+rejects an overflowing frame explicitly rather than silently dropping events.
+
+This makes modifier classification depth-accurate for the backend's existing
+translucent draw order. The overlap-aware dependency sort resolves a global
+far-to-near order where one exists and falls back deterministically for
+intersecting or cyclic geometry; it is still not tile-accurate.
 
 This is a supported packet subset, not an arbitrary raw PVR command decoder.
 Only the render state listed here is decoded from compiled headers.
@@ -86,6 +100,6 @@ that a Dreamcast controller would report.
 
 - PVR culling modes and complete depth, blend, fog, and material-state decoding
 - PVR bump-map lighting semantics
-- tile-accurate Dreamcast translucent sorting
+- tile-accurate Dreamcast translucent sorting for intersecting/cyclic geometry
 - configurable controller mappings and VMU LCD output
 - arbitrary PVR packet streams outside the documented colored geometry subset

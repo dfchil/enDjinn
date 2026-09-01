@@ -30,8 +30,100 @@ int main() {
 
   const auto &submitted = pc_endjinn_pvr::primitives();
   assert(submitted.size() == 2u);
+  assert(!submitted[0].modifier_receiver && !submitted[1].modifier_receiver);
   assert(submitted[0].x[2] == 30.0f && submitted[0].y[2] == 20.0f);
   assert(submitted[1].x[2] == 30.0f && submitted[1].y[2] == 28.0f);
+
+  pc_endjinn_pvr::scene_begin();
+  pc_endjinn_pvr::list_begin(PVR_LIST_OP_MOD);
+  const auto submit_modifier = [](uint32_t mode, float z) {
+    auto *modifier_header =
+        static_cast<pvr_mod_hdr_t *>(pc_endjinn_pvr::dr_target());
+    pvr_mod_compile(modifier_header, PVR_LIST_OP_MOD, mode,
+                    PVR_CULLING_NONE);
+    pc_endjinn_pvr::dr_commit(modifier_header);
+
+    auto *first =
+        static_cast<pvr_modifier_vol_t *>(pc_endjinn_pvr::dr_target());
+    first->flags = PVR_CMD_VERTEX_EOL;
+    first->ax = 10.0f;
+    first->ay = 10.0f;
+    first->az = z;
+    first->bx = 20.0f;
+    first->by = 10.0f;
+    first->bz = z;
+    first->cx = 10.0f;
+    pc_endjinn_pvr::dr_commit(first);
+    auto *tail = static_cast<float *>(pc_endjinn_pvr::dr_target());
+    tail[0] = 20.0f;
+    tail[1] = z;
+    pc_endjinn_pvr::dr_commit(tail);
+  };
+  submit_modifier(PVR_MODIFIER_OTHER_POLY, 0.75f);
+  submit_modifier(PVR_MODIFIER_INCLUDE_LAST_POLY, 0.25f);
+  const auto &modifiers = pc_endjinn_pvr::primitives();
+  assert(modifiers.size() == 2u);
+  assert(!modifiers[0].modifier_receiver && modifiers[0].modifier_volume &&
+         !modifiers[0].modifier_volume_last &&
+         modifiers[0].modifier_mode == PVR_MODIFIER_OTHER_POLY);
+  assert(modifiers[1].modifier_volume &&
+         modifiers[1].modifier_volume_last &&
+         modifiers[1].modifier_mode == PVR_MODIFIER_INCLUDE_LAST_POLY);
+
+  pc_endjinn_pvr::scene_begin();
+  pc_endjinn_pvr::list_begin(PVR_LIST_TR_POLY);
+  pvr_poly_cxt_col_mod(&context, PVR_LIST_TR_POLY);
+  auto *modifier_receiver_header =
+      static_cast<pvr_poly_mod_hdr_t *>(pc_endjinn_pvr::dr_target());
+  pvr_poly_mod_compile(modifier_receiver_header, &context);
+  pc_endjinn_pvr::dr_commit(modifier_receiver_header);
+  for (int i = 0; i < 3; i++) {
+    auto *receiver =
+        static_cast<pvr_vertex_pcm_t *>(pc_endjinn_pvr::dr_target());
+    receiver->flags = i == 2 ? PVR_CMD_VERTEX_EOL : PVR_CMD_VERTEX;
+    receiver->x = 10.0f + static_cast<float>(i * 10);
+    receiver->y = 20.0f + static_cast<float>((i & 1) * 10);
+    receiver->z = 0.4f;
+    receiver->argb0 = 0x80ff0000u;
+    receiver->argb1 = 0x8000ff00u;
+    pc_endjinn_pvr::dr_commit(receiver);
+  }
+  const auto &receiver_areas = pc_endjinn_pvr::primitives();
+  assert(receiver_areas.size() == 2u);
+  assert(receiver_areas[0].modifier_receiver && !receiver_areas[0].modifier);
+  assert(receiver_areas[1].modifier_receiver && receiver_areas[1].modifier);
+
+  /* The raw PVR combination used for an open OR volume has a non-zero
+   * modifier instruction without the volume-last flag. */
+  pc_endjinn_pvr::scene_begin();
+  pc_endjinn_pvr::list_begin(PVR_LIST_OP_MOD);
+  auto *open_header =
+      static_cast<pvr_mod_hdr_t *>(pc_endjinn_pvr::dr_target());
+  pvr_mod_compile(open_header, PVR_LIST_OP_MOD, PVR_MODIFIER_OTHER_POLY,
+                  PVR_CULLING_NONE);
+  open_header->oargb = PVR_MODIFIER_INCLUDE_LAST_POLY;
+  pc_endjinn_pvr::dr_commit(open_header);
+  auto *open_first =
+      static_cast<pvr_modifier_vol_t *>(pc_endjinn_pvr::dr_target());
+  open_first->flags = PVR_CMD_VERTEX_EOL;
+  open_first->ax = 10.0f;
+  open_first->ay = 10.0f;
+  open_first->az = 0.75f;
+  open_first->bx = 20.0f;
+  open_first->by = 10.0f;
+  open_first->bz = 0.75f;
+  open_first->cx = 10.0f;
+  pc_endjinn_pvr::dr_commit(open_first);
+  auto *open_tail = static_cast<float *>(pc_endjinn_pvr::dr_target());
+  open_tail[0] = 20.0f;
+  open_tail[1] = 0.75f;
+  pc_endjinn_pvr::dr_commit(open_tail);
+  const auto &open_modifiers = pc_endjinn_pvr::primitives();
+  assert(open_modifiers.size() == 1u);
+  assert(open_modifiers[0].modifier_volume &&
+         !open_modifiers[0].modifier_volume_last &&
+         open_modifiers[0].modifier_mode ==
+             PVR_MODIFIER_INCLUDE_LAST_POLY);
 
   const uint16_t argb1555[] = {0xffffu, 0x8000u, 0x7fffu, 0x0000u};
   pvr_ptr_t texture = pc_endjinn_pvr::texture_alloc(sizeof(argb1555));

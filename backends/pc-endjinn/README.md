@@ -67,6 +67,8 @@ Projects with host-side library dependencies can add their include paths to
 - `enj_platform_pc_endjinn.cpp`: thin KOS symbol adapter used by enDjinn.
 - `pc_endjinn_pvr.cpp`: PVR direct-render packet decoding, render lists, and
   renderer-neutral primitive queues.
+- `pc_endjinn_translucent_sort.cpp`: overlap-aware translucent dependency
+  ordering and its diagnostic counters.
 - `pc_endjinn_vulkan.cpp`: SDL window management, Vulkan resources, pipelines,
   frame construction, and presentation.
 - `pc_endjinn_input.cpp`: SDL implementations of Maple controllers, controller
@@ -94,6 +96,18 @@ does not acquire a drawable or present a frame, and creates the required SDL
 Vulkan surface window hidden, avoiding macOS GUI-session blocking or a visible
 test window while an explicit `ENJ_SCREENSHOT_PATH` readback is requested.  It
 is not a separate renderer and is not enabled for normal interactive runs.
+
+Set `ENJ_TRANSLUCENT_SORT_DIAGNOSTICS=1` to print the translucent primitive,
+modifier-triangle, dependency, unordered-pair, cycle-break, and bounded
+average-depth-fallback counters every 60 frames. The modifier-volume regression
+uses the same offscreen renderer and can be run from the repository root with:
+
+```sh
+make -C tests modifier-volume-visual
+```
+
+The ordinary `make -C tests check` target includes the renderer-independent
+translucent ordering unit tests; it does not require Vulkan.
 
 Dreamcast builds resolve normal KOS includes to the real toolchain headers.
 PC builds prepend `backends/pc-endjinn/include`, resolving those same includes

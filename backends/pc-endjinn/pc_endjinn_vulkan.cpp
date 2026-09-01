@@ -1,12 +1,14 @@
 #include <kos.h>
 
 #include "pc_endjinn_pvr.h"
+#include "pc_endjinn_translucent_sort.h"
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -56,9 +58,16 @@ VkPipeline g_model1_painter_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_no_depth_write_pipeline = VK_NULL_HANDLE;
 VkPipeline g_translucent_pipeline = VK_NULL_HANDLE;
-VkPipeline g_modifier_volume_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_translucent_depth_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_xor_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_or_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_include_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_exclude_pipeline = VK_NULL_HANDLE;
-VkPipeline g_modifier_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_clear_current_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_opaque_receiver_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_legacy_include_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_legacy_exclude_pipeline = VK_NULL_HANDLE;
+VkPipeline g_modifier_translucent_receiver_pipeline = VK_NULL_HANDLE;
 VkDescriptorSetLayout g_texture_set_layout = VK_NULL_HANDLE;
 VkDescriptorPool g_descriptor_pool = VK_NULL_HANDLE;
 VkCommandPool g_command_pool = VK_NULL_HANDLE;
@@ -69,6 +78,9 @@ VkFence g_in_flight = VK_NULL_HANDLE;
 VkBuffer g_vertex_buffer = VK_NULL_HANDLE;
 VkDeviceMemory g_vertex_memory = VK_NULL_HANDLE;
 size_t g_vertex_capacity = 0u;
+VkBuffer g_translucent_modifier_buffer = VK_NULL_HANDLE;
+VkDeviceMemory g_translucent_modifier_memory = VK_NULL_HANDLE;
+constexpr uint32_t kMaxTranslucentModifierTriangles = 65536u;
 uint64_t g_presented_frames = 0u;
 bool g_translucent_autosort = true;
 bool g_fsaa_enabled = false;
@@ -94,7 +106,19 @@ struct TexturePush {
     uint32_t palette_base;
     uint32_t filter_mode;
     uint32_t unused;
+    uint32_t modifier_count;
+    uint32_t modifier_area;
+    uint32_t reserved0;
+    uint32_t reserved1;
 };
+
+struct alignas(16) GpuModifierTriangle {
+    float a[4];
+    float b[4];
+    float c[4];
+    uint32_t state[4];
+};
+static_assert(sizeof(GpuModifierTriangle) == 64u);
 
 struct DrawBatch {
     pvr_list_t list;
@@ -108,8 +132,10 @@ struct DrawBatch {
     uint32_t texture_height;
     pvr_filter_mode_t texture_filter;
     uint32_t palette_base;
+    bool modifier_receiver;
     bool modifier;
     bool modifier_volume;
+    bool modifier_volume_last;
     uint32_t modifier_mode;
     bool alpha_cutout;
     bool model1_painter;
@@ -118,6 +144,8 @@ struct DrawBatch {
 struct FrameDrawData {
     std::vector<PcVertex> vertices;
     std::vector<DrawBatch> batches;
+    std::vector<GpuModifierTriangle> translucent_modifiers;
+    pc_endjinn_translucent_sort::Diagnostics translucent_sort;
 };
 
 struct GpuImage {
@@ -396,6 +424,42 @@ bool create_readback_buffer(VkDeviceSize size, VkBuffer &buffer,
     return true;
 }
 
+bool create_translucent_modifier_buffer()
+{
+    const VkDeviceSize size = static_cast<VkDeviceSize>(
+        kMaxTranslucentModifierTriangles) * sizeof(GpuModifierTriangle);
+    VkBufferCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = size;
+    info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(g_device, &info, nullptr,
+                       &g_translucent_modifier_buffer) != VK_SUCCESS) {
+        return false;
+    }
+    VkMemoryRequirements req{};
+    vkGetBufferMemoryRequirements(g_device, g_translucent_modifier_buffer, &req);
+    VkMemoryAllocateInfo alloc{};
+    alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc.allocationSize = req.size;
+    alloc.memoryTypeIndex = find_memory_type(
+        req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (vkAllocateMemory(g_device, &alloc, nullptr,
+                         &g_translucent_modifier_memory) != VK_SUCCESS ||
+        vkBindBufferMemory(g_device, g_translucent_modifier_buffer,
+                           g_translucent_modifier_memory, 0u) != VK_SUCCESS) {
+        if (g_translucent_modifier_memory != VK_NULL_HANDLE) {
+            vkFreeMemory(g_device, g_translucent_modifier_memory, nullptr);
+            g_translucent_modifier_memory = VK_NULL_HANDLE;
+        }
+        vkDestroyBuffer(g_device, g_translucent_modifier_buffer, nullptr);
+        g_translucent_modifier_buffer = VK_NULL_HANDLE;
+        return false;
+    }
+    return true;
+}
+
 const char *screenshot_requested_path()
 {
     if (!g_screenshot_checked) {
@@ -633,7 +697,7 @@ void write_texture_descriptor(const GpuTexture &texture)
         {index.sampler, index.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
         {g_palette_texture.sampler, g_palette_texture.view,
          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}};
-    VkWriteDescriptorSet writes[3]{};
+    VkWriteDescriptorSet writes[4]{};
     for (uint32_t i = 0u; i < 3u; i++) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet = texture.descriptor;
@@ -642,7 +706,15 @@ void write_texture_descriptor(const GpuTexture &texture)
         writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         writes[i].pImageInfo = &images[i];
     }
-    vkUpdateDescriptorSets(g_device, 3u, writes, 0u, nullptr);
+    VkDescriptorBufferInfo modifier_buffer{
+        g_translucent_modifier_buffer, 0u, VK_WHOLE_SIZE};
+    writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[3].dstSet = texture.descriptor;
+    writes[3].dstBinding = 3u;
+    writes[3].descriptorCount = 1u;
+    writes[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    writes[3].pBufferInfo = &modifier_buffer;
+    vkUpdateDescriptorSets(g_device, 4u, writes, 0u, nullptr);
 }
 
 bool allocate_texture_descriptor(GpuTexture &texture)
@@ -781,6 +853,14 @@ GpuTexture *gpu_texture_for(const DrawBatch &batch)
 void destroy_frame_resources()
 {
     destroy_texture_resources();
+    if (g_translucent_modifier_buffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(g_device, g_translucent_modifier_buffer, nullptr);
+        g_translucent_modifier_buffer = VK_NULL_HANDLE;
+    }
+    if (g_translucent_modifier_memory != VK_NULL_HANDLE) {
+        vkFreeMemory(g_device, g_translucent_modifier_memory, nullptr);
+        g_translucent_modifier_memory = VK_NULL_HANDLE;
+    }
     if (g_vertex_buffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(g_device, g_vertex_buffer, nullptr);
         g_vertex_buffer = VK_NULL_HANDLE;
@@ -839,18 +919,22 @@ void destroy_frame_resources()
         vkDestroyPipeline(g_device, g_translucent_pipeline, nullptr);
         g_translucent_pipeline = VK_NULL_HANDLE;
     }
-    if (g_modifier_volume_pipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(g_device, g_modifier_volume_pipeline, nullptr);
-        g_modifier_volume_pipeline = VK_NULL_HANDLE;
-    }
-    if (g_modifier_exclude_pipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(g_device, g_modifier_exclude_pipeline, nullptr);
-        g_modifier_exclude_pipeline = VK_NULL_HANDLE;
-    }
-    if (g_modifier_pipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(g_device, g_modifier_pipeline, nullptr);
-        g_modifier_pipeline = VK_NULL_HANDLE;
-    }
+    const auto destroy_pipeline = [](VkPipeline &pipeline) {
+        if (pipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(g_device, pipeline, nullptr);
+            pipeline = VK_NULL_HANDLE;
+        }
+    };
+    destroy_pipeline(g_modifier_xor_pipeline);
+    destroy_pipeline(g_modifier_or_pipeline);
+    destroy_pipeline(g_modifier_include_pipeline);
+    destroy_pipeline(g_modifier_exclude_pipeline);
+    destroy_pipeline(g_modifier_clear_current_pipeline);
+    destroy_pipeline(g_modifier_opaque_receiver_pipeline);
+    destroy_pipeline(g_modifier_translucent_depth_pipeline);
+    destroy_pipeline(g_modifier_legacy_include_pipeline);
+    destroy_pipeline(g_modifier_legacy_exclude_pipeline);
+    destroy_pipeline(g_modifier_translucent_receiver_pipeline);
     if (g_pipeline_layout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(g_device, g_pipeline_layout, nullptr);
         g_pipeline_layout = VK_NULL_HANDLE;
@@ -1175,11 +1259,14 @@ bool create_render_pipeline()
 
     std::vector<char> vert = read_shader_file("flat.vert.spv");
     std::vector<char> frag = read_shader_file("flat.frag.spv");
+    std::vector<char> modifier_frag = read_shader_file("flat_modifier.frag.spv");
     std::vector<char> punch_frag = read_shader_file("flat_punch.frag.spv");
     VkShaderModule vert_module = create_shader_module(vert);
     VkShaderModule frag_module = create_shader_module(frag);
+    VkShaderModule modifier_frag_module = create_shader_module(modifier_frag);
     VkShaderModule punch_frag_module = create_shader_module(punch_frag);
     if (vert_module == VK_NULL_HANDLE || frag_module == VK_NULL_HANDLE ||
+        modifier_frag_module == VK_NULL_HANDLE ||
         punch_frag_module == VK_NULL_HANDLE) {
         std::fprintf(stderr, "pc-enDjinn: missing pc-endjinn flat shaders\n");
         return false;
@@ -1247,29 +1334,35 @@ bool create_render_pipeline()
     blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     blend.attachmentCount = 1u;
     blend.pAttachments = &blend_att;
-    VkDescriptorSetLayoutBinding texture_bindings[3]{};
+    VkDescriptorSetLayoutBinding texture_bindings[4]{};
     for (uint32_t i = 0u; i < 3u; i++) {
         texture_bindings[i].binding = i;
         texture_bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         texture_bindings[i].descriptorCount = 1u;
         texture_bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     }
+    texture_bindings[3].binding = 3u;
+    texture_bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    texture_bindings[3].descriptorCount = 1u;
+    texture_bindings[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     VkDescriptorSetLayoutCreateInfo set_layout{};
     set_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    set_layout.bindingCount = 3u;
+    set_layout.bindingCount = 4u;
     set_layout.pBindings = texture_bindings;
     if (vkCreateDescriptorSetLayout(g_device, &set_layout, nullptr,
                                     &g_texture_set_layout) != VK_SUCCESS) {
         return false;
     }
-    VkDescriptorPoolSize pool_size{};
-    pool_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    pool_size.descriptorCount = 3072u;
+    VkDescriptorPoolSize pool_sizes[2]{};
+    pool_sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    pool_sizes[0].descriptorCount = 3072u;
+    pool_sizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    pool_sizes[1].descriptorCount = 1024u;
     VkDescriptorPoolCreateInfo pool{};
     pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool.maxSets = 1024u;
-    pool.poolSizeCount = 1u;
-    pool.pPoolSizes = &pool_size;
+    pool.poolSizeCount = 2u;
+    pool.pPoolSizes = pool_sizes;
     if (vkCreateDescriptorPool(g_device, &pool, nullptr, &g_descriptor_pool) != VK_SUCCESS) {
         return false;
     }
@@ -1335,37 +1428,126 @@ bool create_render_pipeline()
     ok = ok && vkCreateGraphicsPipelines(
         g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_translucent_pipeline) == VK_SUCCESS;
 
-    depth_state.depthTestEnable = VK_FALSE;
+    /* Transparent modifier receivers evaluate the submitted volume events
+     * at each fragment's own PVR depth, then discard the unselected area. */
+    stages[1].module = modifier_frag_module;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_translucent_depth_pipeline) == VK_SUCCESS;
+    stages[1].module = frag_module;
+
+    /* Opaque modifier volumes use two stencil bits, matching the PVR's
+     * per-pixel state machine: bit 1 is the current volume result and bit 0
+     * is the accumulated area-1 result. */
+    depth_state.depthTestEnable = VK_TRUE;
     depth_state.depthWriteEnable = VK_FALSE;
+    depth_state.depthCompareOp = VK_COMPARE_OP_GREATER;
     depth_state.stencilTestEnable = VK_TRUE;
+    depth_state.front.failOp = VK_STENCIL_OP_KEEP;
+    depth_state.front.passOp = VK_STENCIL_OP_INVERT;
+    depth_state.front.depthFailOp = VK_STENCIL_OP_KEEP;
     depth_state.front.compareOp = VK_COMPARE_OP_ALWAYS;
-    depth_state.front.passOp = VK_STENCIL_OP_REPLACE;
-    depth_state.front.reference = 1u;
-    depth_state.front.compareMask = 0xffu;
-    depth_state.front.writeMask = 0xffu;
+    depth_state.front.compareMask = 0x02u;
+    depth_state.front.writeMask = 0x02u;
+    depth_state.front.reference = 0u;
     depth_state.back = depth_state.front;
     blend_att.colorWriteMask = 0u;
     blend_att.blendEnable = VK_FALSE;
     ok = ok && vkCreateGraphicsPipelines(
-        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_modifier_volume_pipeline) == VK_SUCCESS;
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_xor_pipeline) == VK_SUCCESS;
+
+    depth_state.front.passOp = VK_STENCIL_OP_REPLACE;
+    depth_state.front.reference = 0x02u;
+    depth_state.back = depth_state.front;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_or_pipeline) == VK_SUCCESS;
+
+    /* Inclusion computes summary |= current. The reference value selects
+     * current (bit 1) and writes one to summary (bit 0). */
+    depth_state.depthTestEnable = VK_FALSE;
+    depth_state.front.compareOp = VK_COMPARE_OP_EQUAL;
+    depth_state.front.compareMask = 0x02u;
+    depth_state.front.writeMask = 0x01u;
+    depth_state.front.reference = 0x03u;
+    depth_state.front.passOp = VK_STENCIL_OP_REPLACE;
+    depth_state.back = depth_state.front;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_include_pipeline) == VK_SUCCESS;
+
+    /* Exclusion computes summary &= !current. */
+    depth_state.front.reference = 0x02u;
+    depth_state.front.passOp = VK_STENCIL_OP_ZERO;
+    depth_state.back = depth_state.front;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_exclude_pipeline) == VK_SUCCESS;
+
+    depth_state.front.compareOp = VK_COMPARE_OP_ALWAYS;
+    depth_state.front.compareMask = 0x02u;
+    depth_state.front.writeMask = 0x02u;
+    depth_state.front.reference = 0u;
+    depth_state.front.passOp = VK_STENCIL_OP_ZERO;
+    depth_state.back = depth_state.front;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_clear_current_pipeline) == VK_SUCCESS;
+
+    /* Re-shade only the visible area-1 fragments of opaque receivers. */
+    depth_state.depthTestEnable = VK_TRUE;
+    depth_state.depthCompareOp = VK_COMPARE_OP_EQUAL;
+    depth_state.front.compareOp = VK_COMPARE_OP_EQUAL;
+    depth_state.front.compareMask = 0x01u;
+    depth_state.front.writeMask = 0u;
+    depth_state.front.reference = 0x01u;
+    depth_state.front.passOp = VK_STENCIL_OP_KEEP;
+    depth_state.back = depth_state.front;
+    blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blend_att.blendEnable = VK_FALSE;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_opaque_receiver_pipeline) == VK_SUCCESS;
+
+    /* Keep the old screen-space mask on a separate bit for translucent
+     * receivers, whose per-layer classification needs a future event path. */
+    depth_state.depthTestEnable = VK_FALSE;
+    depth_state.front.compareOp = VK_COMPARE_OP_ALWAYS;
+    depth_state.front.compareMask = 0x04u;
+    depth_state.front.writeMask = 0x04u;
+    depth_state.front.reference = 0x04u;
+    depth_state.front.passOp = VK_STENCIL_OP_REPLACE;
+    depth_state.back = depth_state.front;
+    blend_att.colorWriteMask = 0u;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_legacy_include_pipeline) == VK_SUCCESS;
 
     depth_state.front.passOp = VK_STENCIL_OP_ZERO;
     depth_state.back = depth_state.front;
     ok = ok && vkCreateGraphicsPipelines(
-        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_modifier_exclude_pipeline) == VK_SUCCESS;
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_legacy_exclude_pipeline) == VK_SUCCESS;
 
+    depth_state.depthTestEnable = VK_TRUE;
+    depth_state.depthCompareOp = VK_COMPARE_OP_GREATER;
     depth_state.front.compareOp = VK_COMPARE_OP_EQUAL;
+    depth_state.front.compareMask = 0x04u;
+    depth_state.front.writeMask = 0u;
+    depth_state.front.reference = 0x04u;
     depth_state.front.passOp = VK_STENCIL_OP_KEEP;
     depth_state.back = depth_state.front;
     blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     blend_att.blendEnable = VK_TRUE;
-    blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     ok = ok && vkCreateGraphicsPipelines(
-        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_modifier_pipeline) == VK_SUCCESS;
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_modifier_translucent_receiver_pipeline) == VK_SUCCESS;
 
     vkDestroyShaderModule(g_device, punch_frag_module, nullptr);
+    vkDestroyShaderModule(g_device, modifier_frag_module, nullptr);
     vkDestroyShaderModule(g_device, frag_module, nullptr);
     vkDestroyShaderModule(g_device, vert_module, nullptr);
     return ok;
@@ -1376,7 +1558,8 @@ bool create_draw_resources()
     g_offscreen_capture = offscreen_capture_requested();
     if ((!g_offscreen_capture && !create_swapchain()) ||
         (g_offscreen_capture && !create_offscreen_color_resources()) ||
-        !create_depth_resources() || !create_render_pipeline()) {
+        !create_depth_resources() || !create_render_pipeline() ||
+        !create_translucent_modifier_buffer()) {
         return false;
     }
     VkCommandPoolCreateInfo pool{};
@@ -1442,6 +1625,31 @@ bool ensure_vertex_buffer(size_t vertex_count)
     return true;
 }
 
+bool upload_translucent_modifiers(
+    const std::vector<GpuModifierTriangle> &modifiers)
+{
+    if (modifiers.size() > kMaxTranslucentModifierTriangles) {
+        std::fprintf(stderr,
+                     "pc-enDjinn: translucent modifier triangle overflow "
+                     "(%zu > %u); frame rejected\n",
+                     modifiers.size(), kMaxTranslucentModifierTriangles);
+        return false;
+    }
+    if (modifiers.empty()) {
+        return true;
+    }
+    const VkDeviceSize bytes = static_cast<VkDeviceSize>(modifiers.size()) *
+        sizeof(GpuModifierTriangle);
+    void *mapped = nullptr;
+    if (vkMapMemory(g_device, g_translucent_modifier_memory, 0u, bytes, 0u,
+                    &mapped) != VK_SUCCESS) {
+        return false;
+    }
+    std::memcpy(mapped, modifiers.data(), static_cast<size_t>(bytes));
+    vkUnmapMemory(g_device, g_translucent_modifier_memory);
+    return true;
+}
+
 PcVertex make_vertex(float x, float y, float z, uint32_t argb, float u, float v)
 {
     const float half_w = (float)g_vid_mode.width * (g_fsaa_enabled ? 1.0f : 0.5f);
@@ -1503,40 +1711,57 @@ void emit_primitive(std::vector<PcVertex> &out, const QueuedPrimitive &p)
     }
 }
 
-float primitive_average_z(const QueuedPrimitive &primitive)
-{
-    float z = 0.0f;
-    for (uint32_t i = 0u; i < primitive.count; i++) {
-        z += primitive.z[i];
-    }
-    return primitive.count > 0u ? z / static_cast<float>(primitive.count) : 0.0f;
-}
-
 FrameDrawData build_frame_draw_data()
 {
     const std::vector<QueuedPrimitive> &queued = pc_endjinn_pvr::primitives();
     FrameDrawData frame;
     frame.vertices.reserve(queued.size() * 6u);
+    frame.translucent_modifiers.reserve(queued.size());
+
+    for (const QueuedPrimitive &primitive : queued) {
+        if (primitive.list != PVR_LIST_TR_MOD || !primitive.modifier_volume ||
+            primitive.count != 3u || triangle_is_culled(primitive, 0u, 1u, 2u)) {
+            continue;
+        }
+        const PcVertex a = make_vertex(primitive.x[0], primitive.y[0],
+                                       primitive.z[0], 0u, 0.0f, 0.0f);
+        const PcVertex b = make_vertex(primitive.x[1], primitive.y[1],
+                                       primitive.z[1], 0u, 0.0f, 0.0f);
+        const PcVertex c = make_vertex(primitive.x[2], primitive.y[2],
+                                       primitive.z[2], 0u, 0.0f, 0.0f);
+        GpuModifierTriangle event{};
+        std::memcpy(event.a, a.position, sizeof(a.position));
+        std::memcpy(event.b, b.position, sizeof(b.position));
+        std::memcpy(event.c, c.position, sizeof(c.position));
+        event.state[0] = primitive.modifier_volume_last ? 1u : 0u;
+        event.state[1] = !primitive.modifier_volume_last &&
+                primitive.modifier_mode != PVR_MODIFIER_OTHER_POLY
+            ? 1u
+            : 0u;
+        event.state[2] = primitive.modifier_mode;
+        frame.translucent_modifiers.push_back(event);
+    }
 
     const auto append_list = [&](pvr_list_t list, bool sort_back_to_front,
-                                 bool modifier_volume, bool model1_painter) {
+                                 bool modifier_volume, bool model1_painter,
+                                 int modifier_filter) {
         std::vector<const QueuedPrimitive *> primitives;
         primitives.reserve(queued.size());
         for (const QueuedPrimitive &primitive : queued) {
             if (primitive.list == list &&
                 primitive.modifier_volume == modifier_volume &&
-                primitive.model1_painter == model1_painter) {
+                primitive.model1_painter == model1_painter &&
+                (modifier_filter < 0 ||
+                 primitive.modifier == (modifier_filter != 0))) {
                 primitives.push_back(&primitive);
             }
         }
         if (sort_back_to_front) {
-            std::stable_sort(
-                primitives.begin(),
-                primitives.end(),
-                [](const QueuedPrimitive *a, const QueuedPrimitive *b) {
-                    // PVR screen-space Z is inverse depth: smaller values are farther away.
-                    return primitive_average_z(*a) < primitive_average_z(*b);
-                });
+            const pc_endjinn_translucent_sort::Diagnostics diagnostics =
+                pc_endjinn_translucent_sort::sort(primitives);
+            if (list == PVR_LIST_TR_POLY) {
+                frame.translucent_sort = diagnostics;
+            }
         }
         for (const QueuedPrimitive *primitive : primitives) {
             const bool same_batch = !frame.batches.empty() &&
@@ -1548,8 +1773,12 @@ FrameDrawData build_frame_draw_data()
                 frame.batches.back().texture_width == primitive->texture_width &&
                 frame.batches.back().texture_height == primitive->texture_height &&
                 frame.batches.back().texture_filter == primitive->texture_filter &&
+                frame.batches.back().modifier_receiver ==
+                    primitive->modifier_receiver &&
                 frame.batches.back().modifier == primitive->modifier &&
                 frame.batches.back().modifier_volume == primitive->modifier_volume &&
+                frame.batches.back().modifier_volume_last ==
+                    primitive->modifier_volume_last &&
                 frame.batches.back().modifier_mode == primitive->modifier_mode &&
                 frame.batches.back().alpha_cutout == primitive->alpha_cutout &&
                 frame.batches.back().model1_painter == primitive->model1_painter;
@@ -1564,8 +1793,10 @@ FrameDrawData build_frame_draw_data()
                 batch.texture_width = primitive->texture_width;
                 batch.texture_height = primitive->texture_height;
                 batch.texture_filter = primitive->texture_filter;
+                batch.modifier_receiver = primitive->modifier_receiver;
                 batch.modifier = primitive->modifier;
                 batch.modifier_volume = primitive->modifier_volume;
+                batch.modifier_volume_last = primitive->modifier_volume_last;
                 batch.modifier_mode = primitive->modifier_mode;
                 batch.alpha_cutout = primitive->alpha_cutout;
                 batch.model1_painter = primitive->model1_painter;
@@ -1582,14 +1813,16 @@ FrameDrawData build_frame_draw_data()
         }
     };
 
-    append_list(PVR_LIST_OP_MOD, false, true, false);
-    append_list(PVR_LIST_TR_MOD, false, true, false);
-    append_list(PVR_LIST_OP_POLY, false, false, false);
+    /* Opaque area 0 establishes the receiver depth before modifier-volume
+     * fragments are classified. Area 1 is then re-shaded at equal depth. */
+    append_list(PVR_LIST_OP_POLY, false, false, false, 0);
+    append_list(PVR_LIST_OP_MOD, false, true, false, -1);
+    append_list(PVR_LIST_OP_POLY, false, false, false, 1);
     /* Model-1 world faces are painted after ordinary opaque world geometry
      * but before punch-through/translucent presentation overlays (HUD/text). */
-    append_list(PVR_LIST_OP_POLY, true, false, true);
-    append_list(PVR_LIST_PT_POLY, false, false, false);
-    append_list(PVR_LIST_TR_POLY, g_translucent_autosort, false, false);
+    append_list(PVR_LIST_OP_POLY, true, false, true, -1);
+    append_list(PVR_LIST_PT_POLY, false, false, false, -1);
+    append_list(PVR_LIST_TR_POLY, g_translucent_autosort, false, false, -1);
     return frame;
 }
 
@@ -1602,9 +1835,17 @@ bool draw_frame(const FrameDrawData &frame)
         g_punch_through_pipeline == VK_NULL_HANDLE ||
         g_punch_through_no_depth_write_pipeline == VK_NULL_HANDLE ||
         g_translucent_pipeline == VK_NULL_HANDLE ||
-        g_modifier_volume_pipeline == VK_NULL_HANDLE ||
+        g_modifier_translucent_depth_pipeline == VK_NULL_HANDLE ||
+        g_modifier_xor_pipeline == VK_NULL_HANDLE ||
+        g_modifier_or_pipeline == VK_NULL_HANDLE ||
+        g_modifier_include_pipeline == VK_NULL_HANDLE ||
         g_modifier_exclude_pipeline == VK_NULL_HANDLE ||
-        g_modifier_pipeline == VK_NULL_HANDLE || g_command_buffers.empty()) {
+        g_modifier_clear_current_pipeline == VK_NULL_HANDLE ||
+        g_modifier_opaque_receiver_pipeline == VK_NULL_HANDLE ||
+        g_modifier_legacy_include_pipeline == VK_NULL_HANDLE ||
+        g_modifier_legacy_exclude_pipeline == VK_NULL_HANDLE ||
+        g_modifier_translucent_receiver_pipeline == VK_NULL_HANDLE ||
+        g_command_buffers.empty()) {
         set_window_title("pc-enDjinn - draw unavailable");
         return false;
     }
@@ -1647,6 +1888,10 @@ bool draw_frame(const FrameDrawData &frame)
         }
         std::memcpy(mapped, frame.vertices.data(), static_cast<size_t>(bytes));
         vkUnmapMemory(g_device, g_vertex_memory);
+    }
+    if (!upload_translucent_modifiers(frame.translucent_modifiers)) {
+        set_window_title("pc-enDjinn - translucent modifier upload failed");
+        return false;
     }
 
     const char *const requested_screenshot = screenshot_path();
@@ -1716,20 +1961,37 @@ bool draw_frame(const FrameDrawData &frame)
     if (!frame.vertices.empty()) {
         VkDeviceSize offset = 0u;
         vkCmdBindVertexBuffers(cmd, 0u, 1u, &g_vertex_buffer, &offset);
+        uint32_t opaque_volume_first_vertex = UINT32_MAX;
         for (const DrawBatch &batch : frame.batches) {
-            if (batch.vertex_count == 0u) {
-                continue;
+            const bool opaque_modifier_volume =
+                batch.modifier_volume && batch.list == PVR_LIST_OP_MOD;
+            if (opaque_modifier_volume &&
+                opaque_volume_first_vertex == UINT32_MAX) {
+                opaque_volume_first_vertex = batch.first_vertex;
             }
             VkPipeline pipeline = g_opaque_pipeline;
             if (batch.model1_painter) {
                 pipeline = g_model1_painter_pipeline;
             } else if (batch.modifier_volume) {
-                // ponytail: this is a 2D stencil mask; add PVR 3D winding only
-                // when a project needs closed OTHER_POLY shadow volumes.
-                pipeline = batch.modifier_mode == PVR_MODIFIER_EXCLUDE_LAST_POLY
-                    ? g_modifier_exclude_pipeline : g_modifier_volume_pipeline;
-            } else if (batch.modifier) {
-                pipeline = g_modifier_pipeline;
+                if (opaque_modifier_volume) {
+                    /* A non-final modifier instruction denotes the PVR's
+                     * open/planar OR mode. Closed volumes, including their
+                     * final polygon, use parity/XOR. */
+                    pipeline = !batch.modifier_volume_last &&
+                            batch.modifier_mode != PVR_MODIFIER_OTHER_POLY
+                        ? g_modifier_or_pipeline
+                        : g_modifier_xor_pipeline;
+                } else {
+                    pipeline = batch.modifier_mode ==
+                            PVR_MODIFIER_EXCLUDE_LAST_POLY
+                        ? g_modifier_legacy_exclude_pipeline
+                        : g_modifier_legacy_include_pipeline;
+                }
+            } else if (batch.modifier && batch.list == PVR_LIST_OP_POLY) {
+                pipeline = g_modifier_opaque_receiver_pipeline;
+            } else if (batch.modifier_receiver &&
+                       batch.list == PVR_LIST_TR_POLY) {
+                pipeline = g_modifier_translucent_depth_pipeline;
             } else if (batch.alpha_cutout || batch.list == PVR_LIST_PT_POLY) {
                 pipeline = batch.depth_write
                     ? g_punch_through_pipeline
@@ -1747,14 +2009,45 @@ bool draw_frame(const FrameDrawData &frame)
             push.indexed = texture != nullptr && texture->indexed ? 1u : 0u;
             push.palette_base = batch.palette_base;
             push.filter_mode = static_cast<uint32_t>(batch.texture_filter);
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    g_pipeline_layout, 0u, 1u, &descriptor,
-                                    0u, nullptr);
-            vkCmdPushConstants(cmd, g_pipeline_layout,
-                               VK_SHADER_STAGE_FRAGMENT_BIT, 0u,
-                               sizeof(push), &push);
-            vkCmdDraw(cmd, batch.vertex_count, 1u, batch.first_vertex, 0u);
+            push.modifier_count = static_cast<uint32_t>(
+                frame.translucent_modifiers.size());
+            push.modifier_area = batch.modifier_receiver &&
+                    batch.list == PVR_LIST_TR_POLY
+                ? (batch.modifier ? 2u : 1u)
+                : 0u;
+            const auto draw = [&](VkPipeline selected, uint32_t first,
+                                  uint32_t count) {
+                if (count == 0u) {
+                    return;
+                }
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  selected);
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        g_pipeline_layout, 0u, 1u,
+                                        &descriptor, 0u, nullptr);
+                vkCmdPushConstants(cmd, g_pipeline_layout,
+                                   VK_SHADER_STAGE_FRAGMENT_BIT, 0u,
+                                   sizeof(push), &push);
+                vkCmdDraw(cmd, count, 1u, first, 0u);
+            };
+            draw(pipeline, batch.first_vertex, batch.vertex_count);
+
+            if (opaque_modifier_volume && batch.modifier_volume_last) {
+                const uint32_t volume_end =
+                    batch.first_vertex + batch.vertex_count;
+                const uint32_t volume_vertex_count =
+                    opaque_volume_first_vertex == UINT32_MAX ||
+                            volume_end < opaque_volume_first_vertex
+                        ? 0u
+                        : volume_end - opaque_volume_first_vertex;
+                draw(batch.modifier_mode == PVR_MODIFIER_EXCLUDE_LAST_POLY
+                         ? g_modifier_exclude_pipeline
+                         : g_modifier_include_pipeline,
+                     opaque_volume_first_vertex, volume_vertex_count);
+                draw(g_modifier_clear_current_pipeline,
+                     opaque_volume_first_vertex, volume_vertex_count);
+                opaque_volume_first_vertex = UINT32_MAX;
+            }
         }
     }
     vkCmdEndRenderPass(cmd);
@@ -2173,6 +2466,26 @@ void pvr_scene_finish(void)
         return;
     }
     const FrameDrawData frame = build_frame_draw_data();
+    const char *const sort_diagnostics =
+        std::getenv("ENJ_TRANSLUCENT_SORT_DIAGNOSTICS");
+    if (sort_diagnostics != nullptr && std::strcmp(sort_diagnostics, "1") == 0 &&
+        (g_presented_frames % 60u) == 0u) {
+        const pc_endjinn_translucent_sort::Diagnostics &diagnostics =
+            frame.translucent_sort;
+        std::fprintf(
+            stderr,
+            "pc-enDjinn: translucent-sort frame=%llu primitives=%zu "
+            "modifier-triangles=%zu candidates=%zu dependencies=%zu "
+            "unordered=%zu cycle-breaks=%zu average-fallback=%s\n",
+            static_cast<unsigned long long>(g_presented_frames),
+            diagnostics.primitive_count,
+            frame.translucent_modifiers.size(),
+            diagnostics.candidate_pairs,
+            diagnostics.dependency_edges,
+            diagnostics.unordered_pairs,
+            diagnostics.cycle_breaks,
+            diagnostics.average_depth_fallback ? "yes" : "no");
+    }
     (void)draw_frame(frame);
     g_presented_frames++;
     if (g_window != nullptr && (g_presented_frames <= 3u || (g_presented_frames % 30u) == 0u)) {

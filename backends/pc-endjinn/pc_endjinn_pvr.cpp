@@ -32,6 +32,7 @@ struct HeaderState {
   bool sprite{};
   bool modifier{};
   bool modifier_volume{};
+  bool modifier_volume_last{};
   uint32_t modifier_mode{};
   bool model1_painter{};
   bool modifier_textured{};
@@ -89,8 +90,10 @@ void copy_header_state(pc_endjinn_pvr::QueuedPrimitive &primitive) {
   primitive.texture_width = g_header.width;
   primitive.texture_height = g_header.height;
   primitive.texture_filter = g_header.filter;
+  primitive.modifier_receiver = g_header.modifier;
   primitive.modifier = g_header.modifier;
   primitive.modifier_volume = false;
+  primitive.modifier_volume_last = false;
   primitive.modifier_mode = 0u;
 }
 
@@ -192,7 +195,9 @@ void queue_modifier_volume(const pvr_modifier_vol_t &first, const void *tail) {
   primitive.count = 3u;
   primitive.list = g_current_list;
   primitive.culling = g_header.culling;
+  primitive.modifier_receiver = false;
   primitive.modifier_volume = true;
+  primitive.modifier_volume_last = g_header.modifier_volume_last;
   primitive.modifier_mode = g_header.modifier_mode;
   primitive.x[0] = first.ax;
   primitive.y[0] = first.ay;
@@ -578,6 +583,8 @@ void dr_commit(void *ptr) {
       (header->mode1 & PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER) != 0u;
   g_header.modifier = (header->mode1 & 0x40000000u) != 0u;
   g_header.modifier_volume = (header->mode1 & 0x20000000u) != 0u;
+  g_header.modifier_volume_last =
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_VOLUME_LAST) != 0u;
   g_header.culling = static_cast<pvr_cull_mode_t>(
       (header->mode1 & PC_ENDJINN_PVR_HEADER_CULL_MASK) >>
       PC_ENDJINN_PVR_HEADER_CULL_SHIFT);

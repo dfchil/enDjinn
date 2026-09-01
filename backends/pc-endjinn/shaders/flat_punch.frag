@@ -12,6 +12,10 @@ layout(push_constant) uniform TextureState {
     uint palette_base;
     uint filter_mode;
     uint unused;
+    uint modifier_count;
+    uint modifier_area;
+    uint reserved0;
+    uint reserved1;
 } state;
 
 vec4 palette_color(ivec2 pixel)

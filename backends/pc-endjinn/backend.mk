@@ -30,6 +30,7 @@ PC_ENDJINN_PLATFORM_SRCS := \
 	$(PC_ENDJINN_BACKEND_DIR)kos_abi_compat.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)enj_platform_pc_endjinn.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_pvr.cpp \
+	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_translucent_sort.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_vulkan.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_input.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_fs.cpp
@@ -51,6 +52,7 @@ pc-endjinn-kos-abi-contract:
 ENJ_HOST_EXTRA_DEPS += \
 	$(ENJ_HOST_BUILD_DIR)/flat.vert.spv \
 	$(ENJ_HOST_BUILD_DIR)/flat.frag.spv \
+	$(ENJ_HOST_BUILD_DIR)/flat_modifier.frag.spv \
 	$(ENJ_HOST_BUILD_DIR)/flat_punch.frag.spv
 
 $(ENJ_HOST_BUILD_DIR)/%.vert.spv: $(PC_ENDJINN_BACKEND_DIR)shaders/%.vert | $(ENJ_HOST_BUILD_DIR)
