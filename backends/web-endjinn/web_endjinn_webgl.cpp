@@ -238,6 +238,190 @@ bool triangle_is_culled(const QueuedPrimitive &primitive, uint32_t a,
 
 void emit_primitive(std::vector<WebVertex> &vertices,
                     const QueuedPrimitive &primitive) {
+  if (primitive.model1_painter && primitive.count == 4u) {
+    /* Match the Model 1 scanline ownership used by pc-endjinn.  In
+     * particular, inclusive one-native-pixel spans must not disappear when
+     * WebGL triangulates a thin HUD quad such as FF526A's RPM needle. */
+    struct NativePoint {
+      int32_t x;
+      int32_t y;
+    };
+    std::array<NativePoint, 8> point{};
+    const float logical_width = g_video_mode.width * (g_fsaa ? 2.0f : 1.0f);
+    const float logical_height = static_cast<float>(g_video_mode.height);
+    for (uint32_t i = 0u; i < 4u; ++i) {
+      point[i].x = point[i + 4u].x = static_cast<int32_t>(
+          std::lround(primitive.x[i] * 496.0f / logical_width));
+      point[i].y = point[i + 4u].y = static_cast<int32_t>(
+          std::lround(primitive.y[i] * 384.0f / logical_height));
+    }
+    const auto emit_span = [&](int32_t x1, int32_t x2, int32_t y) {
+      x1 = std::max<int32_t>(x1, 0);
+      x2 = std::min<int32_t>(x2, 495);
+      if (x1 > x2 || y < 0 || y > 383) {
+        return;
+      }
+      const float left = static_cast<float>(x1) * logical_width / 496.0f;
+      const float right =
+          static_cast<float>(x2 + 1) * logical_width / 496.0f;
+      const float top = static_cast<float>(y) * logical_height / 384.0f;
+      const float bottom =
+          static_cast<float>(y + 1) * logical_height / 384.0f;
+      const float z = primitive.z[0];
+      const uint32_t color = primitive.argb;
+      const WebVertex span[4] = {
+          make_vertex(left, top, z, color, 0.0f, 0.0f),
+          make_vertex(right, top, z, color, 0.0f, 0.0f),
+          make_vertex(right, bottom, z, color, 0.0f, 0.0f),
+          make_vertex(left, bottom, z, color, 0.0f, 0.0f),
+      };
+      vertices.push_back(span[0]);
+      vertices.push_back(span[1]);
+      vertices.push_back(span[2]);
+      vertices.push_back(span[0]);
+      vertices.push_back(span[2]);
+      vertices.push_back(span[3]);
+    };
+    const auto fill_line = [&](int32_t y, int32_t x1, int32_t x2) {
+      if (y >= 0 && y <= 383) {
+        emit_span(x1 >> 16, x2 >> 16, y);
+      }
+    };
+    const auto fill_slope = [&](int32_t x1, int32_t x2, int32_t slope1,
+                                int32_t slope2, int32_t y1, int32_t y2) {
+      if (y1 > 383) {
+        return std::array<int32_t, 2>{x1, x2};
+      }
+      if (y2 <= 0) {
+        const int32_t delta = y2 - y1;
+        return std::array<int32_t, 2>{x1 + delta * slope1,
+                                      x2 + delta * slope2};
+      }
+      y2 = std::min<int32_t>(y2, 384);
+      if (y1 < 0) {
+        const int32_t delta = -y1;
+        x1 += delta * slope1;
+        x2 += delta * slope2;
+        y1 = 0;
+      }
+      if (x1 > x2 || (x1 == x2 && slope1 > slope2)) {
+        std::swap(x1, x2);
+        std::swap(slope1, slope2);
+      }
+      while (y1 < y2) {
+        fill_line(y1, x1, x2);
+        x1 += slope1;
+        x2 += slope2;
+        ++y1;
+      }
+      return std::array<int32_t, 2>{x1, x2};
+    };
+
+    uint32_t pmin = 0u;
+    uint32_t pmax = 0u;
+    for (uint32_t i = 1u; i < 4u; ++i) {
+      if (point[i].y < point[pmin].y) {
+        pmin = i;
+      }
+      if (point[i].y > point[pmax].y) {
+        pmax = i;
+      }
+    }
+    int32_t current_y = point[pmin].y;
+    int32_t limit_y = point[pmax].y;
+    if (current_y == limit_y) {
+      int32_t x1 = point[0].x;
+      int32_t x2 = point[0].x;
+      for (uint32_t i = 1u; i < 4u; ++i) {
+        x1 = std::min(x1, point[i].x);
+        x2 = std::max(x2, point[i].x);
+      }
+      fill_line(current_y, x1 << 16, x2 << 16);
+      return;
+    }
+    if (current_y > 383 || limit_y <= 0) {
+      return;
+    }
+    limit_y = std::min<int32_t>(limit_y, 383);
+    uint32_t side1 = pmin + 4u;
+    uint32_t side2 = pmin;
+    while (point[side1 - 1u].y == current_y) {
+      --side1;
+    }
+    while (point[side2 + 1u].y == current_y) {
+      ++side2;
+    }
+    int32_t x1 = point[side1].x << 16;
+    int32_t x2 = point[side2].x << 16;
+    int32_t slope1 = (x1 - (point[side1 - 1u].x << 16)) /
+                     (current_y - point[side1 - 1u].y);
+    int32_t slope2 = (x2 - (point[side2 + 1u].x << 16)) /
+                     (current_y - point[side2 + 1u].y);
+    for (;;) {
+      const int32_t left_y = point[side1 - 1u].y;
+      const int32_t right_y = point[side2 + 1u].y;
+      if (left_y == right_y) {
+        const auto next =
+            fill_slope(x1, x2, slope1, slope2, current_y, left_y);
+        x1 = next[0];
+        x2 = next[1];
+        current_y = left_y;
+        if (current_y >= limit_y) {
+          break;
+        }
+        --side1;
+        ++side2;
+        while (point[side1 - 1u].y == current_y) {
+          --side1;
+        }
+        while (point[side2 + 1u].y == current_y) {
+          ++side2;
+        }
+        x1 = point[side1].x << 16;
+        x2 = point[side2].x << 16;
+        slope1 = (x1 - (point[side1 - 1u].x << 16)) /
+                 (current_y - point[side1 - 1u].y);
+        slope2 = (x2 - (point[side2 + 1u].x << 16)) /
+                 (current_y - point[side2 + 1u].y);
+      } else if (left_y < right_y) {
+        const auto next =
+            fill_slope(x1, x2, slope1, slope2, current_y, left_y);
+        x1 = next[0];
+        x2 = next[1];
+        current_y = left_y;
+        if (current_y >= limit_y) {
+          break;
+        }
+        --side1;
+        while (point[side1 - 1u].y == current_y) {
+          --side1;
+        }
+        x1 = point[side1].x << 16;
+        slope1 = (x1 - (point[side1 - 1u].x << 16)) /
+                 (current_y - point[side1 - 1u].y);
+      } else {
+        const auto next =
+            fill_slope(x1, x2, slope1, slope2, current_y, right_y);
+        x1 = next[0];
+        x2 = next[1];
+        current_y = right_y;
+        if (current_y >= limit_y) {
+          break;
+        }
+        ++side2;
+        while (point[side2 + 1u].y == current_y) {
+          ++side2;
+        }
+        x2 = point[side2].x << 16;
+        slope2 = (x2 - (point[side2 + 1u].x << 16)) /
+                 (current_y - point[side2 + 1u].y);
+      }
+    }
+    if (current_y == limit_y) {
+      fill_line(current_y, x1, x2);
+    }
+    return;
+  }
   const auto emit = [&](uint32_t index) {
     vertices.push_back(make_vertex(
         primitive.x[index], primitive.y[index], primitive.z[index],
