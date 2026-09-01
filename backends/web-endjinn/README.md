@@ -18,6 +18,9 @@ filesystem. The browser drives the engine loop through `requestAnimationFrame`;
 Implemented rendering covers the same projected colored/textured packets used
 by the PC backend, including palettized textures, punch-through alpha,
 translucent sorting, and the existing 2D modifier-volume stencil behavior.
+Model 1 painter batches preserve their caller-sorted order in a dedicated
+depth-free pass between ordinary opaque geometry and presentation overlays,
+matching the Vulkan backend's ownership semantics.
 
 Applications may define both `ENJ_INTEGER_PRESENT_WIDTH` and
 `ENJ_INTEGER_PRESENT_HEIGHT` in their web preprocessor flags. The WebGL

@@ -43,6 +43,7 @@ struct DrawBatch {
   uint32_t first_vertex{};
   uint32_t vertex_count{};
   bool depth_write{};
+  bool model1_painter{};
   bool textured{};
   pvr_ptr_t texture{};
   uint32_t texture_format{};
@@ -307,13 +308,20 @@ const FrameDrawData &build_frame() {
         });
   }
 
-  const auto append_list = [&](pvr_list_t list, size_t list_index) {
+  const auto append_list = [&](pvr_list_t list, size_t list_index,
+                               int model1_painter_filter) {
     for (const SortablePrimitive &sortable : g_frame_lists[list_index]) {
       const QueuedPrimitive *primitive = sortable.primitive;
+      if (model1_painter_filter >= 0 &&
+          primitive->model1_painter != (model1_painter_filter != 0)) {
+        continue;
+      }
       const bool same = !g_frame.batches.empty() &&
                         g_frame.batches.back().list == list &&
                         g_frame.batches.back().depth_write ==
                             primitive->depth_write &&
+                        g_frame.batches.back().model1_painter ==
+                            primitive->model1_painter &&
                         g_frame.batches.back().textured == primitive->textured &&
                         g_frame.batches.back().texture == primitive->texture &&
                         g_frame.batches.back().texture_format ==
@@ -331,6 +339,7 @@ const FrameDrawData &build_frame() {
              static_cast<uint32_t>(g_frame.vertices.size()),
              0u,
              primitive->depth_write,
+             primitive->model1_painter,
              primitive->textured,
              primitive->texture,
              primitive->texture_format,
@@ -349,11 +358,15 @@ const FrameDrawData &build_frame() {
     }
   };
 
-  append_list(PVR_LIST_OP_MOD, 0u);
-  append_list(PVR_LIST_TR_MOD, 1u);
-  append_list(PVR_LIST_OP_POLY, 2u);
-  append_list(PVR_LIST_PT_POLY, 3u);
-  append_list(PVR_LIST_TR_POLY, 4u);
+  append_list(PVR_LIST_OP_MOD, 0u, -1);
+  append_list(PVR_LIST_TR_MOD, 1u, -1);
+  append_list(PVR_LIST_OP_POLY, 2u, 0);
+  /* The caller has already sorted these Model 1 faces into arcade painter
+   * order.  Match Vulkan by drawing that order after ordinary opaque world
+   * geometry and before punch-through/translucent presentation overlays. */
+  append_list(PVR_LIST_OP_POLY, 2u, 1);
+  append_list(PVR_LIST_PT_POLY, 3u, -1);
+  append_list(PVR_LIST_TR_POLY, 4u, -1);
   return g_frame;
 }
 
@@ -553,7 +566,13 @@ void set_draw_state(const DrawBatch &batch) {
   desired.depth_write = batch.depth_write;
   desired.color_write = true;
   desired.punch_through = batch.list == PVR_LIST_PT_POLY;
-  if (batch.modifier_volume) {
+  if (batch.model1_painter) {
+    /* Model 1 ownership is completely resolved by the retained painter
+     * sequence.  Testing it against the PVR-compatible depth buffer can
+     * incorrectly hide HUD-owned faces such as the FF526A RPM needle. */
+    desired.depth_test = false;
+    desired.depth_write = false;
+  } else if (batch.modifier_volume) {
     desired.depth_test = false;
     desired.depth_write = false;
     desired.color_write = false;
