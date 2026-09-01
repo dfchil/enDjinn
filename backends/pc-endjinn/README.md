@@ -103,6 +103,12 @@ markings, skid marks, and shadows. Set `ENJ_MODEL1_SCANLINE_RASTER=0` only for
 renderer comparison diagnostics; Dreamcast and generic PVR submissions are
 unchanged.
 
+Applications may define both `ENJ_INTEGER_PRESENT_WIDTH` and
+`ENJ_INTEGER_PRESENT_HEIGHT` in their host preprocessor flags. The Vulkan
+backend then centers the largest whole-number multiple of that aperture in the
+drawable and clears the unused area to black. Drawables smaller than one
+native aperture fall back to an aspect-preserving fractional downscale.
+
 Dreamcast builds resolve normal KOS includes to the real toolchain headers.
 PC builds prepend `backends/pc-endjinn/include`, resolving those same includes
 to the compatibility declarations supplied by this backend.

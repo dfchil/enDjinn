@@ -658,19 +658,60 @@ void draw_frame(const FrameDrawData &frame) {
   int width = 0;
   int height = 0;
 #ifdef __EMSCRIPTEN__
+  double css_width = 0.0;
+  double css_height = 0.0;
+  if (emscripten_get_element_css_size(
+          "#canvas", &css_width, &css_height) == EMSCRIPTEN_RESULT_SUCCESS) {
+    const double pixel_ratio = emscripten_get_device_pixel_ratio();
+    const int requested_width =
+        std::max(1, static_cast<int>(std::lround(css_width * pixel_ratio)));
+    const int requested_height =
+        std::max(1, static_cast<int>(std::lround(css_height * pixel_ratio)));
+    int current_width = 0;
+    int current_height = 0;
+    (void)emscripten_get_canvas_element_size(
+        "#canvas", &current_width, &current_height);
+    if (current_width != requested_width || current_height != requested_height) {
+      (void)emscripten_set_canvas_element_size(
+          "#canvas", requested_width, requested_height);
+    }
+  }
   (void)emscripten_get_canvas_element_size("#canvas", &width, &height);
 #else
   SDL_GL_GetDrawableSize(g_window, &width, &height);
 #endif
-  const int viewport_width =
+  int viewport_width =
       std::min(width, height * g_video_mode.width / g_video_mode.height);
-  const int viewport_height =
+  int viewport_height =
       std::min(height, width * g_video_mode.height / g_video_mode.width);
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+  static_assert(ENJ_INTEGER_PRESENT_WIDTH > 0,
+                "integer presentation width must be positive");
+  static_assert(ENJ_INTEGER_PRESENT_HEIGHT > 0,
+                "integer presentation height must be positive");
+  const int integer_scale = std::min(
+      width / ENJ_INTEGER_PRESENT_WIDTH,
+      height / ENJ_INTEGER_PRESENT_HEIGHT);
+  if (integer_scale > 0) {
+    viewport_width = ENJ_INTEGER_PRESENT_WIDTH * integer_scale;
+    viewport_height = ENJ_INTEGER_PRESENT_HEIGHT * integer_scale;
+  } else if (static_cast<int64_t>(width) * ENJ_INTEGER_PRESENT_HEIGHT >
+             static_cast<int64_t>(height) * ENJ_INTEGER_PRESENT_WIDTH) {
+    viewport_width = height * ENJ_INTEGER_PRESENT_WIDTH /
+        ENJ_INTEGER_PRESENT_HEIGHT;
+    viewport_height = height;
+  } else {
+    viewport_width = width;
+    viewport_height = width * ENJ_INTEGER_PRESENT_HEIGHT /
+        ENJ_INTEGER_PRESENT_WIDTH;
+  }
+#endif
   const int viewport_x = (width - viewport_width) / 2;
   const int viewport_y = (height - viewport_height) / 2;
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
-  glClearColor(g_bg_color[0], g_bg_color[1], g_bg_color[2], 1.0f);
+  glDisable(GL_SCISSOR_TEST);
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 #ifdef __EMSCRIPTEN__
   glClearDepthf(0.0f);
 #else
@@ -679,6 +720,11 @@ void draw_frame(const FrameDrawData &frame) {
   glDepthMask(GL_TRUE);
   glClearStencil(0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+  glEnable(GL_SCISSOR_TEST);
+  glScissor(viewport_x, viewport_y, viewport_width, viewport_height);
+  glClearColor(g_bg_color[0], g_bg_color[1], g_bg_color[2], 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glDisable(GL_SCISSOR_TEST);
 
   const enj_web_render_pass_context_t pass_context = {
       viewport_x,

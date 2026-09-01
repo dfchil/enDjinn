@@ -198,11 +198,34 @@ void update_content_rect()
     const uint64_t height = g_extent.height;
     uint32_t content_width = g_extent.width;
     uint32_t content_height = g_extent.height;
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+    static_assert(ENJ_INTEGER_PRESENT_WIDTH > 0,
+                  "integer presentation width must be positive");
+    static_assert(ENJ_INTEGER_PRESENT_HEIGHT > 0,
+                  "integer presentation height must be positive");
+    const uint32_t integer_scale = std::min(
+        g_extent.width / static_cast<uint32_t>(ENJ_INTEGER_PRESENT_WIDTH),
+        g_extent.height / static_cast<uint32_t>(ENJ_INTEGER_PRESENT_HEIGHT));
+    if (integer_scale != 0u) {
+        content_width = static_cast<uint32_t>(ENJ_INTEGER_PRESENT_WIDTH) *
+            integer_scale;
+        content_height = static_cast<uint32_t>(ENJ_INTEGER_PRESENT_HEIGHT) *
+            integer_scale;
+    } else if (width * ENJ_INTEGER_PRESENT_HEIGHT >
+               height * ENJ_INTEGER_PRESENT_WIDTH) {
+        content_width = static_cast<uint32_t>(
+            height * ENJ_INTEGER_PRESENT_WIDTH / ENJ_INTEGER_PRESENT_HEIGHT);
+    } else {
+        content_height = static_cast<uint32_t>(
+            width * ENJ_INTEGER_PRESENT_HEIGHT / ENJ_INTEGER_PRESENT_WIDTH);
+    }
+#else
     if (width * 3u > height * 4u) {
         content_width = static_cast<uint32_t>(height * 4u / 3u);
     } else if (width * 3u < height * 4u) {
         content_height = static_cast<uint32_t>(width * 3u / 4u);
     }
+#endif
     g_content_rect.offset.x = static_cast<int32_t>((g_extent.width - content_width) / 2u);
     g_content_rect.offset.y = static_cast<int32_t>((g_extent.height - content_height) / 2u);
     g_content_rect.extent = {content_width, content_height};

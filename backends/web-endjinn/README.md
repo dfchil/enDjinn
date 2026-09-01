@@ -18,3 +18,10 @@ filesystem. The browser drives the engine loop through `requestAnimationFrame`;
 Implemented rendering covers the same projected colored/textured packets used
 by the PC backend, including palettized textures, punch-through alpha,
 translucent sorting, and the existing 2D modifier-volume stencil behavior.
+
+Applications may define both `ENJ_INTEGER_PRESENT_WIDTH` and
+`ENJ_INTEGER_PRESENT_HEIGHT` in their web preprocessor flags. The WebGL
+backend keeps the canvas backing store synchronized with its CSS size and the
+browser device-pixel ratio, then centers the largest whole-number multiple of
+that aperture on black. A target smaller than one aperture uses an
+aspect-preserving fractional downscale.
