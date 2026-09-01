@@ -159,6 +159,12 @@ bool offscreen_capture_requested()
     return value != nullptr && std::strcmp(value, "1") == 0;
 }
 
+bool native_composition_raster_requested()
+{
+    const char *const value = std::getenv("ENJ_NATIVE_COMPOSITION_RASTER");
+    return value != nullptr && std::strcmp(value, "1") == 0;
+}
+
 bool model1_scanline_raster_enabled()
 {
     const char *const value = std::getenv("ENJ_MODEL1_SCANLINE_RASTER");
@@ -184,6 +190,10 @@ int SDLCALL pc_endjinn_event_watch(void *, SDL_Event *event)
 
 void update_content_rect()
 {
+    if (g_offscreen_capture && native_composition_raster_requested()) {
+        g_content_rect = {{0, 0}, g_extent};
+        return;
+    }
     const uint64_t width = g_extent.width;
     const uint64_t height = g_extent.height;
     uint32_t content_width = g_extent.width;
@@ -991,12 +1001,17 @@ bool create_swapchain()
 
 bool create_offscreen_color_resources()
 {
-    /* Match the regular 4:3 host target.  The diagnostic comparator scales
-     * native Model-1's 496x384 raster to this target deterministically. */
+    /* Match the regular 4:3 host target unless an offscreen-only diagnostic
+     * requests Model 1's native 496x384 composition aperture. */
     g_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
-    g_extent = {1280u, 960u};
+    g_extent = native_composition_raster_requested()
+        ? VkExtent2D{496u, 384u} : VkExtent2D{1280u, 960u};
     g_swapchain_readback_supported = true;
-    update_content_rect();
+    if (native_composition_raster_requested()) {
+        g_content_rect = {{0, 0}, g_extent};
+    } else {
+        update_content_rect();
+    }
     VkImageCreateInfo image{};
     image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image.imageType = VK_IMAGE_TYPE_2D;
@@ -1035,8 +1050,10 @@ bool create_offscreen_color_resources()
     if (vkCreateImageView(g_device, &view, nullptr, &g_offscreen_color_view) != VK_SUCCESS) {
         return false;
     }
-    std::fprintf(stderr, "pc-enDjinn: offscreen Vulkan capture target=%ux%u\n",
-                 g_extent.width, g_extent.height);
+    std::fprintf(stderr,
+                 "pc-enDjinn: offscreen Vulkan capture target=%ux%u native=%u\n",
+                 g_extent.width, g_extent.height,
+                 native_composition_raster_requested() ? 1u : 0u);
     return true;
 }
 
