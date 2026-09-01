@@ -107,6 +107,11 @@ GLuint g_vertex_buffer = 0;
 GLuint g_vertex_array = 0;
 GLuint g_white_texture = 0;
 GLuint g_palette_texture = 0;
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+GLuint g_present_framebuffer = 0;
+GLuint g_present_color_texture = 0;
+GLuint g_present_depth_stencil = 0;
+#endif
 uint64_t g_uploaded_palette_revision = 0u;
 GLint g_position = -1;
 GLint g_color = -1;
@@ -126,6 +131,39 @@ std::vector<CustomRenderPass> g_custom_render_passes;
 GLuint g_bound_texture = 0;
 GenericDrawState g_generic_draw_state;
 bool g_generic_draw_state_valid = false;
+
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+bool create_present_framebuffer() {
+  glGenTextures(1, &g_present_color_texture);
+  glBindTexture(GL_TEXTURE_2D, g_present_color_texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+               ENJ_INTEGER_PRESENT_WIDTH, ENJ_INTEGER_PRESENT_HEIGHT,
+               0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  glGenRenderbuffers(1, &g_present_depth_stencil);
+  glBindRenderbuffer(GL_RENDERBUFFER, g_present_depth_stencil);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8,
+                        ENJ_INTEGER_PRESENT_WIDTH,
+                        ENJ_INTEGER_PRESENT_HEIGHT);
+
+  glGenFramebuffers(1, &g_present_framebuffer);
+  glBindFramebuffer(GL_FRAMEBUFFER, g_present_framebuffer);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                         GL_TEXTURE_2D, g_present_color_texture, 0);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                            GL_RENDERBUFFER, g_present_depth_stencil);
+  const bool complete =
+      glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glBindRenderbuffer(GL_RENDERBUFFER, 0);
+  g_bound_texture = 0;
+  return complete;
+}
+#endif
 
 constexpr const char *vertex_shader = R"(#version 300 es
 in vec3 a_position;
@@ -643,7 +681,11 @@ void run_custom_render_passes(
     if (pass.phase != phase || pass.callback == nullptr) {
       continue;
     }
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+    glBindFramebuffer(GL_FRAMEBUFFER, g_present_framebuffer);
+#else
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+#endif
     glViewport(context.viewport_x, context.viewport_y, context.viewport_width,
                context.viewport_height);
     pass.callback(&context,
@@ -709,7 +751,6 @@ void draw_frame(const FrameDrawData &frame) {
   const int viewport_x = (width - viewport_width) / 2;
   const int viewport_y = (height - viewport_height) / 2;
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
   glDisable(GL_SCISSOR_TEST);
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 #ifdef __EMSCRIPTEN__
@@ -720,23 +761,43 @@ void draw_frame(const FrameDrawData &frame) {
   glDepthMask(GL_TRUE);
   glClearStencil(0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+  glBindFramebuffer(GL_FRAMEBUFFER, g_present_framebuffer);
+  glViewport(0, 0, ENJ_INTEGER_PRESENT_WIDTH, ENJ_INTEGER_PRESENT_HEIGHT);
+  glClearColor(g_bg_color[0], g_bg_color[1], g_bg_color[2], 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+#else
+  glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
   glEnable(GL_SCISSOR_TEST);
   glScissor(viewport_x, viewport_y, viewport_width, viewport_height);
   glClearColor(g_bg_color[0], g_bg_color[1], g_bg_color[2], 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
   glDisable(GL_SCISSOR_TEST);
+#endif
 
   const enj_web_render_pass_context_t pass_context = {
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+      0,
+      0,
+      ENJ_INTEGER_PRESENT_WIDTH,
+      ENJ_INTEGER_PRESENT_HEIGHT,
+#else
       viewport_x,
       viewport_y,
       viewport_width,
       viewport_height,
+#endif
       g_video_mode.width * (g_fsaa ? 2 : 1),
       g_video_mode.height,
   };
   run_custom_render_passes(ENJ_WEB_RENDER_PASS_BACKGROUND, pass_context);
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+  glBindFramebuffer(GL_FRAMEBUFFER, g_present_framebuffer);
+  glViewport(0, 0, ENJ_INTEGER_PRESENT_WIDTH, ENJ_INTEGER_PRESENT_HEIGHT);
+#else
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
+#endif
   g_bound_texture = 0;
 
   if (!frame.vertices.empty()) {
@@ -769,6 +830,16 @@ void draw_frame(const FrameDrawData &frame) {
   glStencilMask(0xff);
   run_custom_render_passes(ENJ_WEB_RENDER_PASS_FOREGROUND, pass_context);
   glStencilMask(0xff);
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, g_present_framebuffer);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+  glBlitFramebuffer(
+      0, 0, ENJ_INTEGER_PRESENT_WIDTH, ENJ_INTEGER_PRESENT_HEIGHT,
+      viewport_x, viewport_y,
+      viewport_x + viewport_width, viewport_y + viewport_height,
+      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+#endif
   SDL_GL_SwapWindow(g_window);
 }
 
@@ -820,6 +891,13 @@ bool create_context() {
                GL_UNSIGNED_BYTE, &white);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+  if (!create_present_framebuffer()) {
+    std::fprintf(stderr,
+                 "web-enDjinn: integer presentation framebuffer failed\n");
+    return false;
+  }
+#endif
   g_ready = true;
   return true;
 }
@@ -934,6 +1012,11 @@ void pvr_shutdown() {
     }
     glDeleteTextures(1, &g_palette_texture);
     glDeleteTextures(1, &g_white_texture);
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+    glDeleteFramebuffers(1, &g_present_framebuffer);
+    glDeleteRenderbuffers(1, &g_present_depth_stencil);
+    glDeleteTextures(1, &g_present_color_texture);
+#endif
     glDeleteVertexArrays(1, &g_vertex_array);
     glDeleteBuffers(1, &g_vertex_buffer);
     glDeleteProgram(g_program);
@@ -944,6 +1027,11 @@ void pvr_shutdown() {
   g_ready = false;
   g_white_texture = 0;
   g_palette_texture = 0;
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+  g_present_framebuffer = 0;
+  g_present_depth_stencil = 0;
+  g_present_color_texture = 0;
+#endif
   g_uploaded_palette_revision = 0u;
   g_vertex_array = 0;
   g_vertex_buffer = 0;
