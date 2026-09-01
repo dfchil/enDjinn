@@ -113,6 +113,27 @@ void queue_triangle(const pvr_vertex_t &a, const pvr_vertex_t &b,
   g_primitives.push_back(primitive);
 }
 
+void queue_model1_quad(const std::vector<pvr_vertex_t> &vertices) {
+  if (vertices.size() != 4u) {
+    return;
+  }
+  pc_endjinn_pvr::QueuedPrimitive primitive{};
+  primitive.count = 4u;
+  copy_header_state(primitive);
+  primitive.argb = vertices.back().argb != 0u
+      ? vertices.back().argb : primitive.argb;
+  for (uint32_t i = 0u; i < 4u; ++i) {
+    primitive.x[i] = vertices[i].x;
+    primitive.y[i] = vertices[i].y;
+    primitive.z[i] = vertices[i].z;
+    primitive.u[i] = vertices[i].u;
+    primitive.v[i] = vertices[i].v;
+    primitive.color[i] = vertices[i].argb != 0u
+        ? vertices[i].argb : primitive.argb;
+  }
+  g_primitives.push_back(primitive);
+}
+
 void queue_modifier_triangle(const pvr_vertex_t outside[3],
                              const pvr_vertex_t inside[3]) {
   pc_endjinn_pvr::QueuedPrimitive primitive{};
@@ -545,6 +566,19 @@ void dr_commit(void *ptr) {
       return;
     }
     const pvr_vertex_t *vertex = static_cast<const pvr_vertex_t *>(ptr);
+    if (g_header.model1_painter) {
+      g_triangle_vertices.push_back(*vertex);
+      if (flags == PVR_CMD_VERTEX_EOL) {
+        if (g_triangle_vertices.size() == 4u) {
+          queue_model1_quad(g_triangle_vertices);
+        } else if (g_triangle_vertices.size() == 3u) {
+          queue_triangle(g_triangle_vertices[0], g_triangle_vertices[1],
+                         g_triangle_vertices[2]);
+        }
+        g_triangle_vertices.clear();
+      }
+      return;
+    }
     g_triangle_vertices.push_back(*vertex);
     if (g_triangle_vertices.size() >= 3u) {
       const size_t n = g_triangle_vertices.size();

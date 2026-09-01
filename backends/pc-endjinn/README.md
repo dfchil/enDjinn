@@ -95,6 +95,14 @@ Vulkan surface window hidden, avoiding macOS GUI-session blocking or a visible
 test window while an explicit `ENJ_SCREENSHOT_PATH` readback is requested.  It
 is not a separate renderer and is not enabled for normal interactive runs.
 
+Model 1 painter primitives that arrive as four-corner quads are filled with
+the arcade's native 496x384 inclusive, fixed-point scanline ownership before
+the resulting spans are presented by Vulkan. This preserves submitted painter
+order and avoids host triangle-edge coverage differences for coplanar road
+markings, skid marks, and shadows. Set `ENJ_MODEL1_SCANLINE_RASTER=0` only for
+renderer comparison diagnostics; Dreamcast and generic PVR submissions are
+unchanged.
+
 Dreamcast builds resolve normal KOS includes to the real toolchain headers.
 PC builds prepend `backends/pc-endjinn/include`, resolving those same includes
 to the compatibility declarations supplied by this backend.

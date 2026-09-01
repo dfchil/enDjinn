@@ -159,6 +159,12 @@ bool offscreen_capture_requested()
     return value != nullptr && std::strcmp(value, "1") == 0;
 }
 
+bool model1_scanline_raster_enabled()
+{
+    const char *const value = std::getenv("ENJ_MODEL1_SCANLINE_RASTER");
+    return value == nullptr || std::strcmp(value, "0") != 0;
+}
+
 int SDLCALL pc_endjinn_event_watch(void *, SDL_Event *event)
 {
     if (event != nullptr &&
@@ -1485,6 +1491,160 @@ bool triangle_is_culled(const QueuedPrimitive &p, uint32_t a, uint32_t b,
 
 void emit_primitive(std::vector<PcVertex> &out, const QueuedPrimitive &p)
 {
+    if (p.model1_painter && p.count == 4u &&
+        model1_scanline_raster_enabled()) {
+        /* MAME's Model-1 renderer first truncates projection to the native
+         * 496x384 aperture, then fills each ordered quad with inclusive
+         * 16.16 scanline spans. Expand those native pixels back into the
+         * 1280x480 PVR carrier so the ordinary Vulkan pipeline remains the
+         * final presentation backend. */
+        struct NativePoint { int32_t x; int32_t y; };
+        std::array<NativePoint, 8> point{};
+        for (uint32_t i = 0u; i < 4u; ++i) {
+            point[i].x = point[i + 4u].x = static_cast<int32_t>(
+                std::lround(p.x[i] * 496.0f / 1280.0f));
+            point[i].y = point[i + 4u].y = static_cast<int32_t>(
+                std::lround(p.y[i] * 384.0f / 480.0f));
+        }
+        const auto emit_span = [&](int32_t x1, int32_t x2, int32_t y) {
+            x1 = std::max<int32_t>(x1, 0);
+            x2 = std::min<int32_t>(x2, 495);
+            if (x1 > x2 || y < 0 || y > 383) {
+                return;
+            }
+            const float left = static_cast<float>(x1) * 1280.0f / 496.0f;
+            const float right = static_cast<float>(x2 + 1) * 1280.0f / 496.0f;
+            const float top = static_cast<float>(y) * 480.0f / 384.0f;
+            const float bottom = static_cast<float>(y + 1) * 480.0f / 384.0f;
+            const float z = p.z[0];
+            const uint32_t colour = p.argb;
+            const PcVertex vertices[4] = {
+                make_vertex(left, top, z, colour, 0.0f, 0.0f),
+                make_vertex(right, top, z, colour, 0.0f, 0.0f),
+                make_vertex(right, bottom, z, colour, 0.0f, 0.0f),
+                make_vertex(left, bottom, z, colour, 0.0f, 0.0f),
+            };
+            out.push_back(vertices[0]); out.push_back(vertices[1]);
+            out.push_back(vertices[2]); out.push_back(vertices[0]);
+            out.push_back(vertices[2]); out.push_back(vertices[3]);
+        };
+        const auto fill_line = [&](int32_t y, int32_t x1, int32_t x2) {
+            if (y < 0 || y > 383) {
+                return;
+            }
+            int32_t left = x1 >> 16;
+            int32_t right = x2 >> 16;
+            if (left <= 495 || right >= 0) {
+                emit_span(left, right, y);
+            }
+        };
+        const auto fill_slope = [&](int32_t x1, int32_t x2,
+                                    int32_t slope1, int32_t slope2,
+                                    int32_t y1, int32_t y2) {
+            if (y1 > 383) {
+                return std::array<int32_t, 2>{x1, x2};
+            }
+            if (y2 <= 0) {
+                const int32_t delta = y2 - y1;
+                return std::array<int32_t, 2>{
+                    x1 + delta * slope1, x2 + delta * slope2};
+            }
+            y2 = std::min<int32_t>(y2, 384);
+            if (y1 < 0) {
+                const int32_t delta = -y1;
+                x1 += delta * slope1;
+                x2 += delta * slope2;
+                y1 = 0;
+            }
+            if (x1 > x2 || (x1 == x2 && slope1 > slope2)) {
+                std::swap(x1, x2);
+                std::swap(slope1, slope2);
+            }
+            while (y1 < y2) {
+                fill_line(y1, x1, x2);
+                x1 += slope1;
+                x2 += slope2;
+                ++y1;
+            }
+            return std::array<int32_t, 2>{x1, x2};
+        };
+
+        uint32_t pmin = 0u;
+        uint32_t pmax = 0u;
+        for (uint32_t i = 1u; i < 4u; ++i) {
+            if (point[i].y < point[pmin].y) pmin = i;
+            if (point[i].y > point[pmax].y) pmax = i;
+        }
+        int32_t current_y = point[pmin].y;
+        int32_t limit_y = point[pmax].y;
+        if (current_y == limit_y) {
+            int32_t x1 = point[0].x;
+            int32_t x2 = point[0].x;
+            for (uint32_t i = 1u; i < 4u; ++i) {
+                x1 = std::min(x1, point[i].x);
+                x2 = std::max(x2, point[i].x);
+            }
+            fill_line(current_y, x1 << 16, x2 << 16);
+            return;
+        }
+        if (current_y > 383 || limit_y <= 0) {
+            return;
+        }
+        limit_y = std::min<int32_t>(limit_y, 383);
+        uint32_t side1 = pmin + 4u;
+        uint32_t side2 = pmin;
+        while (point[side1 - 1u].y == current_y) --side1;
+        while (point[side2 + 1u].y == current_y) ++side2;
+        int32_t x1 = point[side1].x << 16;
+        int32_t x2 = point[side2].x << 16;
+        int32_t slope1 = (x1 - (point[side1 - 1u].x << 16)) /
+            (current_y - point[side1 - 1u].y);
+        int32_t slope2 = (x2 - (point[side2 + 1u].x << 16)) /
+            (current_y - point[side2 + 1u].y);
+        for (;;) {
+            const int32_t left_y = point[side1 - 1u].y;
+            const int32_t right_y = point[side2 + 1u].y;
+            if (left_y == right_y) {
+                const auto next = fill_slope(
+                    x1, x2, slope1, slope2, current_y, left_y);
+                x1 = next[0]; x2 = next[1]; current_y = left_y;
+                if (current_y >= limit_y) break;
+                --side1; ++side2;
+                while (point[side1 - 1u].y == current_y) --side1;
+                while (point[side2 + 1u].y == current_y) ++side2;
+                x1 = point[side1].x << 16;
+                x2 = point[side2].x << 16;
+                slope1 = (x1 - (point[side1 - 1u].x << 16)) /
+                    (current_y - point[side1 - 1u].y);
+                slope2 = (x2 - (point[side2 + 1u].x << 16)) /
+                    (current_y - point[side2 + 1u].y);
+            } else if (left_y < right_y) {
+                const auto next = fill_slope(
+                    x1, x2, slope1, slope2, current_y, left_y);
+                x1 = next[0]; x2 = next[1]; current_y = left_y;
+                if (current_y >= limit_y) break;
+                --side1;
+                while (point[side1 - 1u].y == current_y) --side1;
+                x1 = point[side1].x << 16;
+                slope1 = (x1 - (point[side1 - 1u].x << 16)) /
+                    (current_y - point[side1 - 1u].y);
+            } else {
+                const auto next = fill_slope(
+                    x1, x2, slope1, slope2, current_y, right_y);
+                x1 = next[0]; x2 = next[1]; current_y = right_y;
+                if (current_y >= limit_y) break;
+                ++side2;
+                while (point[side2 + 1u].y == current_y) ++side2;
+                x2 = point[side2].x << 16;
+                slope2 = (x2 - (point[side2 + 1u].x << 16)) /
+                    (current_y - point[side2 + 1u].y);
+            }
+        }
+        if (current_y == limit_y) {
+            fill_line(current_y, x1, x2);
+        }
+        return;
+    }
     const auto emit = [&](uint32_t i) {
         out.push_back(make_vertex(p.x[i], p.y[i], p.z[i], p.color[i],
                                   p.u[i], p.v[i]));
