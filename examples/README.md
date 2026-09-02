@@ -20,10 +20,12 @@ Most examples also build for the browser with
 `ENJ_TARGET=web-endjinn`; browser prerequisites and invocation are covered in
 the [web backend README](../backends/web-endjinn/README.md).
 
-Textures, fonts, PCM sound effects, controllers, and screen-space modifier
-masks work on PC. Rumble and VMU LCD output remain no-ops; see the
+Textures, fonts, PCM sound effects, controllers, and depth-aware opaque and
+transparent modifier volumes work on PC. Rumble and VMU LCD output remain
+no-ops; see the
 [pc-enDjinn support matrix](../backends/pc-endjinn/SUPPORTED.md) for the exact
-differences.
+differences. web-enDjinn implements the same depth-aware opaque and transparent
+modifier classification through WebGL 2 stencil state and fragment evaluation.
 
 ## enj_hello
 
@@ -63,9 +65,23 @@ between a main mode, an information mode, and short animation modes.
 ## enj_modifiers
 
 Uses raw PVR modifier-volume commands alongside enDjinn’s render-list loop and
-sh4zam vector types. pc-enDjinn renders include/exclude modifier masks through
-Vulkan stencil state, but does not yet emulate depth-aware closed 3D shadow
-volumes.
+sh4zam vector types. The example submits a closed depth slab: pc-enDjinn's
+opaque path uses Vulkan depth/stencil parity so only the receiver band inside
+the slab selects its area-1 color. In translucent mode, every receiver fragment
+evaluates the submitted modifier crossings at its own depth.
+
+## enj_modifier_volume_zclip
+
+Adapts the closed 12-triangle cube from KallistiOS's
+`modifier_volume_zclip` example into enDjinn's render-list loop. The rotating
+volume crosses the near plane, is clipped and capped at `z=1`, and darkens only
+the portions of a perspective ground grid and a solid 12-triangle box lying
+inside the resulting depth volume. This KOS-style 3D scene provides receiver
+depths across a single projected silhouette and a demanding regression for
+pc-enDjinn's and web-enDjinn's modifier emulation while running from the same
+source on Dreamcast hardware. Press A to cycle between opaque depth/stencil
+receivers, transparent receivers evaluated independently at each fragment
+depth, and mixed inside-transparent/outside-opaque receivers.
 
 ## enj_fonts
 

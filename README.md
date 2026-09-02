@@ -179,7 +179,8 @@ The executable name defaults to the application directory name.
 
 The backend supports the geometry, texture and palette formats used by the
 examples, PCM sound effects, keyboard and SDL controllers, host save-file
-storage, and screen-space modifier masks. Rumble, VMU LCD output, and some PVR
+storage, opaque depth/stencil modifier volumes, and depth-aware per-fragment
+translucent modifier evaluation. Rumble, VMU LCD output, and some PVR
 state remain unsupported. See the
 [PC backend README](./backends/pc-endjinn/README.md) for setup and usage and
 the [support matrix](./backends/pc-endjinn/SUPPORTED.md) for exact coverage.
@@ -211,6 +212,21 @@ Run the host-side safety, public-header, and backend-shim checks with:
 
 ```sh
 make -C tests check
+```
+
+Run the deterministic pc-enDjinn modifier-volume framebuffer regression with:
+
+```sh
+make -C tests modifier-volume-visual
+```
+
+This explicit target requires the pc-enDjinn Vulkan dependencies; the ordinary
+host checks remain renderer-independent.
+
+Compile the same depth-aware modifier-volume example for WebGL 2 with:
+
+```sh
+make -C tests modifier-volume-web
 ```
 
 Build every example against the native development backend with:

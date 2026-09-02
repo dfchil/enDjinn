@@ -67,6 +67,8 @@ Projects with host-side library dependencies can add their include paths to
 - `enj_platform_pc_endjinn.cpp`: thin KOS symbol adapter used by enDjinn.
 - `pc_endjinn_pvr.cpp`: PVR direct-render packet decoding, render lists, and
   renderer-neutral primitive queues.
+- `pc_endjinn_translucent_sort.cpp`: overlap-aware translucent dependency
+  ordering and its diagnostic counters.
 - `pc_endjinn_vulkan.cpp`: SDL window management, Vulkan resources, pipelines,
   frame construction, and presentation.
 - `pc_endjinn_input.cpp`: SDL implementations of Maple controllers, controller
@@ -95,19 +97,23 @@ Vulkan surface window hidden, avoiding macOS GUI-session blocking or a visible
 test window while an explicit `ENJ_SCREENSHOT_PATH` readback is requested.  It
 is not a separate renderer and is not enabled for normal interactive runs.
 
-Model 1 painter primitives that arrive as four-corner quads are filled with
-the arcade's native 496x384 inclusive, fixed-point scanline ownership before
-the resulting spans are presented by Vulkan. This preserves submitted painter
-order and avoids host triangle-edge coverage differences for coplanar road
-markings, skid marks, and shadows. Set `ENJ_MODEL1_SCANLINE_RASTER=0` only for
-renderer comparison diagnostics; Dreamcast and generic PVR submissions are
-unchanged.
-
 Applications may define both `ENJ_INTEGER_PRESENT_WIDTH` and
 `ENJ_INTEGER_PRESENT_HEIGHT` in their host preprocessor flags. The Vulkan
 backend then centers the largest whole-number multiple of that aperture in the
 drawable and clears the unused area to black. Drawables smaller than one
 native aperture fall back to an aspect-preserving fractional downscale.
+
+Set `ENJ_TRANSLUCENT_SORT_DIAGNOSTICS=1` to print the translucent primitive,
+modifier-triangle, dependency, unordered-pair, cycle-break, and bounded
+average-depth-fallback counters every 60 frames. The modifier-volume regression
+uses the same offscreen renderer and can be run from the repository root with:
+
+```sh
+make -C tests modifier-volume-visual
+```
+
+The ordinary `make -C tests check` target includes the renderer-independent
+translucent ordering unit tests; it does not require Vulkan.
 
 Dreamcast builds resolve normal KOS includes to the real toolchain headers.
 PC builds prepend `backends/pc-endjinn/include`, resolving those same includes

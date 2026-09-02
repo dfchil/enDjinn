@@ -198,23 +198,28 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
 }
 #define PC_ENDJINN_PVR_HEADER_SPRITE 0x10000000u
 #define PC_ENDJINN_PVR_HEADER_DEPTH_WRITE 0x02000000u
-/* Keep origin's depth-write encoding authoritative. These two host-private
- * flags occupy separate unused bits for Dream Driving's retained painter and
- * opaque alpha-cutout paths. */
+/* Keep origin's depth-write encoding authoritative. Host-private flags occupy
+ * separate unused bits for retained renderer state and volume boundaries. */
 #define PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT 0x01000000u
-#define PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER 0x00800000u
+#define PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE 0x00800000u
+#define PC_ENDJINN_PVR_HEADER_VOLUME_LAST 0x00400000u
 #define PC_ENDJINN_PVR_HEADER_CULL_SHIFT 26u
 #define PC_ENDJINN_PVR_HEADER_CULL_MASK (0x3u << PC_ENDJINN_PVR_HEADER_CULL_SHIFT)
 #if ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE | \
-      PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER | \
-      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) & \
+      PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
+      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT | \
+      PC_ENDJINN_PVR_HEADER_VOLUME_LAST) & \
      (PC_ENDJINN_PVR_HEADER_CULL_MASK | PC_ENDJINN_PVR_HEADER_SPRITE)) != 0u || \
     (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE & \
-     PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER) != 0u || \
+     PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE) != 0u || \
     (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE & \
      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u || \
-    (PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER & \
-     PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u
+    (PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE & \
+     PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u || \
+    ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE | \
+      PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
+      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) & \
+     PC_ENDJINN_PVR_HEADER_VOLUME_LAST) != 0u
 #error "pc-enDjinn private PVR header flags overlap another header field"
 #endif
 
@@ -344,6 +349,9 @@ static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
   hdr->mode1 = PC_ENDJINN_PVR_HEADER_SPRITE | (uint32_t)cxt->list_type |
       (cxt->txr.enable ? 0x80000000u : 0u) |
       (cxt->depth.write ? PC_ENDJINN_PVR_HEADER_DEPTH_WRITE : 0u) |
+      (cxt->depth.comparison == PVR_DEPTHCMP_ALWAYS
+           ? PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE
+           : 0u) |
       (cxt->gen.alpha ? PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT : 0u) |
       (((uint32_t)cxt->gen.culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   hdr->mode2 = (uint32_t)cxt->txr.format;
@@ -382,7 +390,11 @@ static inline void pvr_mod_compile(pvr_mod_hdr_t *hdr, pvr_list_t list,
   memset(hdr, 0, sizeof(*hdr));
   hdr->cmd = 0x80000000u;
   hdr->mode1 = (uint32_t)list | 0x20000000u |
-      ((culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
+      ((culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT) |
+      (mode == PVR_MODIFIER_INCLUDE_LAST_POLY ||
+               mode == PVR_MODIFIER_EXCLUDE_LAST_POLY
+           ? PC_ENDJINN_PVR_HEADER_VOLUME_LAST
+           : 0u);
   hdr->oargb = mode;
   hdr->argb = 0xffffffffu;
 }

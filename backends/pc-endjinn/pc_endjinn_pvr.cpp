@@ -32,11 +32,12 @@ struct HeaderState {
   bool sprite{};
   bool modifier{};
   bool modifier_volume{};
+  bool modifier_volume_last{};
   uint32_t modifier_mode{};
-  bool model1_painter{};
   bool modifier_textured{};
   pvr_context_txr_t modifier_texture{};
   pvr_cull_mode_t culling{PVR_CULLING_NONE};
+  bool depth_test{true};
   bool depth_write{true};
   bool alpha_cutout{};
 };
@@ -80,17 +81,19 @@ void copy_header_state(pc_endjinn_pvr::QueuedPrimitive &primitive) {
   primitive.argb = g_header.argb;
   primitive.list = g_current_list;
   primitive.culling = g_header.culling;
+  primitive.depth_test = g_header.depth_test;
   primitive.depth_write = g_header.depth_write;
   primitive.alpha_cutout = g_header.alpha_cutout;
-  primitive.model1_painter = g_header.model1_painter;
   primitive.textured = g_header.textured;
   primitive.texture = g_header.texture;
   primitive.texture_format = g_header.format;
   primitive.texture_width = g_header.width;
   primitive.texture_height = g_header.height;
   primitive.texture_filter = g_header.filter;
+  primitive.modifier_receiver = g_header.modifier;
   primitive.modifier = g_header.modifier;
   primitive.modifier_volume = false;
+  primitive.modifier_volume_last = false;
   primitive.modifier_mode = 0u;
 }
 
@@ -109,27 +112,6 @@ void queue_triangle(const pvr_vertex_t &a, const pvr_vertex_t &b,
     primitive.v[i] = vertices[i].v;
     primitive.color[i] = vertices[i].argb != 0u ? vertices[i].argb
                                                  : primitive.argb;
-  }
-  g_primitives.push_back(primitive);
-}
-
-void queue_model1_quad(const std::vector<pvr_vertex_t> &vertices) {
-  if (vertices.size() != 4u) {
-    return;
-  }
-  pc_endjinn_pvr::QueuedPrimitive primitive{};
-  primitive.count = 4u;
-  copy_header_state(primitive);
-  primitive.argb = vertices.back().argb != 0u
-      ? vertices.back().argb : primitive.argb;
-  for (uint32_t i = 0u; i < 4u; ++i) {
-    primitive.x[i] = vertices[i].x;
-    primitive.y[i] = vertices[i].y;
-    primitive.z[i] = vertices[i].z;
-    primitive.u[i] = vertices[i].u;
-    primitive.v[i] = vertices[i].v;
-    primitive.color[i] = vertices[i].argb != 0u
-        ? vertices[i].argb : primitive.argb;
   }
   g_primitives.push_back(primitive);
 }
@@ -213,7 +195,9 @@ void queue_modifier_volume(const pvr_modifier_vol_t &first, const void *tail) {
   primitive.count = 3u;
   primitive.list = g_current_list;
   primitive.culling = g_header.culling;
+  primitive.modifier_receiver = false;
   primitive.modifier_volume = true;
+  primitive.modifier_volume_last = g_header.modifier_volume_last;
   primitive.modifier_mode = g_header.modifier_mode;
   primitive.x[0] = first.ax;
   primitive.y[0] = first.ay;
@@ -566,19 +550,6 @@ void dr_commit(void *ptr) {
       return;
     }
     const pvr_vertex_t *vertex = static_cast<const pvr_vertex_t *>(ptr);
-    if (g_header.model1_painter) {
-      g_triangle_vertices.push_back(*vertex);
-      if (flags == PVR_CMD_VERTEX_EOL) {
-        if (g_triangle_vertices.size() == 4u) {
-          queue_model1_quad(g_triangle_vertices);
-        } else if (g_triangle_vertices.size() == 3u) {
-          queue_triangle(g_triangle_vertices[0], g_triangle_vertices[1],
-                         g_triangle_vertices[2]);
-        }
-        g_triangle_vertices.clear();
-      }
-      return;
-    }
     g_triangle_vertices.push_back(*vertex);
     if (g_triangle_vertices.size() >= 3u) {
       const size_t n = g_triangle_vertices.size();
@@ -608,10 +579,12 @@ void dr_commit(void *ptr) {
   g_header.sprite = (header->mode1 & PC_ENDJINN_PVR_HEADER_SPRITE) != 0u;
   g_header.alpha_cutout =
       (header->mode1 & PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u;
-  g_header.model1_painter =
-      (header->mode1 & PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER) != 0u;
+  g_header.depth_test =
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE) == 0u;
   g_header.modifier = (header->mode1 & 0x40000000u) != 0u;
   g_header.modifier_volume = (header->mode1 & 0x20000000u) != 0u;
+  g_header.modifier_volume_last =
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_VOLUME_LAST) != 0u;
   g_header.culling = static_cast<pvr_cull_mode_t>(
       (header->mode1 & PC_ENDJINN_PVR_HEADER_CULL_MASK) >>
       PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
