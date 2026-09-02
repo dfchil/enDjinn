@@ -24,7 +24,8 @@ Textures, fonts, PCM sound effects, controllers, and depth-aware opaque and
 transparent modifier volumes work on PC. Rumble and VMU LCD output remain
 no-ops; see the
 [pc-enDjinn support matrix](../backends/pc-endjinn/SUPPORTED.md) for the exact
-differences.
+differences. web-enDjinn implements the same depth-aware opaque and transparent
+modifier classification through WebGL 2 stencil state and fragment evaluation.
 
 ## enj_hello
 
@@ -77,9 +78,10 @@ volume crosses the near plane, is clipped and capped at `z=1`, and darkens only
 the portions of a perspective ground grid and a solid 12-triangle box lying
 inside the resulting depth volume. This KOS-style 3D scene provides receiver
 depths across a single projected silhouette and a demanding regression for
-pc-enDjinn's opaque XOR accumulator while running from the same source on
-Dreamcast hardware. Press A to toggle between opaque depth/stencil receivers
-and transparent receivers evaluated independently at each fragment depth.
+pc-enDjinn's and web-enDjinn's modifier emulation while running from the same
+source on Dreamcast hardware. Press A to cycle between opaque depth/stencil
+receivers, transparent receivers evaluated independently at each fragment
+depth, and mixed inside-transparent/outside-opaque receivers.
 
 ## enj_fonts
 

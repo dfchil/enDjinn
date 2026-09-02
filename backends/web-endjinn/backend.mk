@@ -29,6 +29,7 @@ ENJ_WEB_EXTRA_DEPS += $(WEB_ENDJINN_POST_JS)
 WEB_ENDJINN_PLATFORM_SRCS := \
 	$(ENJDIR)backends/pc-endjinn/kos_abi_compat.cpp \
 	$(ENJDIR)backends/pc-endjinn/pc_endjinn_pvr.cpp \
+	$(ENJDIR)backends/pc-endjinn/pc_endjinn_translucent_sort.cpp \
 	$(ENJDIR)backends/pc-endjinn/pc_endjinn_input.cpp \
 	$(ENJDIR)backends/pc-endjinn/pc_endjinn_fs.cpp \
 	$(WEB_ENDJINN_BACKEND_DIR)enj_platform_web_endjinn.cpp \

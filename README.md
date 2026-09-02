@@ -223,6 +223,12 @@ make -C tests modifier-volume-visual
 This explicit target requires the pc-enDjinn Vulkan dependencies; the ordinary
 host checks remain renderer-independent.
 
+Compile the same depth-aware modifier-volume example for WebGL 2 with:
+
+```sh
+make -C tests modifier-volume-web
+```
+
 Build every example against the native development backend with:
 
 ```sh
