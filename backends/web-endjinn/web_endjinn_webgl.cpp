@@ -1,6 +1,7 @@
 #include "web_endjinn_webgl.h"
 
 #include "../pc-endjinn/pc_endjinn_pvr.h"
+#include "../pc-endjinn/pc_endjinn_translucent_sort.h"
 #include <enDjinn/enj_web_render.h>
 
 #include <SDL.h>
@@ -49,19 +50,24 @@ struct DrawBatch {
   uint32_t texture_width{};
   uint32_t texture_height{};
   pvr_filter_mode_t texture_filter{};
+  bool modifier_receiver{};
   bool modifier{};
   bool modifier_volume{};
+  bool modifier_volume_last{};
   uint32_t modifier_mode{};
+};
+
+struct WebModifierTriangle {
+  std::array<float, 4> a{};
+  std::array<float, 4> b{};
+  std::array<float, 4> c{};
+  std::array<float, 4> state{};
 };
 
 struct FrameDrawData {
   std::vector<WebVertex> vertices;
   std::vector<DrawBatch> batches;
-};
-
-struct SortablePrimitive {
-  const QueuedPrimitive *primitive{};
-  float depth{};
+  std::vector<WebModifierTriangle> translucent_modifiers;
 };
 
 struct WebTexture {
@@ -91,12 +97,24 @@ struct GenericDrawState {
   bool stencil_test{};
   bool blend{};
   bool punch_through{};
+  GLenum depth_func{GL_GEQUAL};
   GLenum stencil_func{GL_ALWAYS};
+  GLint stencil_reference{};
   GLuint stencil_func_mask{0xffu};
   GLuint stencil_write_mask{0xffu};
   GLenum stencil_depth_pass{GL_KEEP};
   GLenum blend_source{GL_SRC_ALPHA};
   GLenum blend_destination{GL_ONE_MINUS_SRC_ALPHA};
+};
+
+enum class DrawMode {
+  Standard,
+  ModifierXor,
+  ModifierOr,
+  ModifierInclude,
+  ModifierExclude,
+  ModifierClearCurrent,
+  OpaqueModifierReceiver,
 };
 
 vid_mode_t g_video_mode{640, 480};
@@ -107,6 +125,7 @@ GLuint g_vertex_buffer = 0;
 GLuint g_vertex_array = 0;
 GLuint g_white_texture = 0;
 GLuint g_palette_texture = 0;
+GLuint g_modifier_texture = 0;
 uint64_t g_uploaded_palette_revision = 0u;
 GLint g_position = -1;
 GLint g_color = -1;
@@ -114,6 +133,10 @@ GLint g_uv = -1;
 GLint g_sampler = -1;
 GLint g_textured = -1;
 GLint g_punch_through = -1;
+GLint g_modifier_sampler = -1;
+GLint g_modifier_count = -1;
+GLint g_modifier_texture_width = -1;
+GLint g_modifier_area = -1;
 float g_bg_color[3]{};
 bool g_fsaa = false;
 bool g_translucent_autosort = true;
@@ -121,7 +144,6 @@ bool g_ready = false;
 std::unordered_map<uint64_t, WebTexture> g_textures;
 std::unordered_map<uint64_t, WebIndexTexture> g_index_textures;
 FrameDrawData g_frame;
-std::array<std::vector<SortablePrimitive>, 5> g_frame_lists;
 std::vector<CustomRenderPass> g_custom_render_passes;
 GLuint g_bound_texture = 0;
 GenericDrawState g_generic_draw_state;
@@ -133,22 +155,116 @@ in vec4 a_color;
 in vec2 a_uv;
 out vec4 v_color;
 out vec2 v_uv;
+out vec3 v_position;
 void main() {
   gl_Position = vec4(a_position, 1.0);
   v_color = a_color;
   v_uv = a_uv;
+  v_position = a_position;
 }
 )";
 
 constexpr const char *fragment_shader = R"(#version 300 es
-precision mediump float;
+precision highp float;
+precision highp int;
 in vec4 v_color;
 in vec2 v_uv;
+in vec3 v_position;
 uniform sampler2D u_texture;
+uniform sampler2D u_modifier_events;
 uniform bool u_textured;
 uniform bool u_punch_through;
+uniform int u_modifier_count;
+uniform int u_modifier_texture_width;
+uniform int u_modifier_area;
 out vec4 fragment_color;
+
+vec4 modifier_event_texel(int linear_index) {
+  return texelFetch(u_modifier_events,
+                    ivec2(linear_index % u_modifier_texture_width,
+                          linear_index / u_modifier_texture_width), 0);
+}
+
+float cross2(vec2 a, vec2 b) {
+  return a.x * b.y - a.y * b.x;
+}
+
+bool top_left_edge(vec2 edge) {
+  /* WebGL NDC Y is the inverse of the submitted framebuffer Y. */
+  return edge.y > 0.0 || (edge.y == 0.0 && edge.x < 0.0);
+}
+
+bool triangle_crosses_receiver(int index) {
+  vec3 av = modifier_event_texel(index * 4).xyz;
+  vec3 bv = modifier_event_texel(index * 4 + 1).xyz;
+  vec3 cv = modifier_event_texel(index * 4 + 2).xyz;
+  vec2 a = av.xy;
+  vec2 b = bv.xy;
+  vec2 c = cv.xy;
+  float az = av.z;
+  float bz = bv.z;
+  float cz = cv.z;
+  vec2 p = v_position.xy;
+  float denominator = cross2(b - a, c - a);
+  if (abs(denominator) < 0.0000001) return false;
+  if (denominator < 0.0) {
+    vec2 swap_position = b;
+    b = c;
+    c = swap_position;
+    float swap_depth = bz;
+    bz = cz;
+    cz = swap_depth;
+    denominator = -denominator;
+  }
+  vec2 edge0 = b - a;
+  vec2 edge1 = c - b;
+  vec2 edge2 = a - c;
+  float coverage0 = cross2(edge0, p - a);
+  float coverage1 = cross2(edge1, p - b);
+  float coverage2 = cross2(edge2, p - c);
+  const float edge_epsilon = 0.0000001;
+  if (coverage0 < -edge_epsilon ||
+      (abs(coverage0) <= edge_epsilon && !top_left_edge(edge0)) ||
+      coverage1 < -edge_epsilon ||
+      (abs(coverage1) <= edge_epsilon && !top_left_edge(edge1)) ||
+      coverage2 < -edge_epsilon ||
+      (abs(coverage2) <= edge_epsilon && !top_left_edge(edge2))) {
+    return false;
+  }
+  float wa = cross2(b - p, c - p) / denominator;
+  float wb = cross2(c - p, a - p) / denominator;
+  float wc = 1.0 - wa - wb;
+  float modifier_depth = wa * az + wb * bz + wc * cz;
+  return modifier_depth > v_position.z;
+}
+
+bool area_one_at_receiver() {
+  bool current = false;
+  bool summary = false;
+  bool pending = false;
+  for (int i = 0; i < u_modifier_count; i++) {
+    vec4 state = modifier_event_texel(i * 4 + 3);
+    if (triangle_crosses_receiver(i)) {
+      current = state.y > 0.5 ? true : !current;
+    }
+    pending = true;
+    if (state.x > 0.5) {
+      summary = int(state.z + 0.5) == 2 ? summary && !current
+                                       : summary || current;
+      current = false;
+      pending = false;
+    }
+  }
+  if (pending) summary = summary || current;
+  return summary;
+}
+
 void main() {
+  if (u_modifier_area != 0) {
+    bool area_one = area_one_at_receiver();
+    if ((u_modifier_area == 1 && area_one) ||
+        (u_modifier_area == 2 && !area_one)) discard;
+  }
   vec4 color = (u_textured ? texture(u_texture, v_uv) : vec4(1.0)) * v_color;
   if (u_punch_through && color.a < 0.5) discard;
   fragment_color = color;
@@ -205,6 +321,11 @@ bool create_program() {
   g_sampler = glGetUniformLocation(g_program, "u_texture");
   g_textured = glGetUniformLocation(g_program, "u_textured");
   g_punch_through = glGetUniformLocation(g_program, "u_punch_through");
+  g_modifier_sampler = glGetUniformLocation(g_program, "u_modifier_events");
+  g_modifier_count = glGetUniformLocation(g_program, "u_modifier_count");
+  g_modifier_texture_width =
+      glGetUniformLocation(g_program, "u_modifier_texture_width");
+  g_modifier_area = glGetUniformLocation(g_program, "u_modifier_area");
   return true;
 }
 
@@ -262,54 +383,59 @@ void emit_primitive(std::vector<WebVertex> &vertices,
   }
 }
 
-float average_z(const QueuedPrimitive &primitive) {
-  float total = 0.0f;
-  for (uint32_t i = 0; i < primitive.count; i++) {
-    total += primitive.z[i];
-  }
-  return primitive.count == 0 ? 0.0f : total / primitive.count;
-}
-
 const FrameDrawData &build_frame() {
   const auto &queued = pc_endjinn_pvr::primitives();
   g_frame.vertices.clear();
   g_frame.batches.clear();
+  g_frame.translucent_modifiers.clear();
   g_frame.vertices.reserve(queued.size() * 6u);
-  for (auto &list : g_frame_lists) {
-    list.clear();
-  }
+  g_frame.translucent_modifiers.reserve(queued.size());
 
   for (const QueuedPrimitive &primitive : queued) {
-    size_t list_index = g_frame_lists.size();
-    if (primitive.modifier_volume) {
-      if (primitive.list == PVR_LIST_OP_MOD) {
-        list_index = 0u;
-      } else if (primitive.list == PVR_LIST_TR_MOD) {
-        list_index = 1u;
-      }
-    } else if (primitive.list == PVR_LIST_OP_POLY) {
-      list_index = 2u;
-    } else if (primitive.list == PVR_LIST_PT_POLY) {
-      list_index = 3u;
-    } else if (primitive.list == PVR_LIST_TR_POLY) {
-      list_index = 4u;
+    if (primitive.list != PVR_LIST_TR_MOD || !primitive.modifier_volume ||
+        primitive.count != 3u ||
+        triangle_is_culled(primitive, 0u, 1u, 2u)) {
+      continue;
     }
-    if (list_index < g_frame_lists.size()) {
-      g_frame_lists[list_index].push_back(
-          {&primitive, list_index == 4u ? average_z(primitive) : 0.0f});
+    const WebVertex a = make_vertex(primitive.x[0], primitive.y[0],
+                                    primitive.z[0], 0u, 0.0f, 0.0f);
+    const WebVertex b = make_vertex(primitive.x[1], primitive.y[1],
+                                    primitive.z[1], 0u, 0.0f, 0.0f);
+    const WebVertex c = make_vertex(primitive.x[2], primitive.y[2],
+                                    primitive.z[2], 0u, 0.0f, 0.0f);
+    WebModifierTriangle event{};
+    for (size_t component = 0u; component < 3u; component++) {
+      event.a[component] = a.position[component];
+      event.b[component] = b.position[component];
+      event.c[component] = c.position[component];
     }
-  }
-  if (g_translucent_autosort) {
-    std::stable_sort(
-        g_frame_lists[4].begin(), g_frame_lists[4].end(),
-        [](const SortablePrimitive &a, const SortablePrimitive &b) {
-          return a.depth < b.depth;
-        });
+    event.state[0] = primitive.modifier_volume_last ? 1.0f : 0.0f;
+    event.state[1] = !primitive.modifier_volume_last &&
+                             primitive.modifier_mode != PVR_MODIFIER_OTHER_POLY
+                         ? 1.0f
+                         : 0.0f;
+    event.state[2] = static_cast<float>(primitive.modifier_mode);
+    g_frame.translucent_modifiers.push_back(event);
   }
 
-  const auto append_list = [&](pvr_list_t list, size_t list_index) {
-    for (const SortablePrimitive &sortable : g_frame_lists[list_index]) {
-      const QueuedPrimitive *primitive = sortable.primitive;
+  const auto append_list = [&](pvr_list_t list, bool sort_back_to_front,
+                               bool modifier_volume, bool model1_painter,
+                               int modifier_filter) {
+    std::vector<const QueuedPrimitive *> primitives;
+    primitives.reserve(queued.size());
+    for (const QueuedPrimitive &primitive : queued) {
+      if (primitive.list == list &&
+          primitive.modifier_volume == modifier_volume &&
+          primitive.model1_painter == model1_painter &&
+          (modifier_filter < 0 ||
+           primitive.modifier == (modifier_filter != 0))) {
+        primitives.push_back(&primitive);
+      }
+    }
+    if (sort_back_to_front) {
+      (void)pc_endjinn_translucent_sort::sort(primitives);
+    }
+    for (const QueuedPrimitive *primitive : primitives) {
       const bool same = !g_frame.batches.empty() &&
                         g_frame.batches.back().list == list &&
                         g_frame.batches.back().depth_write ==
@@ -318,28 +444,38 @@ const FrameDrawData &build_frame() {
                         g_frame.batches.back().texture == primitive->texture &&
                         g_frame.batches.back().texture_format ==
                             primitive->texture_format &&
+                        g_frame.batches.back().texture_width ==
+                            primitive->texture_width &&
+                        g_frame.batches.back().texture_height ==
+                            primitive->texture_height &&
                         g_frame.batches.back().texture_filter ==
                             primitive->texture_filter &&
+                        g_frame.batches.back().modifier_receiver ==
+                            primitive->modifier_receiver &&
                         g_frame.batches.back().modifier == primitive->modifier &&
                         g_frame.batches.back().modifier_volume ==
                             primitive->modifier_volume &&
+                        g_frame.batches.back().modifier_volume_last ==
+                            primitive->modifier_volume_last &&
                         g_frame.batches.back().modifier_mode ==
                             primitive->modifier_mode;
       if (!same) {
-        g_frame.batches.push_back(
-            {list,
-             static_cast<uint32_t>(g_frame.vertices.size()),
-             0u,
-             primitive->depth_write,
-             primitive->textured,
-             primitive->texture,
-             primitive->texture_format,
-             primitive->texture_width,
-             primitive->texture_height,
-             primitive->texture_filter,
-             primitive->modifier,
-             primitive->modifier_volume,
-             primitive->modifier_mode});
+        DrawBatch batch{};
+        batch.list = list;
+        batch.first_vertex = static_cast<uint32_t>(g_frame.vertices.size());
+        batch.depth_write = primitive->depth_write;
+        batch.textured = primitive->textured;
+        batch.texture = primitive->texture;
+        batch.texture_format = primitive->texture_format;
+        batch.texture_width = primitive->texture_width;
+        batch.texture_height = primitive->texture_height;
+        batch.texture_filter = primitive->texture_filter;
+        batch.modifier_receiver = primitive->modifier_receiver;
+        batch.modifier = primitive->modifier;
+        batch.modifier_volume = primitive->modifier_volume;
+        batch.modifier_volume_last = primitive->modifier_volume_last;
+        batch.modifier_mode = primitive->modifier_mode;
+        g_frame.batches.push_back(batch);
       }
       const uint32_t before =
           static_cast<uint32_t>(g_frame.vertices.size());
@@ -349,11 +485,15 @@ const FrameDrawData &build_frame() {
     }
   };
 
-  append_list(PVR_LIST_OP_MOD, 0u);
-  append_list(PVR_LIST_TR_MOD, 1u);
-  append_list(PVR_LIST_OP_POLY, 2u);
-  append_list(PVR_LIST_PT_POLY, 3u);
-  append_list(PVR_LIST_TR_POLY, 4u);
+  /* Area 0 establishes the visible opaque receiver depth. Modifier volumes
+   * then build stencil summary bit 0 from current-volume bit 1, and area 1
+   * is re-shaded only where that summary is set. */
+  append_list(PVR_LIST_OP_POLY, false, false, false, 0);
+  append_list(PVR_LIST_OP_MOD, false, true, false, -1);
+  append_list(PVR_LIST_OP_POLY, false, false, false, 1);
+  append_list(PVR_LIST_OP_POLY, true, false, true, -1);
+  append_list(PVR_LIST_PT_POLY, false, false, false, -1);
+  append_list(PVR_LIST_TR_POLY, g_translucent_autosort, false, false, -1);
   return g_frame;
 }
 
@@ -547,33 +687,100 @@ WebIndexTexture *index_texture_for(const DrawBatch &batch,
   return &cached;
 }
 
-void set_draw_state(const DrawBatch &batch) {
+bool upload_modifier_texture(
+    const std::vector<WebModifierTriangle> &modifiers,
+    GLint *texture_width) {
+  GLint maximum_size = 0;
+  glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maximum_size);
+  if (maximum_size <= 0) {
+    return false;
+  }
+  const size_t texel_count = std::max<size_t>(1u, modifiers.size() * 4u);
+  const size_t width = std::min<size_t>(
+      static_cast<size_t>(maximum_size), std::max<size_t>(4u, texel_count));
+  const size_t height = (texel_count + width - 1u) / width;
+  if (height > static_cast<size_t>(maximum_size)) {
+    std::fprintf(stderr,
+                 "web-enDjinn: translucent modifier triangle overflow "
+                 "(%zu events exceed a %dx%d data texture); frame rejected\n",
+                 modifiers.size(), maximum_size, maximum_size);
+    return false;
+  }
+
+  std::vector<float> pixels(width * height * 4u, 0.0f);
+  for (size_t i = 0u; i < modifiers.size(); i++) {
+    const WebModifierTriangle &event = modifiers[i];
+    float *destination = pixels.data() + i * 16u;
+    std::memcpy(destination, event.a.data(), sizeof(float) * 4u);
+    std::memcpy(destination + 4u, event.b.data(), sizeof(float) * 4u);
+    std::memcpy(destination + 8u, event.c.data(), sizeof(float) * 4u);
+    std::memcpy(destination + 12u, event.state.data(), sizeof(float) * 4u);
+  }
+
+  glActiveTexture(GL_TEXTURE1);
+  if (g_modifier_texture == 0u) {
+    glGenTextures(1, &g_modifier_texture);
+  }
+  glBindTexture(GL_TEXTURE_2D, g_modifier_texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, static_cast<GLsizei>(width),
+               static_cast<GLsizei>(height), 0, GL_RGBA, GL_FLOAT,
+               pixels.data());
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glActiveTexture(GL_TEXTURE0);
+  g_bound_texture = 0u;
+  *texture_width = static_cast<GLint>(width);
+  return true;
+}
+
+void set_draw_state(const DrawBatch &batch, DrawMode mode) {
   GenericDrawState desired{};
   desired.depth_test = true;
   desired.depth_write = batch.depth_write;
   desired.color_write = true;
   desired.punch_through = batch.list == PVR_LIST_PT_POLY;
-  if (batch.modifier_volume) {
+  if (mode == DrawMode::ModifierXor || mode == DrawMode::ModifierOr) {
+    desired.depth_write = false;
+    desired.color_write = false;
+    desired.stencil_test = true;
+    desired.stencil_func = GL_ALWAYS;
+    desired.stencil_func_mask = 0x02u;
+    desired.stencil_write_mask = 0x02u;
+    desired.stencil_reference = mode == DrawMode::ModifierOr ? 0x02 : 0;
+    desired.stencil_depth_pass =
+        mode == DrawMode::ModifierOr ? GL_REPLACE : GL_INVERT;
+  } else if (mode == DrawMode::ModifierInclude ||
+             mode == DrawMode::ModifierExclude) {
+    desired.depth_test = false;
+    desired.depth_write = false;
+    desired.color_write = false;
+    desired.stencil_test = true;
+    desired.stencil_func = GL_EQUAL;
+    desired.stencil_func_mask = 0x02u;
+    desired.stencil_write_mask = 0x01u;
+    desired.stencil_reference =
+        mode == DrawMode::ModifierExclude ? 0x02 : 0x03;
+    desired.stencil_depth_pass =
+        mode == DrawMode::ModifierExclude ? GL_ZERO : GL_REPLACE;
+  } else if (mode == DrawMode::ModifierClearCurrent) {
     desired.depth_test = false;
     desired.depth_write = false;
     desired.color_write = false;
     desired.stencil_test = true;
     desired.stencil_func = GL_ALWAYS;
-    desired.stencil_func_mask = 0xffu;
-    desired.stencil_write_mask = 0xffu;
-    desired.stencil_depth_pass =
-        batch.modifier_mode == PVR_MODIFIER_EXCLUDE_LAST_POLY
-            ? GL_ZERO
-            : GL_REPLACE;
-  } else if (batch.modifier) {
-    desired.depth_test = false;
+    desired.stencil_func_mask = 0x02u;
+    desired.stencil_write_mask = 0x02u;
+    desired.stencil_depth_pass = GL_ZERO;
+  } else if (mode == DrawMode::OpaqueModifierReceiver) {
     desired.depth_write = false;
+    desired.depth_func = GL_EQUAL;
     desired.stencil_test = true;
-    desired.blend = true;
     desired.stencil_func = GL_EQUAL;
-    desired.stencil_func_mask = 0xffu;
-    desired.stencil_write_mask = 0x00u;
-    desired.stencil_depth_pass = GL_KEEP;
+    desired.stencil_reference = 0x01;
+    desired.stencil_func_mask = 0x01u;
+    desired.stencil_write_mask = 0u;
   } else if (batch.list == PVR_LIST_TR_POLY) {
     desired.depth_write = false;
     desired.blend = true;
@@ -588,8 +795,10 @@ void set_draw_state(const DrawBatch &batch) {
   if (invalid || desired.depth_test != g_generic_draw_state.depth_test) {
     desired.depth_test ? glEnable(GL_DEPTH_TEST) : glDisable(GL_DEPTH_TEST);
   }
-  if (invalid) {
-    glDepthFunc(GL_GEQUAL);
+  if (desired.depth_test &&
+      (invalid || !g_generic_draw_state.depth_test ||
+       desired.depth_func != g_generic_draw_state.depth_func)) {
+    glDepthFunc(desired.depth_func);
   }
   if (invalid || desired.depth_write != g_generic_draw_state.depth_write) {
     glDepthMask(desired.depth_write ? GL_TRUE : GL_FALSE);
@@ -602,9 +811,12 @@ void set_draw_state(const DrawBatch &batch) {
   if (desired.stencil_test &&
       (invalid || !g_generic_draw_state.stencil_test ||
        desired.stencil_func != g_generic_draw_state.stencil_func ||
+       desired.stencil_reference !=
+           g_generic_draw_state.stencil_reference ||
        desired.stencil_func_mask !=
            g_generic_draw_state.stencil_func_mask)) {
-    glStencilFunc(desired.stencil_func, 1, desired.stencil_func_mask);
+    glStencilFunc(desired.stencil_func, desired.stencil_reference,
+                  desired.stencil_func_mask);
   }
   if (desired.stencil_test &&
       (invalid || !g_generic_draw_state.stencil_test ||
@@ -655,6 +867,11 @@ void draw_frame(const FrameDrawData &frame) {
   if (!g_ready) {
     return;
   }
+  GLint modifier_texture_width = 0;
+  if (!upload_modifier_texture(frame.translucent_modifiers,
+                               &modifier_texture_width)) {
+    return;
+  }
   int width = 0;
   int height = 0;
 #ifdef __EMSCRIPTEN__
@@ -703,14 +920,40 @@ void draw_frame(const FrameDrawData &frame) {
                  frame.vertices.data(), GL_STREAM_DRAW);
     glActiveTexture(GL_TEXTURE0);
     glUniform1i(g_sampler, 0);
+    glUniform1i(g_modifier_sampler, 1);
+    glUniform1i(g_modifier_count,
+                static_cast<GLint>(frame.translucent_modifiers.size()));
+    glUniform1i(g_modifier_texture_width, modifier_texture_width);
 
     g_generic_draw_state_valid = false;
     int last_textured = -1;
+    uint32_t opaque_volume_first_vertex = UINT32_MAX;
     for (const DrawBatch &batch : frame.batches) {
       if (batch.vertex_count == 0) {
         continue;
       }
-      set_draw_state(batch);
+      const bool opaque_modifier_volume =
+          batch.modifier_volume && batch.list == PVR_LIST_OP_MOD;
+      if (opaque_modifier_volume &&
+          opaque_volume_first_vertex == UINT32_MAX) {
+        opaque_volume_first_vertex = batch.first_vertex;
+      }
+      DrawMode mode = DrawMode::Standard;
+      if (opaque_modifier_volume) {
+        mode = !batch.modifier_volume_last &&
+                       batch.modifier_mode != PVR_MODIFIER_OTHER_POLY
+                   ? DrawMode::ModifierOr
+                   : DrawMode::ModifierXor;
+      } else if (batch.modifier && batch.list == PVR_LIST_OP_POLY) {
+        mode = DrawMode::OpaqueModifierReceiver;
+      }
+      set_draw_state(batch, mode);
+      const GLint modifier_area = batch.modifier_receiver &&
+                                          batch.list == PVR_LIST_TR_POLY
+                                      ? (batch.modifier ? 2 : 1)
+                                      : 0;
+      glUniform1i(g_modifier_area, modifier_area);
+      glActiveTexture(GL_TEXTURE0);
       bind_texture_2d(texture_for(batch));
       if (last_textured != static_cast<int>(batch.textured)) {
         last_textured = static_cast<int>(batch.textured);
@@ -718,6 +961,30 @@ void draw_frame(const FrameDrawData &frame) {
       }
       glDrawArrays(GL_TRIANGLES, static_cast<GLint>(batch.first_vertex),
                    static_cast<GLsizei>(batch.vertex_count));
+
+      if (opaque_modifier_volume && batch.modifier_volume_last) {
+        const uint32_t volume_end = batch.first_vertex + batch.vertex_count;
+        const uint32_t volume_vertex_count =
+            opaque_volume_first_vertex == UINT32_MAX ||
+                    volume_end < opaque_volume_first_vertex
+                ? 0u
+                : volume_end - opaque_volume_first_vertex;
+        if (volume_vertex_count != 0u) {
+          set_draw_state(
+              batch,
+              batch.modifier_mode == PVR_MODIFIER_EXCLUDE_LAST_POLY
+                  ? DrawMode::ModifierExclude
+                  : DrawMode::ModifierInclude);
+          glDrawArrays(GL_TRIANGLES,
+                       static_cast<GLint>(opaque_volume_first_vertex),
+                       static_cast<GLsizei>(volume_vertex_count));
+          set_draw_state(batch, DrawMode::ModifierClearCurrent);
+          glDrawArrays(GL_TRIANGLES,
+                       static_cast<GLint>(opaque_volume_first_vertex),
+                       static_cast<GLsizei>(volume_vertex_count));
+        }
+        opaque_volume_first_vertex = UINT32_MAX;
+      }
     }
   }
   glStencilMask(0xff);
@@ -888,6 +1155,7 @@ void pvr_shutdown() {
     }
     glDeleteTextures(1, &g_palette_texture);
     glDeleteTextures(1, &g_white_texture);
+    glDeleteTextures(1, &g_modifier_texture);
     glDeleteVertexArrays(1, &g_vertex_array);
     glDeleteBuffers(1, &g_vertex_buffer);
     glDeleteProgram(g_program);
@@ -898,6 +1166,7 @@ void pvr_shutdown() {
   g_ready = false;
   g_white_texture = 0;
   g_palette_texture = 0;
+  g_modifier_texture = 0;
   g_uploaded_palette_revision = 0u;
   g_vertex_array = 0;
   g_vertex_buffer = 0;

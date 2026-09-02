@@ -48,6 +48,9 @@ modifier-volume-visual-update:
 	$(MAKE) -C $(ROOT)/examples/enj_modifier_volume_zclip ENJ_TARGET=pc-endjinn
 	$(PYTHON) modifier_volume_visual_regression.py --update-reference
 
+modifier-volume-web:
+	$(MAKE) -C $(ROOT)/examples/enj_modifier_volume_zclip ENJ_TARGET=web-endjinn
+
 $(CPP_API_TARGET): public_api_cpp_test.cpp
 	$(CXX) -std=c++17 -Wall -Wextra -Werror \
 		-I$(ROOT)/backends/pc-endjinn/include -I$(ROOT)/include \
@@ -58,4 +61,4 @@ clean:
 		$(TRANSLUCENT_SORT_TARGET)
 
 .PHONY: check clean public-headers modifier-volume-visual \
-	modifier-volume-visual-update
+	modifier-volume-visual-update modifier-volume-web
