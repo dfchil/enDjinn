@@ -13,8 +13,8 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE = ROOT / "examples" / "enj_modifier_volume_zclip"
-DEFAULT_BINARY = EXAMPLE / "build" / "pc-endjinn" / "enj_modifier_volume_zclip"
+EXAMPLE = ROOT / "examples" / "enj_deep_modifiers"
+DEFAULT_BINARY = ROOT / "tests" / "build" / "deep-modifiers-pc" / "enj_deep_modifiers"
 REFERENCE = Path(__file__).with_name("data") / "modifier_volume_visual_reference.json"
 CAPTURE_FRAME = 180
 GRID_WIDTH = 32

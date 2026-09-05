@@ -41,3 +41,4 @@ tests/public_api_cpp_test
 tests/resource_safety_test
 tests/texture_shim_test
 tests/translucent_sort_test
+tests/web_frame_test

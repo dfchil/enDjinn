@@ -1,5 +1,5 @@
 /*
- * Closed modifier-volume and near-plane clipping regression.
+ * Closed modifier-volume and near-plane clipping example.
  *
  * The cube topology and test scenario are adapted from KallistiOS's
  * examples/dreamcast/pvr/modifier_volume_zclip example (Twada, 2024).
@@ -11,7 +11,9 @@
 
 #include <math.h>
 #include <stdint.h>
+#ifdef ENJ_DEEP_MODIFIERS_TEST_CONTROLS
 #include <stdlib.h>
+#endif
 
 #define LOGICAL_WIDTH 320.0f
 #define LOGICAL_HEIGHT 240.0f
@@ -519,7 +521,7 @@ int main(__unused int argc, __unused char **argv) {
   screen_x_offset = (float)(vid_mode->width >> 1) - LOGICAL_WIDTH * 0.5f;
   screen_y_offset = (float)(vid_mode->height >> 1) - LOGICAL_HEIGHT * 0.5f;
   pvr_set_bg_color(0.025f, 0.04f, 0.065f);
-#ifdef ENJ_TARGET_PC_ENDJINN
+#ifdef ENJ_DEEP_MODIFIERS_TEST_CONTROLS
   if (getenv("ENJ_MODIFIER_TRANSLUCENT") != NULL) {
     receiver_mode = RECEIVER_TRANSLUCENT;
     receiver_list = PVR_LIST_TR_POLY;
@@ -537,7 +539,7 @@ int main(__unused int argc, __unused char **argv) {
 #endif
 
   enj_mode_t mode = {
-      .name = "Modifier Volume Z-Clip",
+      .name = "Deep Modifiers",
       .mode_updater = main_mode_updater,
       .data = NULL,
   };

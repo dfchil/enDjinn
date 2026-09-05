@@ -177,7 +177,7 @@ void render_PT(void* data) {
     }
 }
 
-void render_TR(void* data) {
+void render_TR(void* __unused) {
     int fontstartx = MARGIN_LEFT;
     int fontstarty = 0;
     enj_font_zvalue_set(2.0f);

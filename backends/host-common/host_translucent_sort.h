@@ -1,12 +1,12 @@
-#ifndef PC_ENDJINN_TRANSLUCENT_SORT_H
-#define PC_ENDJINN_TRANSLUCENT_SORT_H
+#ifndef ENJ_HOST_TRANSLUCENT_SORT_H
+#define ENJ_HOST_TRANSLUCENT_SORT_H
 
-#include "pc_endjinn_pvr.h"
+#include "host_pvr.h"
 
 #include <cstddef>
 #include <vector>
 
-namespace pc_endjinn_translucent_sort {
+namespace enj_host_translucent_sort {
 
 struct Diagnostics {
   size_t primitive_count{};
@@ -17,15 +17,15 @@ struct Diagnostics {
   bool average_depth_fallback{};
 };
 
-float primitive_average_z(const pc_endjinn_pvr::QueuedPrimitive &primitive);
+float primitive_average_z(const enj_host_pvr::QueuedPrimitive &primitive);
 
 /* -1 means a is farther, 1 means b is farther, and 0 means that the pair
  * does not overlap or cannot be represented by one global depth order. */
-int overlapping_depth_order(const pc_endjinn_pvr::QueuedPrimitive &a,
-                            const pc_endjinn_pvr::QueuedPrimitive &b);
+int overlapping_depth_order(const enj_host_pvr::QueuedPrimitive &a,
+                            const enj_host_pvr::QueuedPrimitive &b);
 
 Diagnostics sort(
-    std::vector<const pc_endjinn_pvr::QueuedPrimitive *> &primitives);
+    std::vector<const enj_host_pvr::QueuedPrimitive *> &primitives);
 
 namespace detail {
 
@@ -37,6 +37,6 @@ std::vector<size_t> sort_dependency_graph(
     Diagnostics &diagnostics);
 
 }  // namespace detail
-}  // namespace pc_endjinn_translucent_sort
+}  // namespace enj_host_translucent_sort
 
 #endif

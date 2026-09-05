@@ -1,6 +1,8 @@
 #include <kos.h>
 
-#include "pc_endjinn_pvr.h"
+#include <pc_endjinn/capture.h>
+
+#include "../host-common/host_pvr.h"
 #include "pc_endjinn_vulkan.h"
 
 extern "C" {
@@ -42,11 +44,11 @@ void pvr_set_bg_color(float r, float g, float b) {
 void pvr_wait_ready(void) { pc_endjinn::pvr_wait_ready(); }
 void pvr_scene_begin(void) { pc_endjinn::pvr_scene_begin(); }
 void pvr_scene_finish(void) { pc_endjinn::pvr_scene_finish(); }
-uint64_t pc_endjinn_pvr_presented_frame_count(void) {
+uint64_t enj_pc_presented_frame_count(void) {
   return pc_endjinn::pvr_presented_frame_count();
 }
-void pc_endjinn_pvr_request_current_scene_screenshot(const char *path) {
-  pc_endjinn::pvr_request_current_scene_screenshot(path);
+bool enj_pc_capture_next_frame(const char *path) {
+  return pc_endjinn::capture_next_frame(path);
 }
 void pvr_list_begin(pvr_list_t list) { pc_endjinn::pvr_list_begin(list); }
 void pvr_list_finish(void) { pc_endjinn::pvr_list_finish(); }
@@ -57,19 +59,19 @@ void pvr_set_pal_format(pvr_palfmt_t mode) {
 }
 
 void pvr_set_pal_entry(uint32_t index, uint32_t value) {
-  pc_endjinn_pvr::palette_entry(index, value);
+  enj_host_pvr::palette_entry(index, value);
 }
 
-void *pvr_mem_malloc(size_t size) { return pc_endjinn_pvr::texture_alloc(size); }
-void pvr_mem_free(pvr_ptr_t ptr) { pc_endjinn_pvr::texture_free(ptr); }
+void *pvr_mem_malloc(size_t size) { return enj_host_pvr::texture_alloc(size); }
+void pvr_mem_free(pvr_ptr_t ptr) { enj_host_pvr::texture_free(ptr); }
 
 void pvr_txr_load(const void *src, pvr_ptr_t dst, size_t count) {
-  pc_endjinn_pvr::texture_load(src, dst, count);
+  enj_host_pvr::texture_load(src, dst, count);
 }
 
 void pvr_txr_load_ex(const void *src, pvr_ptr_t dst, uint32_t width,
                      uint32_t height, uint32_t flags) {
-  pc_endjinn_pvr::texture_load_ex(src, dst, width, height, flags);
+  enj_host_pvr::texture_load_ex(src, dst, width, height, flags);
 }
 
 void pvr_fog_table_color(float a, float r, float g, float b) {

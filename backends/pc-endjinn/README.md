@@ -65,15 +65,22 @@ Projects with host-side library dependencies can add their include paths to
   for timers, PVR, Maple, video, sound, and related KOS systems.
 - `include/pc_endjinn/`: backend support types and the generated ABI contract.
 - `enj_platform_pc_endjinn.cpp`: thin KOS symbol adapter used by enDjinn.
-- `pc_endjinn_pvr.cpp`: PVR direct-render packet decoding, render lists, and
-  renderer-neutral primitive queues.
-- `pc_endjinn_translucent_sort.cpp`: overlap-aware translucent dependency
-  ordering and its diagnostic counters.
+- `../host-common/host_pvr.cpp`: PVR direct-render packet decoding, render
+  lists, and renderer-neutral primitive queues shared with Web.
+- `../host-common/host_translucent_sort.cpp`: overlap-aware translucent
+  dependency ordering and diagnostic counters shared with Web.
+- `../host-common/host_input.cpp`: SDL implementations of Maple controllers and
+  controller rumble shared with Web.
+- `../host-common/host_audio.cpp`: shared SDL PCM sound implementation.
+- `../host-common/host_fs.cpp`: host filesystem and `/vmu/` save-path handling.
+- `../host-common/host_stubs.cpp`: explicit unsupported KOS diagnostic and VMU
+  LCD stubs.
+- `../host-common/host_kos_abi.cpp`: compile-time checks for the supported KOS
+  ABI subset.
 - `pc_endjinn_vulkan.cpp`: SDL window management, Vulkan resources, pipelines,
-  frame construction, and presentation.
-- `pc_endjinn_input.cpp`: SDL implementations of Maple controllers, controller
-  rumble, and PCM sound, plus the current VMU LCD stubs.
-- `pc_endjinn_fs.cpp`: host filesystem and `/vmu/` save-path handling.
+  and presentation.
+- `pc_endjinn_frame.cpp`: PVR queue conversion, culling, batching, and modifier
+  frame construction for Vulkan.
 - `SUPPORTED.md`: Coverage matrix for implemented, stubbed, and unsupported
   KOS/enDjinn behavior.
 
@@ -91,11 +98,18 @@ owned by the backend.
 
 For replay-raster diagnostics only, `ENJ_OFFSCREEN_CAPTURE=1` retains that
 same PVR packet collection and Vulkan graphics pipeline but replaces the
-swapchain color attachment with a 1280x960 offscreen image.  It deliberately
+swapchain color attachment with an offscreen image. It deliberately
 does not acquire a drawable or present a frame, and creates the required SDL
 Vulkan surface window hidden, avoiding macOS GUI-session blocking or a visible
-test window while an explicit `ENJ_SCREENSHOT_PATH` readback is requested.  It
+test window while an explicit `ENJ_SCREENSHOT_PATH` readback is requested. It
 is not a separate renderer and is not enabled for normal interactive runs.
+
+Applications may define both `ENJ_INTEGER_PRESENT_WIDTH` and
+`ENJ_INTEGER_PRESENT_HEIGHT` in their host preprocessor flags. The Vulkan
+backend centers the largest whole-number multiple of that aperture in the
+drawable and clears unused space to black. Drawables smaller than one aperture
+use an aspect-preserving fractional downscale. `ENJ_NATIVE_COMPOSITION_RASTER=1`
+uses the configured aperture directly for offscreen capture.
 
 Set `ENJ_TRANSLUCENT_SORT_DIAGNOSTICS=1` to print the translucent primitive,
 modifier-triangle, dependency, unordered-pair, cycle-break, and bounded
@@ -105,6 +119,11 @@ uses the same offscreen renderer and can be run from the repository root with:
 ```sh
 make -C tests modifier-volume-visual
 ```
+
+PC-only tools can request a capture after initialization by including
+`<pc_endjinn/capture.h>` and calling `enj_pc_capture_next_frame()`. The backend
+copies the supplied path and rejects the request if another capture is pending.
+This extension is intentionally separate from the KOS-shaped PVR headers.
 
 The ordinary `make -C tests check` target includes the renderer-independent
 translucent ordering unit tests; it does not require Vulkan.
@@ -161,7 +180,7 @@ order. They use SDL's standard buttons, D-pad, left stick, and triggers.
 `include/pc_endjinn/kos_abi_contract.generated.h` records authoritative KOS
 constants, structure sizes, alignments, and offsets. The generator extracts
 them from assembly produced by the Dreamcast compiler, so the probe itself
-does not need to run. `kos_abi_compat.cpp` validates the PC replicas with
+does not need to run. `host_kos_abi.cpp` validates the host replicas with
 `static_assert` during every PC build.
 
 After updating KOS, activate its environment and regenerate the contract from

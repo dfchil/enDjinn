@@ -11,8 +11,9 @@ development. Dreamcast with KallistiOS is the reference target. The
 `pc-endjinn` and `web-endjinn`
 targets are development backends that run the same application source, but do
 not emulate every KOS or PVR feature. Consult the
-[PC support matrix](../backends/pc-endjinn/SUPPORTED.md) before relying on a
-Dreamcast-specific feature in a portable project.
+[target support matrix](./SUPPORT.md) and detailed
+[PC backend support document](../backends/pc-endjinn/SUPPORTED.md) before
+relying on a Dreamcast-specific feature in a portable project.
 
 There is not yet a versioned, stable ABI. Integrate enDjinn as source, pin a
 known commit (a Git submodule is a good fit), and review public-header changes
@@ -158,10 +159,6 @@ For code intended to run on all three targets:
 - test both a reference Dreamcast build and the development backend you ship or
   use; and
 - do not treat the PC or browser backend as cycle-accurate Dreamcast emulation.
-
-The browser-only custom-pass API lives in `enj_web_render.h` and should be
-guarded by the application's web-target compile definition. It is deliberately
-not included by the cross-platform aggregate header `enj_enDjinn.h`.
 
 ## Updating enDjinn
 
