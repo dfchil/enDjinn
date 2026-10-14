@@ -63,8 +63,20 @@ current volume with XOR or OR, and folds completed volumes into its area result
 with inclusion or exclusion. Area 0 and area 1 are separate draws with
 complementary fragment rejection, so exactly one is blended at each fragment;
 overlapping translucent layers can therefore receive different classifications
-at the same pixel. The event buffer accepts up to 65,536 modifier triangles and
-rejects an overflowing frame explicitly rather than silently dropping events.
+at the same pixel. PC and Web share a conservative hard limit of 4,096
+translucent modifier triangles per frame and reject an overflowing frame
+explicitly rather than silently dropping events.
+
+The fragment cost is linear in the submitted triangle count for every
+modifier-enabled translucent receiver. Treat 256 triangles as an initial
+practical budget, measure the actual scene, and keep the 4,096 limit as a
+safety boundary rather than a target. The explicit
+`make -C tests modifier-volume-benchmark` workload covers a full-screen
+transparent receiver with 0, 12, 48, 256, 1,024, and 4,096 spatially varied
+triangles. On an Apple M1 through MoltenVK at a 1280x960 offscreen target, the
+September 2026 median measurements were 3.07, 3.07, 3.09, 3.06, 3.10, and
+3.08 ms/frame respectively. These numbers establish the local baseline only;
+browser, driver, resolution, and receiver coverage can change the result.
 
 This makes modifier classification depth-accurate for the backend's existing
 translucent draw order. The overlap-aware dependency sort resolves a global

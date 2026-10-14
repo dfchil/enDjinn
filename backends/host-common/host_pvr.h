@@ -1,5 +1,5 @@
-#ifndef PC_ENDJINN_PVR_H
-#define PC_ENDJINN_PVR_H
+#ifndef ENJ_HOST_PVR_H
+#define ENJ_HOST_PVR_H
 
 #include <kos.h>
 
@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace pc_endjinn_pvr {
+namespace enj_host_pvr {
 
 struct QueuedPrimitive {
   float x[4];
@@ -21,9 +21,9 @@ struct QueuedPrimitive {
   uint32_t argb;
   pvr_list_t list;
   pvr_cull_mode_t culling;
+  bool depth_test;
   bool depth_write;
   bool alpha_cutout;
-  bool model1_painter;
   bool textured;
   pvr_ptr_t texture;
   uint32_t texture_format;
@@ -68,6 +68,6 @@ uint64_t texture_revision(pvr_ptr_t ptr);
 std::array<uint32_t, 1024> palette_rgba();
 bool decode_texture(const QueuedPrimitive &primitive, DecodedTexture &decoded);
 
-}  // namespace pc_endjinn_pvr
+}  // namespace enj_host_pvr
 
 #endif

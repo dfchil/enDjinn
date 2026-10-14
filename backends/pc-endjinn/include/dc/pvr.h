@@ -201,23 +201,23 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
 /* Keep origin's depth-write encoding authoritative. Host-private flags occupy
  * separate unused bits for retained renderer state and volume boundaries. */
 #define PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT 0x01000000u
-#define PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER 0x00800000u
+#define PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE 0x00800000u
 #define PC_ENDJINN_PVR_HEADER_VOLUME_LAST 0x00400000u
 #define PC_ENDJINN_PVR_HEADER_CULL_SHIFT 26u
 #define PC_ENDJINN_PVR_HEADER_CULL_MASK (0x3u << PC_ENDJINN_PVR_HEADER_CULL_SHIFT)
 #if ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE | \
-      PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER | \
+      PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
       PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT | \
       PC_ENDJINN_PVR_HEADER_VOLUME_LAST) & \
      (PC_ENDJINN_PVR_HEADER_CULL_MASK | PC_ENDJINN_PVR_HEADER_SPRITE)) != 0u || \
     (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE & \
-     PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER) != 0u || \
+     PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE) != 0u || \
     (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE & \
      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u || \
-    (PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER & \
+    (PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE & \
      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u || \
     ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE | \
-      PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER | \
+      PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
       PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) & \
      PC_ENDJINN_PVR_HEADER_VOLUME_LAST) != 0u
 #error "pc-enDjinn private PVR header flags overlap another header field"
@@ -245,7 +245,7 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
 #define PVR_TXRLOAD_16BPP 0x03u
 
 PC_ENDJINN_BEGIN_DECLS
-uint32_t pc_endjinn_pvr_register_modifier_texture(
+uint32_t enj_host_pvr_register_modifier_texture(
     const pvr_context_txr_t *texture);
 void pvr_init(const pvr_init_params_t *params);
 void pvr_shutdown(void);
@@ -253,11 +253,6 @@ void pvr_set_bg_color(float r, float g, float b);
 void pvr_wait_ready(void);
 void pvr_scene_begin(void);
 void pvr_scene_finish(void);
-/* pc-enDjinn-only observation hook: number of completed scene presentations.
- * It is intentionally outside the KOS pvr_* API so Dreamcast code cannot
- * acquire a dependency on it. */
-uint64_t pc_endjinn_pvr_presented_frame_count(void);
-void pc_endjinn_pvr_request_current_scene_screenshot(const char *path);
 void pvr_list_begin(pvr_list_t list);
 void pvr_list_finish(void);
 void pvr_wait_render_done(void);
@@ -349,6 +344,9 @@ static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
   hdr->mode1 = PC_ENDJINN_PVR_HEADER_SPRITE | (uint32_t)cxt->list_type |
       (cxt->txr.enable ? 0x80000000u : 0u) |
       (cxt->depth.write ? PC_ENDJINN_PVR_HEADER_DEPTH_WRITE : 0u) |
+      (cxt->depth.comparison == PVR_DEPTHCMP_ALWAYS
+           ? PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE
+           : 0u) |
       (cxt->gen.alpha ? PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT : 0u) |
       (((uint32_t)cxt->gen.culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   hdr->mode2 = (uint32_t)cxt->txr.format;
@@ -377,7 +375,7 @@ static inline void pvr_poly_mod_compile(pvr_poly_mod_hdr_t *hdr,
   pvr_poly_compile(hdr, cxt);
   hdr->mode1 |= cxt->modifier ? 0x40000000u : 0u;
   if (cxt->modifier && cxt->txr2.enable) {
-    hdr->cmd |= pc_endjinn_pvr_register_modifier_texture(&cxt->txr2) &
+    hdr->cmd |= enj_host_pvr_register_modifier_texture(&cxt->txr2) &
                 0x0fffffffu;
   }
 }

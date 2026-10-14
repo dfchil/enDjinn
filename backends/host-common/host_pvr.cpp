@@ -1,4 +1,4 @@
-#include "pc_endjinn_pvr.h"
+#include "host_pvr.h"
 
 #include <algorithm>
 #include <array>
@@ -34,10 +34,10 @@ struct HeaderState {
   bool modifier_volume{};
   bool modifier_volume_last{};
   uint32_t modifier_mode{};
-  bool model1_painter{};
   bool modifier_textured{};
   pvr_context_txr_t modifier_texture{};
   pvr_cull_mode_t culling{PVR_CULLING_NONE};
+  bool depth_test{true};
   bool depth_write{true};
   bool alpha_cutout{};
 };
@@ -52,7 +52,7 @@ bool g_has_tpcm_first = false;
 pvr_modifier_vol_t g_modifier_volume_first{};
 bool g_has_modifier_volume_first = false;
 std::vector<pvr_vertex_t> g_triangle_vertices;
-std::vector<pc_endjinn_pvr::QueuedPrimitive> g_primitives;
+std::vector<enj_host_pvr::QueuedPrimitive> g_primitives;
 HeaderState g_header;
 std::unordered_map<pvr_ptr_t, TextureUpload> g_uploads;
 std::array<uint32_t, 1024> g_palette{};
@@ -77,13 +77,13 @@ void unpack_uv_pair(uint32_t packed, float &u, float &v) {
   v = unpack_uv(packed << 16u);
 }
 
-void copy_header_state(pc_endjinn_pvr::QueuedPrimitive &primitive) {
+void copy_header_state(enj_host_pvr::QueuedPrimitive &primitive) {
   primitive.argb = g_header.argb;
   primitive.list = g_current_list;
   primitive.culling = g_header.culling;
+  primitive.depth_test = g_header.depth_test;
   primitive.depth_write = g_header.depth_write;
   primitive.alpha_cutout = g_header.alpha_cutout;
-  primitive.model1_painter = g_header.model1_painter;
   primitive.textured = g_header.textured;
   primitive.texture = g_header.texture;
   primitive.texture_format = g_header.format;
@@ -99,7 +99,7 @@ void copy_header_state(pc_endjinn_pvr::QueuedPrimitive &primitive) {
 
 void queue_triangle(const pvr_vertex_t &a, const pvr_vertex_t &b,
                     const pvr_vertex_t &c) {
-  pc_endjinn_pvr::QueuedPrimitive primitive{};
+  enj_host_pvr::QueuedPrimitive primitive{};
   primitive.count = 3u;
   copy_header_state(primitive);
   primitive.argb = c.argb != 0u ? c.argb : primitive.argb;
@@ -118,7 +118,7 @@ void queue_triangle(const pvr_vertex_t &a, const pvr_vertex_t &b,
 
 void queue_modifier_triangle(const pvr_vertex_t outside[3],
                              const pvr_vertex_t inside[3]) {
-  pc_endjinn_pvr::QueuedPrimitive primitive{};
+  enj_host_pvr::QueuedPrimitive primitive{};
   primitive.count = 3u;
   copy_header_state(primitive);
   primitive.modifier = false;
@@ -191,10 +191,12 @@ void queue_modifier_triangle(const pvr_vertex_tpcm_t &a,
 
 void queue_modifier_volume(const pvr_modifier_vol_t &first, const void *tail) {
   const float *values = static_cast<const float *>(tail);
-  pc_endjinn_pvr::QueuedPrimitive primitive{};
+  enj_host_pvr::QueuedPrimitive primitive{};
   primitive.count = 3u;
   primitive.list = g_current_list;
   primitive.culling = g_header.culling;
+  primitive.depth_test = true;
+  primitive.depth_write = false;
   primitive.modifier_receiver = false;
   primitive.modifier_volume = true;
   primitive.modifier_volume_last = g_header.modifier_volume_last;
@@ -214,7 +216,7 @@ void queue_modifier_volume(const pvr_modifier_vol_t &first, const void *tail) {
 void queue_sprite_second_half(const void *ptr) {
   const float *tail = static_cast<const float *>(ptr);
   const uint32_t *tail_words = static_cast<const uint32_t *>(ptr);
-  pc_endjinn_pvr::QueuedPrimitive primitive{};
+  enj_host_pvr::QueuedPrimitive primitive{};
   primitive.count = 4u;
   copy_header_state(primitive);
   primitive.x[0] = g_sprite_first.ax;
@@ -398,7 +400,7 @@ bool source_level(const TextureUpload &upload, uint32_t format,
 
 bool decode_level(const std::vector<uint8_t> &source, uint32_t format,
                   uint32_t width, uint32_t height, bool linear,
-                  pc_endjinn_pvr::DecodedMip &decoded) {
+                  enj_host_pvr::DecodedMip &decoded) {
   const uint32_t pixel_format = (format >> 27u) & 7u;
   const bool indexed = pixel_format == PVR_PIXEL_MODE_PAL_4BPP ||
                        pixel_format == PVR_PIXEL_MODE_PAL_8BPP;
@@ -456,7 +458,7 @@ bool decode_level(const std::vector<uint8_t> &source, uint32_t format,
 
 }  // namespace
 
-namespace pc_endjinn_pvr {
+namespace enj_host_pvr {
 
 const std::vector<QueuedPrimitive> &primitives() { return g_primitives; }
 
@@ -579,8 +581,8 @@ void dr_commit(void *ptr) {
   g_header.sprite = (header->mode1 & PC_ENDJINN_PVR_HEADER_SPRITE) != 0u;
   g_header.alpha_cutout =
       (header->mode1 & PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u;
-  g_header.model1_painter =
-      (header->mode1 & PC_ENDJINN_PVR_HEADER_MODEL1_PAINTER) != 0u;
+  g_header.depth_test =
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE) == 0u;
   g_header.modifier = (header->mode1 & 0x40000000u) != 0u;
   g_header.modifier_volume = (header->mode1 & 0x20000000u) != 0u;
   g_header.modifier_volume_last =
@@ -786,9 +788,9 @@ bool decode_texture(const QueuedPrimitive &primitive, DecodedTexture &decoded) {
   return !decoded.mips.empty();
 }
 
-}  // namespace pc_endjinn_pvr
+}  // namespace enj_host_pvr
 
-extern "C" uint32_t pc_endjinn_pvr_register_modifier_texture(
+extern "C" uint32_t enj_host_pvr_register_modifier_texture(
     const pvr_context_txr_t *texture) {
   if (texture == nullptr || !texture->enable ||
       g_next_modifier_texture_id == 0x10000000u) {

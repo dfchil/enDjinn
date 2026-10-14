@@ -2,7 +2,6 @@
 #include <dc/fmath.h>
 #include <enDjinn/enj_enDjinn.h>
 #include <pvrtex/file_dctex.h>
-#include <sh4zam/shz_sh4zam.h>
 
 static enj_state_t test_state;
 static int activations;
@@ -23,9 +22,6 @@ int main(void) {
   float cosine;
   fsincosr(0.0f, &sine, &cosine);
   assert(sine == 0.0f && cosine == 1.0f);
-  shz_vec3_t vector = {.x = 1.0f, .y = 2.0f, .z = 3.0f};
-  assert(vector.z == 3.0f);
-
   fDtHeader paletted = {.colors_used = 15,
                         .pvr_type = (5u << 27) | (4u << 3) | 3u};
   assert(sizeof(fDtHeader) == 32);

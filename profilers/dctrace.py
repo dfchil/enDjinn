@@ -103,7 +103,6 @@ class PriorityQueue:
 # --- Global mappings ---
 functions = {}  # addr -> FunctionRecord
 child_calls = defaultdict(lambda: defaultdict(ChildCall))  # parent_addr -> (child_addr -> ChildCall)
-call_stack = []  # list of StackFrame
 
 class DotManager:
     def __init__(self, program, addr2line_path, verbose, threshold, total, ev0, ev1):
@@ -400,125 +399,130 @@ def read_uleb128(f):
         shift += 7
     return result, count
 
+def decode_trace(stream, total_size, resolve_name, verbose=False, show_progress=True):
+    """Decode records, keeping clocks and call stacks separate per KOS thread."""
+    functions.clear()
+    child_calls.clear()
+
+    thread_clocks = defaultdict(lambda: [0, 0, 0])
+    thread_stacks = defaultdict(list)
+    read_size = 0
+
+    while True:
+        header = stream.read(4)
+        if not header or len(header) < 4:
+            break
+
+        entry_tid_addr = struct.unpack('<I', header)[0]
+        read_size += 4
+
+        try:
+            delta_time, t_bytes = read_uleb128(stream)
+            delta_evt0, e0_bytes = read_uleb128(stream)
+            delta_evt1, e1_bytes = read_uleb128(stream)
+            read_size += t_bytes + e0_bytes + e1_bytes
+        except EOFError:
+            if verbose:
+                print("Incomplete record at end of file; skipping.")
+            break
+
+        if show_progress and total_size:
+            print_progress_bar(min(100, int((read_size / total_size) * 100)))
+
+        is_entry = bool((entry_tid_addr >> 31) & 1)
+        thread_id = (entry_tid_addr >> 22) & TID_MASK
+        compressed_addr = entry_tid_addr & ADDR_MASK
+        address = (compressed_addr << 2) + BASE_ADDRESS
+
+        clock = thread_clocks[thread_id]
+        clock[0] += delta_time * 80
+        clock[1] += delta_evt0
+        clock[2] += delta_evt1
+        current_time, current_e0, current_e1 = clock
+        stack = thread_stacks[thread_id]
+
+        if is_entry:
+            if address not in functions:
+                functions[address] = FunctionRecord(resolve_name(address))
+            functions[address].times_called += 1
+
+            if stack:
+                child_calls[stack[-1].addr][address].times_called += 1
+
+            stack.append(StackFrame(address, current_time, current_e0, current_e1))
+            continue
+
+        if not stack:
+            if verbose:
+                print(f"Warning: unmatched exit on thread {thread_id}: {address:#x}")
+            continue
+
+        frame = stack.pop()
+        elapsed = current_time - frame.start_time
+        elapsed_e0 = current_e0 - frame.start_e0
+        elapsed_e1 = current_e1 - frame.start_e1
+
+        func = functions[frame.addr]
+        func.total_time += elapsed
+        func.ev0 += elapsed_e0
+        func.ev1 += elapsed_e1
+
+        if stack:
+            child = child_calls[stack[-1].addr][frame.addr]
+            child.total_cycles += elapsed
+            child.ev0 += elapsed_e0
+            child.ev1 += elapsed_e1
+
+    for thread_id, stack in thread_stacks.items():
+        if not stack:
+            continue
+        current_time, current_e0, current_e1 = thread_clocks[thread_id]
+        if verbose:
+            print(f"Warning: {len(stack)} unmatched entries on thread {thread_id}")
+        for depth, frame in enumerate(stack):
+            elapsed = current_time - frame.start_time
+            elapsed_e0 = current_e0 - frame.start_e0
+            elapsed_e1 = current_e1 - frame.start_e1
+            func = functions[frame.addr]
+            func.total_time += elapsed
+            func.ev0 += elapsed_e0
+            func.ev1 += elapsed_e1
+            if depth > 0:
+                child = child_calls[stack[depth - 1].addr][frame.addr]
+                child.total_cycles += elapsed
+                child.ev0 += elapsed_e0
+                child.ev1 += elapsed_e1
+
+    if not thread_clocks:
+        return 0, 0, 0
+
+    # The trace stores deltas relative to each thread's first event, so streams
+    # cannot be summed without double-counting overlapping execution.
+    return tuple(max(clock[index] for clock in thread_clocks.values())
+                 for index in range(3))
+
 def main():
     args = parse_args()
 
     try:
         with open(args.trace, 'rb') as f:
-            current_time = 0
-            current_e0 = 0
-            current_e1 = 0
-
             total_size = os.path.getsize(args.trace)
-            read_size = 0
+            current_time, current_e0, current_e1 = decode_trace(
+                f,
+                total_size,
+                lambda address: addr2name(address, args.addr2line, args.program),
+                verbose=args.verbose)
 
-            total_size = os.path.getsize(args.trace)
-            read_size = 0
+            suggest_exclude_functions(current_time, current_e0, current_e1,
+                                      args.exclude_time_threshold,
+                                      args.exclude_ev_threshold)
 
-            while True:
-                header = f.read(4)
-                if not header or len(header) < 4:
-                    break
-
-                entry_tid_addr = struct.unpack('<I', header)[0]
-                read_size += 4
-
-                try:
-                    delta_time, t_bytes = read_uleb128(f)
-                    delta_evt0, e0_bytes = read_uleb128(f)
-                    delta_evt1, e1_bytes = read_uleb128(f)
-                    read_size += t_bytes + e0_bytes + e1_bytes
-                except EOFError:
-                    if args.verbose:
-                        print("Incomplete record at end of file; skipping.")
-                    break
-
-                progress = int((read_size / total_size) * 100)
-                print_progress_bar(progress)
-
-                is_entry = bool((entry_tid_addr >> 31) & 1)
-                thread_id = (entry_tid_addr >> 22) & TID_MASK
-                compressed_addr = entry_tid_addr & ADDR_MASK
-                address = (compressed_addr << 2) + BASE_ADDRESS
-
-                current_time += delta_time * 80
-                current_e0 += delta_evt0
-                current_e1 += delta_evt1
-
-                if is_entry:
-                    # -- ENTRY logic --
-                    if address not in functions:
-                        func_name = addr2name(address, args.addr2line, args.program)
-                        functions[address] = FunctionRecord(func_name)
-                    func = functions[address]
-                    func.times_called += 1
-
-                    # record child call count
-                    if call_stack:
-                        parent = call_stack[-1].addr
-                        cc = child_calls[parent][address]
-                        cc.times_called += 1
-
-                    # push new frame
-                    frame = StackFrame(address, current_time, current_e0, current_e1)
-                    call_stack.append(frame)
-
-                else:
-                    # -- EXIT logic --
-                    if not call_stack:
-                        # unmatched exit, skip
-                        continue
-
-                    frame = call_stack.pop()
-                    delta_time = current_time - frame.start_time
-                    delta_e0 = current_e0 - frame.start_e0
-                    delta_e1 = current_e1 - frame.start_e1
-
-                    # update function totals
-                    func = functions[frame.addr]
-                    func.total_time += delta_time
-                    func.ev0 += delta_e0
-                    func.ev1 += delta_e1
-
-                    # update child call accumulation
-                    if call_stack:
-                        parent = call_stack[-1]
-                        cc = child_calls[parent.addr][frame.addr]
-                        cc.total_cycles += delta_time
-                        cc.ev0 += delta_e0
-                        cc.ev1 += delta_e1
-
-            # Final cleanup for any unmatched function entries
-            if call_stack:
-                if args.verbose:
-                    print(f"Warning: {len(call_stack)} unmatched function entries detected. Processing them as incomplete frames.")
-
-                for i, frame in enumerate(call_stack):
-                    delta_time = current_time - frame.start_time
-                    delta_e0 = current_e0 - frame.start_e0
-                    delta_e1 = current_e1 - frame.start_e1
-
-                    func = functions[frame.addr]
-                    if args.verbose:
-                        print(f"  Function: {func.name} at depth {i}")
-                    func.total_time += delta_time
-                    func.ev0 += delta_e0
-                    func.ev1 += delta_e1
-
-                    if i > 0:
-                        parent = call_stack[i - 1].addr
-                        cc = child_calls[parent][frame.addr]
-                        cc.total_cycles += delta_time
-                        cc.ev0 += delta_e0
-                        cc.ev1 += delta_e1
-
-            # Suggest some functions the user can remove from intrumenstation after the first run
-            suggest_exclude_functions(current_time, current_e0, current_e1, args.exclude_time_threshold, args.exclude_ev_threshold)
-
-            dm = DotManager(args.program, args.addr2line, args.verbose, args.percentage, current_time, args.ev0_label, args.ev1_label)
+            dm = DotManager(args.program, args.addr2line, args.verbose,
+                            args.percentage, current_time,
+                            args.ev0_label, args.ev1_label)
             dm.create_dot_file()
     except FileNotFoundError:
-        print(f"Error: file '{args.infile}' not found.\n\n")
+        print(f"Error: file '{args.trace}' not found.\n\n")
         usage()
     except Exception as e:
         print("An error occurred:")

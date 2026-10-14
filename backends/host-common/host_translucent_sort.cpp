@@ -1,9 +1,9 @@
-#include "pc_endjinn_translucent_sort.h"
+#include "host_translucent_sort.h"
 
 #include <algorithm>
 #include <cmath>
 
-namespace pc_endjinn_translucent_sort {
+namespace enj_host_translucent_sort {
 namespace {
 
 struct Bounds {
@@ -17,7 +17,7 @@ float cross_2d(float ax, float ay, float bx, float by) {
   return ax * by - ay * bx;
 }
 
-bool triangle_depth_at(const pc_endjinn_pvr::QueuedPrimitive &primitive,
+bool triangle_depth_at(const enj_host_pvr::QueuedPrimitive &primitive,
                        uint32_t ia, uint32_t ib, uint32_t ic,
                        float x, float y, float &depth) {
   const float ax = primitive.x[ia];
@@ -43,7 +43,7 @@ bool triangle_depth_at(const pc_endjinn_pvr::QueuedPrimitive &primitive,
   return true;
 }
 
-bool primitive_depth_at(const pc_endjinn_pvr::QueuedPrimitive &primitive,
+bool primitive_depth_at(const enj_host_pvr::QueuedPrimitive &primitive,
                         float x, float y, float &depth) {
   if (primitive.count == 3u) {
     return triangle_depth_at(primitive, 0u, 1u, 2u, x, y, depth);
@@ -82,7 +82,7 @@ bool segment_intersection(float ax, float ay, float bx, float by,
 
 }  // namespace
 
-float primitive_average_z(const pc_endjinn_pvr::QueuedPrimitive &primitive) {
+float primitive_average_z(const enj_host_pvr::QueuedPrimitive &primitive) {
   float z = 0.0f;
   for (uint32_t i = 0u; i < primitive.count; i++) {
     z += primitive.z[i];
@@ -90,8 +90,8 @@ float primitive_average_z(const pc_endjinn_pvr::QueuedPrimitive &primitive) {
   return primitive.count > 0u ? z / static_cast<float>(primitive.count) : 0.0f;
 }
 
-int overlapping_depth_order(const pc_endjinn_pvr::QueuedPrimitive &a,
-                            const pc_endjinn_pvr::QueuedPrimitive &b) {
+int overlapping_depth_order(const enj_host_pvr::QueuedPrimitive &a,
+                            const enj_host_pvr::QueuedPrimitive &b) {
   int relation = 0;
   const auto compare_at = [&](float x, float y) {
     float a_depth;
@@ -193,7 +193,7 @@ std::vector<size_t> sort_dependency_graph(
 }  // namespace detail
 
 Diagnostics sort(
-    std::vector<const pc_endjinn_pvr::QueuedPrimitive *> &primitives) {
+    std::vector<const enj_host_pvr::QueuedPrimitive *> &primitives) {
   Diagnostics diagnostics{};
   const size_t count = primitives.size();
   diagnostics.primitive_count = count;
@@ -204,8 +204,8 @@ Diagnostics sort(
   constexpr size_t dependency_sort_limit = 2048u;
   if (count > dependency_sort_limit) {
     std::stable_sort(primitives.begin(), primitives.end(),
-        [](const pc_endjinn_pvr::QueuedPrimitive *a,
-           const pc_endjinn_pvr::QueuedPrimitive *b) {
+        [](const enj_host_pvr::QueuedPrimitive *a,
+           const enj_host_pvr::QueuedPrimitive *b) {
           return primitive_average_z(*a) < primitive_average_z(*b);
         });
     diagnostics.average_depth_fallback = true;
@@ -250,7 +250,7 @@ Diagnostics sort(
     }
   }
 
-  const std::vector<const pc_endjinn_pvr::QueuedPrimitive *> submitted = primitives;
+  const std::vector<const enj_host_pvr::QueuedPrimitive *> submitted = primitives;
   const std::vector<size_t> order =
       detail::sort_dependency_graph(average_depth, outgoing, diagnostics);
   for (size_t i = 0u; i < count; i++) {
@@ -259,4 +259,4 @@ Diagnostics sort(
   return diagnostics;
 }
 
-}  // namespace pc_endjinn_translucent_sort
+}  // namespace enj_host_translucent_sort

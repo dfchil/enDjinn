@@ -30,7 +30,9 @@ feature-specific code.
 If you are adopting enDjinn in another repository, start with
 [Using enDjinn in another project](./docs/USING_ENDJINN.md). It documents the
 current compatibility policy, source layout, lifecycle, callback lifetimes,
-resource ownership, and a portability checklist.
+resource ownership, and a portability checklist. The concise
+[target support matrix](./docs/SUPPORT.md) distinguishes reference,
+development, and diagnostic facilities.
 
 ## Requirements and project status
 
@@ -137,21 +139,11 @@ variables are:
 | `ENJ_FSAA` | Enables FSAA and changes `ENJ_XSCALE` accordingly. |
 | `ENJ_FRAME_RATE` | Enables a frame-rate deadline when set to a positive value. |
 | `ENJ_WEB_SIMD` | Set to `1` to compile and link `web-endjinn` with WebAssembly SIMD128; defaults to `0`. |
-| `ENJ_USE_SH4ZAM` | Set to `1` to build and link the optional SH4ZAM integration for the selected target. |
-| `SH4ZAM_DIR` | Optional path to the SH4ZAM source tree when automatic discovery is unsuitable. |
 | `ENJ_INJECT_QFONT` | Builds and embeds the built-in quick font. |
 | `ENJ_ADD_LOGO_TEXTURE` | Adds enDjinn logo textures to the generated assets. |
 
-When `ENJ_USE_SH4ZAM=1`, enDjinn builds SH4ZAM natively with CMake for
-`pc-endjinn`, compiles its software implementation with Emscripten for
-`web-endjinn`, and compiles its SH-4 implementation with KOS for `dreamcast`.
-The integration is disabled by default; applications that use `shz_*` APIs
-should enable it in `local.cfg.mk`. Set `SH4ZAM_DIR` explicitly or place the
-source tree next to the application or enDjinn, or under `third_party/` or
-`vendor/` in the application.
-
 Set `ENJ_WEB_SIMD=1` to pass `-msimd128` to every WebAssembly compilation and
-the final link, including optional integrations such as SH4ZAM. Leave it at
+the final link. Leave it at
 the default `0` when producing a scalar compatibility build.
 
 Run `make cfg_info` in a project directory to inspect the resolved build
@@ -195,18 +187,22 @@ make ENJ_TARGET=web-endjinn
 emrun build/web-endjinn/my-game.html
 ```
 
-The browser target reuses the PC backend's input, audio, filesystem, and PVR
-packet decoding shims. Its KOS-compatible sleep shim yields the unchanged
-engine loop to the browser through Emscripten Asyncify. See the
+The browser target shares host input, audio, filesystem, and PVR packet
+decoding code with the PC backend. The browser owns frame scheduling through
+`requestAnimationFrame`. See the
 [browser backend README](./backends/web-endjinn/README.md) for details.
 
 ## Profiling
 
-The repository includes `profilers/dctrace.py`, `profilers/dcprof/`, and
-helper scripts under `profilers/`. Set `ENJ_DCTRACE` or `ENJ_DCPROF` in
-`local.cfg.mk` to include the corresponding Dreamcast-side instrumentation.
+Set `ENJ_DCTRACE` or `ENJ_DCPROF` in `local.cfg.mk` to include the corresponding
+Dreamcast-side instrumentation. See [Dreamcast profiling](./profilers/README.md)
+for capture and analysis commands. Application launch scripts own dcload
+addresses, game-specific modes, and output locations.
 
 ## Tests
+
+The [test guide](./tests/README.md) lists every routine check and explicit
+renderer integration target.
 
 Run the host-side safety, public-header, and backend-shim checks with:
 
@@ -228,6 +224,25 @@ Compile the same depth-aware modifier-volume example for WebGL 2 with:
 ```sh
 make -C tests modifier-volume-web
 ```
+
+Exercise all six modifier toggles in headless Chrome/Chromium with:
+
+```sh
+make -C tests modifier-volume-web-visual
+```
+
+Set `CHROME=/path/to/chrome` when the browser is not in a conventional install
+location. This explicit integration target starts only a temporary localhost
+server and browser profile.
+
+Measure the PC translucent-modifier reference workload with:
+
+```sh
+make -C tests modifier-volume-benchmark
+```
+
+The [support matrix](./backends/pc-endjinn/SUPPORTED.md#modifier-volume-semantics)
+records the workload, current baseline, practical budget, and hard limit.
 
 Build every example against the native development backend with:
 

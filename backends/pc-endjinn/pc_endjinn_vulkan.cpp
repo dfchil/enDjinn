@@ -1,7 +1,8 @@
 #include <kos.h>
 
-#include "pc_endjinn_pvr.h"
-#include "pc_endjinn_translucent_sort.h"
+#include "../host-common/host_limits.h"
+#include "../host-common/host_pvr.h"
+#include "pc_endjinn_frame.h"
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
@@ -15,10 +16,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <string>
 #include <vector>
 
-extern "C" void pc_endjinn_input_request_quit(void);
-extern "C" void pc_endjinn_input_shutdown(void);
+extern "C" void enj_host_input_request_quit(void);
+extern "C" void enj_host_input_shutdown(void);
 
 namespace {
 
@@ -54,7 +56,7 @@ std::vector<VkFramebuffer> g_framebuffers;
 VkPipelineLayout g_pipeline_layout = VK_NULL_HANDLE;
 VkPipeline g_opaque_pipeline = VK_NULL_HANDLE;
 VkPipeline g_opaque_no_depth_write_pipeline = VK_NULL_HANDLE;
-VkPipeline g_model1_painter_pipeline = VK_NULL_HANDLE;
+VkPipeline g_opaque_no_depth_test_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_no_depth_write_pipeline = VK_NULL_HANDLE;
 VkPipeline g_translucent_pipeline = VK_NULL_HANDLE;
@@ -80,7 +82,6 @@ VkDeviceMemory g_vertex_memory = VK_NULL_HANDLE;
 size_t g_vertex_capacity = 0u;
 VkBuffer g_translucent_modifier_buffer = VK_NULL_HANDLE;
 VkDeviceMemory g_translucent_modifier_memory = VK_NULL_HANDLE;
-constexpr uint32_t kMaxTranslucentModifierTriangles = 65536u;
 uint64_t g_presented_frames = 0u;
 bool g_translucent_autosort = true;
 bool g_fsaa_enabled = false;
@@ -88,18 +89,10 @@ bool g_fullscreen_toggle_requested = false;
 int g_last_window_width = 1280;
 int g_last_window_height = 960;
 bool g_swapchain_readback_supported = false;
-bool g_screenshot_checked = false;
-bool g_screenshot_captured = false;
-const char *g_screenshot_path = nullptr;
+bool g_screenshot_environment_checked = false;
+bool g_screenshot_pending = false;
+std::string g_screenshot_path;
 uint64_t g_screenshot_frame = 0u;
-
-struct PcVertex {
-    float position[3];
-    float color[4];
-    float uv[2];
-};
-
-using pc_endjinn_pvr::QueuedPrimitive;
 
 struct TexturePush {
     uint32_t indexed;
@@ -112,41 +105,11 @@ struct TexturePush {
     uint32_t reserved1;
 };
 
-struct alignas(16) GpuModifierTriangle {
-    float a[4];
-    float b[4];
-    float c[4];
-    uint32_t state[4];
-};
-static_assert(sizeof(GpuModifierTriangle) == 64u);
-
-struct DrawBatch {
-    pvr_list_t list;
-    uint32_t first_vertex;
-    uint32_t vertex_count;
-    bool depth_write;
-    bool textured;
-    pvr_ptr_t texture;
-    uint32_t texture_format;
-    uint32_t texture_width;
-    uint32_t texture_height;
-    pvr_filter_mode_t texture_filter;
-    uint32_t palette_base;
-    bool modifier_receiver;
-    bool modifier;
-    bool modifier_volume;
-    bool modifier_volume_last;
-    uint32_t modifier_mode;
-    bool alpha_cutout;
-    bool model1_painter;
-};
-
-struct FrameDrawData {
-    std::vector<PcVertex> vertices;
-    std::vector<DrawBatch> batches;
-    std::vector<GpuModifierTriangle> translucent_modifiers;
-    pc_endjinn_translucent_sort::Diagnostics translucent_sort;
-};
+using pc_endjinn::DrawBatch;
+using pc_endjinn::FrameDrawData;
+using pc_endjinn::GpuModifierTriangle;
+using pc_endjinn::PcVertex;
+using enj_host_pvr::QueuedPrimitive;
 
 struct GpuImage {
     VkImage image{VK_NULL_HANDLE};
@@ -187,12 +150,18 @@ bool offscreen_capture_requested()
     return value != nullptr && std::strcmp(value, "1") == 0;
 }
 
+bool native_composition_raster_requested()
+{
+    const char *const value = std::getenv("ENJ_NATIVE_COMPOSITION_RASTER");
+    return value != nullptr && std::strcmp(value, "1") == 0;
+}
+
 int SDLCALL pc_endjinn_event_watch(void *, SDL_Event *event)
 {
     if (event != nullptr &&
         (event->type == SDL_QUIT ||
          (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))) {
-        pc_endjinn_input_request_quit();
+        enj_host_input_request_quit();
     }
     if (event != nullptr && event->type == SDL_KEYDOWN && event->key.repeat == 0) {
         const bool alt_enter = event->key.keysym.sym == SDLK_RETURN &&
@@ -206,15 +175,44 @@ int SDLCALL pc_endjinn_event_watch(void *, SDL_Event *event)
 
 void update_content_rect()
 {
+    if (g_offscreen_capture && native_composition_raster_requested()) {
+        g_content_rect = {{0, 0}, g_extent};
+        return;
+    }
     const uint64_t width = g_extent.width;
     const uint64_t height = g_extent.height;
     uint32_t content_width = g_extent.width;
     uint32_t content_height = g_extent.height;
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) != defined(ENJ_INTEGER_PRESENT_HEIGHT)
+#error "define both ENJ_INTEGER_PRESENT_WIDTH and ENJ_INTEGER_PRESENT_HEIGHT"
+#elif defined(ENJ_INTEGER_PRESENT_WIDTH)
+    static_assert(ENJ_INTEGER_PRESENT_WIDTH > 0,
+                  "integer presentation width must be positive");
+    static_assert(ENJ_INTEGER_PRESENT_HEIGHT > 0,
+                  "integer presentation height must be positive");
+    const uint32_t integer_scale = std::min(
+        g_extent.width / static_cast<uint32_t>(ENJ_INTEGER_PRESENT_WIDTH),
+        g_extent.height / static_cast<uint32_t>(ENJ_INTEGER_PRESENT_HEIGHT));
+    if (integer_scale != 0u) {
+        content_width = static_cast<uint32_t>(ENJ_INTEGER_PRESENT_WIDTH) *
+            integer_scale;
+        content_height = static_cast<uint32_t>(ENJ_INTEGER_PRESENT_HEIGHT) *
+            integer_scale;
+    } else if (width * ENJ_INTEGER_PRESENT_HEIGHT >
+               height * ENJ_INTEGER_PRESENT_WIDTH) {
+        content_width = static_cast<uint32_t>(
+            height * ENJ_INTEGER_PRESENT_WIDTH / ENJ_INTEGER_PRESENT_HEIGHT);
+    } else {
+        content_height = static_cast<uint32_t>(
+            width * ENJ_INTEGER_PRESENT_HEIGHT / ENJ_INTEGER_PRESENT_WIDTH);
+    }
+#else
     if (width * 3u > height * 4u) {
         content_width = static_cast<uint32_t>(height * 4u / 3u);
     } else if (width * 3u < height * 4u) {
         content_height = static_cast<uint32_t>(width * 3u / 4u);
     }
+#endif
     g_content_rect.offset.x = static_cast<int32_t>((g_extent.width - content_width) / 2u);
     g_content_rect.offset.y = static_cast<int32_t>((g_extent.height - content_height) / 2u);
     g_content_rect.extent = {content_width, content_height};
@@ -427,7 +425,8 @@ bool create_readback_buffer(VkDeviceSize size, VkBuffer &buffer,
 bool create_translucent_modifier_buffer()
 {
     const VkDeviceSize size = static_cast<VkDeviceSize>(
-        kMaxTranslucentModifierTriangles) * sizeof(GpuModifierTriangle);
+        enj_host_limits::translucent_modifier_triangles) *
+        sizeof(GpuModifierTriangle);
     VkBufferCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     info.size = size;
@@ -460,30 +459,39 @@ bool create_translucent_modifier_buffer()
     return true;
 }
 
-const char *screenshot_requested_path()
+void load_screenshot_request_from_environment()
 {
-    if (!g_screenshot_checked) {
-        g_screenshot_checked = true;
-        const char *const candidate = std::getenv("ENJ_SCREENSHOT_PATH");
-        g_screenshot_path = candidate != nullptr && *candidate != '\0'
-            ? candidate : nullptr;
-        const char *const frame_text = std::getenv("ENJ_SCREENSHOT_FRAME");
-        if (frame_text != nullptr && *frame_text != '\0') {
-            char *end = nullptr;
-            const unsigned long long parsed = std::strtoull(frame_text, &end, 10);
-            if (end != frame_text && *end == '\0') {
-                g_screenshot_frame = static_cast<uint64_t>(parsed);
-            }
+    if (g_screenshot_environment_checked) {
+        return;
+    }
+    g_screenshot_environment_checked = true;
+    const char *const candidate = std::getenv("ENJ_SCREENSHOT_PATH");
+    if (candidate == nullptr || *candidate == '\0') {
+        return;
+    }
+    g_screenshot_path = candidate;
+    g_screenshot_pending = true;
+    const char *const frame_text = std::getenv("ENJ_SCREENSHOT_FRAME");
+    if (frame_text != nullptr && *frame_text != '\0') {
+        char *end = nullptr;
+        const unsigned long long parsed = std::strtoull(frame_text, &end, 10);
+        if (end != frame_text && *end == '\0') {
+            g_screenshot_frame = static_cast<uint64_t>(parsed);
         }
     }
-    return g_screenshot_path;
 }
 
 const char *screenshot_path()
 {
-    (void)screenshot_requested_path();
-    return !g_screenshot_captured && g_presented_frames >= g_screenshot_frame
-        ? g_screenshot_path : nullptr;
+    load_screenshot_request_from_environment();
+    return g_screenshot_pending && g_presented_frames >= g_screenshot_frame
+        ? g_screenshot_path.c_str() : nullptr;
+}
+
+void finish_screenshot_request()
+{
+    g_screenshot_pending = false;
+    g_screenshot_path.clear();
 }
 
 bool write_screenshot_ppm(const char *path, VkDeviceMemory memory,
@@ -516,7 +524,7 @@ bool write_screenshot_ppm(const char *path, VkDeviceMemory memory,
 }
 
 bool upload_gpu_image(GpuImage &texture, VkFormat format,
-                      const std::vector<pc_endjinn_pvr::DecodedMip> &mips,
+                      const std::vector<enj_host_pvr::DecodedMip> &mips,
                       pvr_filter_mode_t filter)
 {
     if (mips.empty() || mips[0].pixels.empty()) {
@@ -681,9 +689,9 @@ bool upload_gpu_image(GpuImage &texture, VkFormat format,
     return true;
 }
 
-pc_endjinn_pvr::DecodedMip solid_mip(uint32_t rgba)
+enj_host_pvr::DecodedMip solid_mip(uint32_t rgba)
 {
-    pc_endjinn_pvr::DecodedMip mip{1u, 1u, std::vector<uint8_t>(4u)};
+    enj_host_pvr::DecodedMip mip{1u, 1u, std::vector<uint8_t>(4u)};
     std::memcpy(mip.pixels.data(), &rgba, 4u);
     return mip;
 }
@@ -732,13 +740,13 @@ bool allocate_texture_descriptor(GpuTexture &texture)
 
 bool create_builtin_textures()
 {
-    const std::vector<pc_endjinn_pvr::DecodedMip> white = {solid_mip(0xffffffffu)};
-    pc_endjinn_pvr::DecodedMip index{1u, 1u, std::vector<uint8_t>(1u, 0u)};
-    const auto palette = pc_endjinn_pvr::palette_rgba();
-    pc_endjinn_pvr::DecodedMip palette_mip{
+    const std::vector<enj_host_pvr::DecodedMip> white = {solid_mip(0xffffffffu)};
+    enj_host_pvr::DecodedMip index{1u, 1u, std::vector<uint8_t>(1u, 0u)};
+    const auto palette = enj_host_pvr::palette_rgba();
+    enj_host_pvr::DecodedMip palette_mip{
         1024u, 1u, std::vector<uint8_t>(palette.size() * sizeof(uint32_t))};
     std::memcpy(palette_mip.pixels.data(), palette.data(), palette_mip.pixels.size());
-    g_uploaded_palette_revision = pc_endjinn_pvr::palette_revision();
+    g_uploaded_palette_revision = enj_host_pvr::palette_revision();
     const bool uploaded =
            upload_gpu_image(g_white_texture, VK_FORMAT_R8G8B8A8_UNORM, white,
                             PVR_FILTER_NEAREST) &&
@@ -760,12 +768,12 @@ bool create_builtin_textures()
 
 bool update_palette_texture()
 {
-    const uint64_t revision = pc_endjinn_pvr::palette_revision();
+    const uint64_t revision = enj_host_pvr::palette_revision();
     if (revision == g_uploaded_palette_revision) {
         return true;
     }
-    const auto palette = pc_endjinn_pvr::palette_rgba();
-    pc_endjinn_pvr::DecodedMip mip{
+    const auto palette = enj_host_pvr::palette_rgba();
+    enj_host_pvr::DecodedMip mip{
         1024u, 1u, std::vector<uint8_t>(palette.size() * sizeof(uint32_t))};
     std::memcpy(mip.pixels.data(), palette.data(), mip.pixels.size());
     if (!upload_gpu_image(g_palette_texture, VK_FORMAT_R8G8B8A8_UNORM, {mip},
@@ -803,7 +811,7 @@ GpuTexture *gpu_texture_for(const DrawBatch &batch)
                    texture.height == batch.texture_height &&
                    texture.filter == batch.texture_filter;
         });
-    const uint64_t revision = pc_endjinn_pvr::texture_revision(batch.texture);
+    const uint64_t revision = enj_host_pvr::texture_revision(batch.texture);
     if (found != g_texture_cache.end() && found->revision == revision) {
         return &*found;
     }
@@ -815,8 +823,8 @@ GpuTexture *gpu_texture_for(const DrawBatch &batch)
     primitive.texture_width = batch.texture_width;
     primitive.texture_height = batch.texture_height;
     primitive.texture_filter = batch.texture_filter;
-    pc_endjinn_pvr::DecodedTexture decoded;
-    if (!pc_endjinn_pvr::decode_texture(primitive, decoded)) {
+    enj_host_pvr::DecodedTexture decoded;
+    if (!enj_host_pvr::decode_texture(primitive, decoded)) {
         return nullptr;
     }
     if (found == g_texture_cache.end()) {
@@ -902,9 +910,9 @@ void destroy_frame_resources()
         vkDestroyPipeline(g_device, g_opaque_no_depth_write_pipeline, nullptr);
         g_opaque_no_depth_write_pipeline = VK_NULL_HANDLE;
     }
-    if (g_model1_painter_pipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(g_device, g_model1_painter_pipeline, nullptr);
-        g_model1_painter_pipeline = VK_NULL_HANDLE;
+    if (g_opaque_no_depth_test_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_opaque_no_depth_test_pipeline, nullptr);
+        g_opaque_no_depth_test_pipeline = VK_NULL_HANDLE;
     }
     if (g_punch_through_pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(g_device, g_punch_through_pipeline, nullptr);
@@ -1036,7 +1044,7 @@ bool create_swapchain()
     info.imageExtent = g_extent;
     info.imageArrayLayers = 1u;
     info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    if (screenshot_requested_path() != nullptr && g_swapchain_readback_supported) {
+    if (g_swapchain_readback_supported) {
         info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     }
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -1069,10 +1077,19 @@ bool create_swapchain()
 
 bool create_offscreen_color_resources()
 {
-    /* Match the regular 4:3 host target.  The diagnostic comparator scales
-     * native Model-1's 496x384 raster to this target deterministically. */
+    /* Use a large default target unless a test requests the configured
+     * application aperture directly. */
     g_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
-    g_extent = {1280u, 960u};
+    if (native_composition_raster_requested()) {
+#if defined(ENJ_INTEGER_PRESENT_WIDTH) && defined(ENJ_INTEGER_PRESENT_HEIGHT)
+        g_extent = VkExtent2D{ENJ_INTEGER_PRESENT_WIDTH,
+                              ENJ_INTEGER_PRESENT_HEIGHT};
+#else
+        g_extent = VkExtent2D{640u, 480u};
+#endif
+    } else {
+        g_extent = VkExtent2D{1280u, 960u};
+    }
     g_swapchain_readback_supported = true;
     update_content_rect();
     VkImageCreateInfo image{};
@@ -1113,8 +1130,10 @@ bool create_offscreen_color_resources()
     if (vkCreateImageView(g_device, &view, nullptr, &g_offscreen_color_view) != VK_SUCCESS) {
         return false;
     }
-    std::fprintf(stderr, "pc-enDjinn: offscreen Vulkan capture target=%ux%u\n",
-                 g_extent.width, g_extent.height);
+    std::fprintf(stderr,
+                 "pc-enDjinn: offscreen Vulkan capture target=%ux%u native=%u\n",
+                 g_extent.width, g_extent.height,
+                 native_composition_raster_requested() ? 1u : 0u);
     return true;
 }
 
@@ -1194,10 +1213,7 @@ bool create_render_pipeline()
     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color.initialLayout = g_offscreen_capture
         ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
-    color.finalLayout = g_offscreen_capture
-        ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-        : screenshot_requested_path() != nullptr && g_swapchain_readback_supported
-        ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    color.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     VkAttachmentDescription depth{};
     depth.format = g_depth_format;
     depth.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1410,12 +1426,12 @@ bool create_render_pipeline()
         &g_punch_through_no_depth_write_pipeline) == VK_SUCCESS;
 
     stages[1].module = frag_module;
-    /* The retained Model 1 pass is already painter-sorted by the caller. */
+    /* PVR_DEPTHCMP_ALWAYS bypasses the existing depth buffer. */
     depth_state.depthTestEnable = VK_FALSE;
     depth_state.depthWriteEnable = VK_FALSE;
     ok = ok && vkCreateGraphicsPipelines(
         g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
-        &g_model1_painter_pipeline) == VK_SUCCESS;
+        &g_opaque_no_depth_test_pipeline) == VK_SUCCESS;
 
     depth_state.depthTestEnable = VK_TRUE;
     blend_att.blendEnable = VK_TRUE;
@@ -1628,11 +1644,13 @@ bool ensure_vertex_buffer(size_t vertex_count)
 bool upload_translucent_modifiers(
     const std::vector<GpuModifierTriangle> &modifiers)
 {
-    if (modifiers.size() > kMaxTranslucentModifierTriangles) {
+    if (modifiers.size() >
+        enj_host_limits::translucent_modifier_triangles) {
         std::fprintf(stderr,
                      "pc-enDjinn: translucent modifier triangle overflow "
-                     "(%zu > %u); frame rejected\n",
-                     modifiers.size(), kMaxTranslucentModifierTriangles);
+                     "(%zu > %zu); frame rejected\n",
+                     modifiers.size(),
+                     enj_host_limits::translucent_modifier_triangles);
         return false;
     }
     if (modifiers.empty()) {
@@ -1650,188 +1668,12 @@ bool upload_translucent_modifiers(
     return true;
 }
 
-PcVertex make_vertex(float x, float y, float z, uint32_t argb, float u, float v)
-{
-    const float half_w = (float)g_vid_mode.width * (g_fsaa_enabled ? 1.0f : 0.5f);
-    const float half_h = (float)g_vid_mode.height * 0.5f;
-    const float a = (float)((argb >> 24) & 0xffu) / 255.0f;
-    const float r = (float)((argb >> 16) & 0xffu) / 255.0f;
-    const float g = (float)((argb >> 8) & 0xffu) / 255.0f;
-    const float b = (float)(argb & 0xffu) / 255.0f;
-    PcVertex vertex{};
-    vertex.position[0] = x / half_w - 1.0f;
-    vertex.position[1] = y / half_h - 1.0f;
-    /*
-     * The KOS/PVR shim must preserve the depth submitted by its caller.
-     * Application-specific overlays (including Dream Driving's road
-     * markings) own any bias before the pvr_* boundary; inferring ownership
-     * from colour also biases similarly coloured vehicle and scenery faces.
-     */
-    vertex.position[2] = clamp01(z * 0.25f);
-    vertex.color[0] = r;
-    vertex.color[1] = g;
-    vertex.color[2] = b;
-    vertex.color[3] = a;
-    vertex.uv[0] = u;
-    vertex.uv[1] = v;
-    return vertex;
-}
-
-bool triangle_is_culled(const QueuedPrimitive &p, uint32_t a, uint32_t b,
-                        uint32_t c)
-{
-    if (p.culling != PVR_CULLING_CCW && p.culling != PVR_CULLING_CW) {
-        return false;
-    }
-    const float signed_area = (p.x[b] - p.x[a]) * (p.y[c] - p.y[a]) -
-                              (p.y[b] - p.y[a]) * (p.x[c] - p.x[a]);
-    // PVR vertices use framebuffer coordinates, where Y grows downward.
-    // This reverses the usual Y-up signed-area winding convention.
-    return p.culling == PVR_CULLING_CCW ? signed_area < 0.0f
-                                         : signed_area > 0.0f;
-}
-
-void emit_primitive(std::vector<PcVertex> &out, const QueuedPrimitive &p)
-{
-    const auto emit = [&](uint32_t i) {
-        out.push_back(make_vertex(p.x[i], p.y[i], p.z[i], p.color[i],
-                                  p.u[i], p.v[i]));
-    };
-    if (p.count == 3u) {
-        if (!triangle_is_culled(p, 0u, 1u, 2u)) {
-            emit(0u); emit(1u); emit(2u);
-        }
-    } else if (p.count == 4u) {
-        if (!triangle_is_culled(p, 0u, 1u, 2u)) {
-            emit(0u); emit(1u); emit(2u);
-        }
-        if (!triangle_is_culled(p, 0u, 2u, 3u)) {
-            emit(0u); emit(2u); emit(3u);
-        }
-    }
-}
-
-FrameDrawData build_frame_draw_data()
-{
-    const std::vector<QueuedPrimitive> &queued = pc_endjinn_pvr::primitives();
-    FrameDrawData frame;
-    frame.vertices.reserve(queued.size() * 6u);
-    frame.translucent_modifiers.reserve(queued.size());
-
-    for (const QueuedPrimitive &primitive : queued) {
-        if (primitive.list != PVR_LIST_TR_MOD || !primitive.modifier_volume ||
-            primitive.count != 3u || triangle_is_culled(primitive, 0u, 1u, 2u)) {
-            continue;
-        }
-        const PcVertex a = make_vertex(primitive.x[0], primitive.y[0],
-                                       primitive.z[0], 0u, 0.0f, 0.0f);
-        const PcVertex b = make_vertex(primitive.x[1], primitive.y[1],
-                                       primitive.z[1], 0u, 0.0f, 0.0f);
-        const PcVertex c = make_vertex(primitive.x[2], primitive.y[2],
-                                       primitive.z[2], 0u, 0.0f, 0.0f);
-        GpuModifierTriangle event{};
-        std::memcpy(event.a, a.position, sizeof(a.position));
-        std::memcpy(event.b, b.position, sizeof(b.position));
-        std::memcpy(event.c, c.position, sizeof(c.position));
-        event.state[0] = primitive.modifier_volume_last ? 1u : 0u;
-        event.state[1] = !primitive.modifier_volume_last &&
-                primitive.modifier_mode != PVR_MODIFIER_OTHER_POLY
-            ? 1u
-            : 0u;
-        event.state[2] = primitive.modifier_mode;
-        frame.translucent_modifiers.push_back(event);
-    }
-
-    const auto append_list = [&](pvr_list_t list, bool sort_back_to_front,
-                                 bool modifier_volume, bool model1_painter,
-                                 int modifier_filter) {
-        std::vector<const QueuedPrimitive *> primitives;
-        primitives.reserve(queued.size());
-        for (const QueuedPrimitive &primitive : queued) {
-            if (primitive.list == list &&
-                primitive.modifier_volume == modifier_volume &&
-                primitive.model1_painter == model1_painter &&
-                (modifier_filter < 0 ||
-                 primitive.modifier == (modifier_filter != 0))) {
-                primitives.push_back(&primitive);
-            }
-        }
-        if (sort_back_to_front) {
-            const pc_endjinn_translucent_sort::Diagnostics diagnostics =
-                pc_endjinn_translucent_sort::sort(primitives);
-            if (list == PVR_LIST_TR_POLY) {
-                frame.translucent_sort = diagnostics;
-            }
-        }
-        for (const QueuedPrimitive *primitive : primitives) {
-            const bool same_batch = !frame.batches.empty() &&
-                frame.batches.back().list == list &&
-                frame.batches.back().depth_write == primitive->depth_write &&
-                frame.batches.back().textured == primitive->textured &&
-                frame.batches.back().texture == primitive->texture &&
-                frame.batches.back().texture_format == primitive->texture_format &&
-                frame.batches.back().texture_width == primitive->texture_width &&
-                frame.batches.back().texture_height == primitive->texture_height &&
-                frame.batches.back().texture_filter == primitive->texture_filter &&
-                frame.batches.back().modifier_receiver ==
-                    primitive->modifier_receiver &&
-                frame.batches.back().modifier == primitive->modifier &&
-                frame.batches.back().modifier_volume == primitive->modifier_volume &&
-                frame.batches.back().modifier_volume_last ==
-                    primitive->modifier_volume_last &&
-                frame.batches.back().modifier_mode == primitive->modifier_mode &&
-                frame.batches.back().alpha_cutout == primitive->alpha_cutout &&
-                frame.batches.back().model1_painter == primitive->model1_painter;
-            if (!same_batch) {
-                DrawBatch batch{};
-                batch.list = list;
-                batch.first_vertex = static_cast<uint32_t>(frame.vertices.size());
-                batch.depth_write = primitive->depth_write;
-                batch.textured = primitive->textured;
-                batch.texture = primitive->texture;
-                batch.texture_format = primitive->texture_format;
-                batch.texture_width = primitive->texture_width;
-                batch.texture_height = primitive->texture_height;
-                batch.texture_filter = primitive->texture_filter;
-                batch.modifier_receiver = primitive->modifier_receiver;
-                batch.modifier = primitive->modifier;
-                batch.modifier_volume = primitive->modifier_volume;
-                batch.modifier_volume_last = primitive->modifier_volume_last;
-                batch.modifier_mode = primitive->modifier_mode;
-                batch.alpha_cutout = primitive->alpha_cutout;
-                batch.model1_painter = primitive->model1_painter;
-                const uint32_t pixel_format = (primitive->texture_format >> 27u) & 7u;
-                batch.palette_base = pixel_format == PVR_PIXEL_MODE_PAL_4BPP
-                    ? ((primitive->texture_format >> 21u) & 0x3fu) * 16u
-                    : ((primitive->texture_format >> 25u) & 0x03u) * 256u;
-                frame.batches.push_back(batch);
-            }
-            const uint32_t before = static_cast<uint32_t>(frame.vertices.size());
-            emit_primitive(frame.vertices, *primitive);
-            frame.batches.back().vertex_count +=
-                static_cast<uint32_t>(frame.vertices.size()) - before;
-        }
-    };
-
-    /* Opaque area 0 establishes the receiver depth before modifier-volume
-     * fragments are classified. Area 1 is then re-shaded at equal depth. */
-    append_list(PVR_LIST_OP_POLY, false, false, false, 0);
-    append_list(PVR_LIST_OP_MOD, false, true, false, -1);
-    append_list(PVR_LIST_OP_POLY, false, false, false, 1);
-    /* Model-1 world faces are painted after ordinary opaque world geometry
-     * but before punch-through/translucent presentation overlays (HUD/text). */
-    append_list(PVR_LIST_OP_POLY, true, false, true, -1);
-    append_list(PVR_LIST_PT_POLY, false, false, false, -1);
-    append_list(PVR_LIST_TR_POLY, g_translucent_autosort, false, false, -1);
-    return frame;
-}
-
 bool draw_frame(const FrameDrawData &frame)
 {
     if (g_device == VK_NULL_HANDLE || (!g_offscreen_capture && g_swapchain == VK_NULL_HANDLE) ||
         g_opaque_pipeline == VK_NULL_HANDLE ||
         g_opaque_no_depth_write_pipeline == VK_NULL_HANDLE ||
-        g_model1_painter_pipeline == VK_NULL_HANDLE ||
+        g_opaque_no_depth_test_pipeline == VK_NULL_HANDLE ||
         g_punch_through_pipeline == VK_NULL_HANDLE ||
         g_punch_through_no_depth_write_pipeline == VK_NULL_HANDLE ||
         g_translucent_pipeline == VK_NULL_HANDLE ||
@@ -1849,6 +1691,14 @@ bool draw_frame(const FrameDrawData &frame)
         set_window_title("pc-enDjinn - draw unavailable");
         return false;
     }
+    /* Palette and texture refreshes can replace images used by the preceding
+     * frame, so wait before mutating either cache.  Keep the fence signalled
+     * until every fallible preparation step has completed. */
+    if (vkWaitForFences(g_device, 1u, &g_in_flight, VK_TRUE, UINT64_MAX) !=
+        VK_SUCCESS) {
+        set_window_title("pc-enDjinn - frame fence wait failed");
+        return false;
+    }
     if (!update_palette_texture()) {
         set_window_title("pc-enDjinn - palette upload failed");
         return false;
@@ -1858,9 +1708,6 @@ bool draw_frame(const FrameDrawData &frame)
             std::fprintf(stderr, "pc-enDjinn: texture decode/upload failed\n");
         }
     }
-    vkWaitForFences(g_device, 1u, &g_in_flight, VK_TRUE, UINT64_MAX);
-    vkResetFences(g_device, 1u, &g_in_flight);
-
     uint32_t image_index = 0u;
     if (!g_offscreen_capture) {
         VkResult acquire = vkAcquireNextImageKHR(
@@ -1895,10 +1742,8 @@ bool draw_frame(const FrameDrawData &frame)
     }
 
     const char *const requested_screenshot = screenshot_path();
-    const bool screenshot_enabled = screenshot_requested_path() != nullptr &&
-        (g_offscreen_capture || g_swapchain_readback_supported);
     const bool capture_screenshot = requested_screenshot != nullptr &&
-        screenshot_enabled;
+        (g_offscreen_capture || g_swapchain_readback_supported);
     VkBuffer screenshot_buffer = VK_NULL_HANDLE;
     VkDeviceMemory screenshot_memory = VK_NULL_HANDLE;
     const VkDeviceSize screenshot_bytes =
@@ -1915,6 +1760,10 @@ bool draw_frame(const FrameDrawData &frame)
     VkCommandBufferBeginInfo begin{};
     begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     if (vkBeginCommandBuffer(cmd, &begin) != VK_SUCCESS) {
+        if (screenshot_buffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(g_device, screenshot_buffer, nullptr);
+            vkFreeMemory(g_device, screenshot_memory, nullptr);
+        }
         set_window_title("pc-enDjinn - command begin failed");
         return false;
     }
@@ -1970,8 +1819,8 @@ bool draw_frame(const FrameDrawData &frame)
                 opaque_volume_first_vertex = batch.first_vertex;
             }
             VkPipeline pipeline = g_opaque_pipeline;
-            if (batch.model1_painter) {
-                pipeline = g_model1_painter_pipeline;
+            if (!batch.depth_test) {
+                pipeline = g_opaque_no_depth_test_pipeline;
             } else if (batch.modifier_volume) {
                 if (opaque_modifier_volume) {
                     /* A non-final modifier instruction denotes the PVR's
@@ -2087,28 +1936,46 @@ bool draw_frame(const FrameDrawData &frame)
                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0u,
                                  0u, nullptr, 0u, nullptr, 1u, &restore);
         }
-    } else if (screenshot_enabled) {
-        VkBufferImageCopy copy{};
+    } else {
+        VkImageMemoryBarrier after_render{};
+        after_render.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        after_render.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        after_render.newLayout = capture_screenshot
+            ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+            : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        after_render.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        after_render.dstAccessMask = capture_screenshot
+            ? VK_ACCESS_TRANSFER_READ_BIT : 0u;
+        after_render.image = g_swapchain_images[image_index];
+        after_render.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        after_render.subresourceRange.levelCount = 1u;
+        after_render.subresourceRange.layerCount = 1u;
+        vkCmdPipelineBarrier(
+            cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            capture_screenshot ? VK_PIPELINE_STAGE_TRANSFER_BIT
+                               : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            0u, 0u, nullptr, 0u, nullptr, 1u, &after_render);
         if (capture_screenshot) {
+            VkBufferImageCopy copy{};
             copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             copy.imageSubresource.layerCount = 1u;
             copy.imageExtent = {g_extent.width, g_extent.height, 1u};
             vkCmdCopyImageToBuffer(cmd, g_swapchain_images[image_index],
                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                    screenshot_buffer, 1u, &copy);
+            VkImageMemoryBarrier to_present{};
+            to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            to_present.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            to_present.image = g_swapchain_images[image_index];
+            to_present.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            to_present.subresourceRange.levelCount = 1u;
+            to_present.subresourceRange.layerCount = 1u;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0u,
+                                 0u, nullptr, 0u, nullptr, 1u, &to_present);
         }
-        VkImageMemoryBarrier to_present{};
-        to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        to_present.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        to_present.image = g_swapchain_images[image_index];
-        to_present.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        to_present.subresourceRange.levelCount = 1u;
-        to_present.subresourceRange.layerCount = 1u;
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0u,
-                             0u, nullptr, 0u, nullptr, 1u, &to_present);
     }
     if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
         if (screenshot_buffer != VK_NULL_HANDLE) {
@@ -2129,6 +1996,14 @@ bool draw_frame(const FrameDrawData &frame)
     submit.pCommandBuffers = &cmd;
     submit.signalSemaphoreCount = g_offscreen_capture ? 0u : 1u;
     submit.pSignalSemaphores = g_offscreen_capture ? nullptr : &g_render_finished;
+    if (vkResetFences(g_device, 1u, &g_in_flight) != VK_SUCCESS) {
+        if (screenshot_buffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(g_device, screenshot_buffer, nullptr);
+            vkFreeMemory(g_device, screenshot_memory, nullptr);
+        }
+        set_window_title("pc-enDjinn - frame fence reset failed");
+        return false;
+    }
     if (vkQueueSubmit(g_graphics_queue, 1u, &submit, g_in_flight) != VK_SUCCESS) {
         if (screenshot_buffer != VK_NULL_HANDLE) {
             vkDestroyBuffer(g_device, screenshot_buffer, nullptr);
@@ -2147,12 +2022,12 @@ bool draw_frame(const FrameDrawData &frame)
         if (!written) {
             std::fprintf(stderr, "pc-enDjinn: screenshot write failed\n");
         } else {
-            g_screenshot_captured = true;
             std::fprintf(stderr, "pc-enDjinn: screenshot=%s\n", requested_screenshot);
+            finish_screenshot_request();
         }
     } else if (requested_screenshot != nullptr) {
         std::fprintf(stderr, "pc-enDjinn: swapchain readback unsupported\n");
-        g_screenshot_captured = true;
+        finish_screenshot_request();
     }
 
     if (g_offscreen_capture) {
@@ -2443,7 +2318,7 @@ void pvr_shutdown(void)
         SDL_DestroyWindow(g_window);
         g_window = nullptr;
     }
-    pc_endjinn_input_shutdown();
+    enj_host_input_shutdown();
 }
 
 void pvr_set_bg_color(float r, float g, float b)
@@ -2456,7 +2331,7 @@ void pvr_set_bg_color(float r, float g, float b)
 void pvr_wait_ready(void) {}
 void pvr_scene_begin(void)
 {
-    pc_endjinn_pvr::scene_begin();
+    enj_host_pvr::scene_begin();
 }
 
 void pvr_scene_finish(void)
@@ -2465,12 +2340,13 @@ void pvr_scene_finish(void)
     if (g_device == VK_NULL_HANDLE) {
         return;
     }
-    const FrameDrawData frame = build_frame_draw_data();
+    const FrameDrawData frame = pc_endjinn::build_frame_draw_data(
+        g_vid_mode, g_fsaa_enabled, g_translucent_autosort);
     const char *const sort_diagnostics =
         std::getenv("ENJ_TRANSLUCENT_SORT_DIAGNOSTICS");
     if (sort_diagnostics != nullptr && std::strcmp(sort_diagnostics, "1") == 0 &&
         (g_presented_frames % 60u) == 0u) {
-        const pc_endjinn_translucent_sort::Diagnostics &diagnostics =
+        const enj_host_translucent_sort::Diagnostics &diagnostics =
             frame.translucent_sort;
         std::fprintf(
             stderr,
@@ -2494,7 +2370,7 @@ void pvr_scene_finish(void)
             title,
             sizeof(title),
             "pc-enDjinn - pvr primitives %zu - vk verts %zu",
-            pc_endjinn_pvr::primitives().size(),
+            enj_host_pvr::primitives().size(),
             frame.vertices.size());
         SDL_SetWindowTitle(g_window, title);
     }
@@ -2505,24 +2381,26 @@ uint64_t pvr_presented_frame_count(void)
     return g_presented_frames;
 }
 
-void pvr_request_current_scene_screenshot(const char *path)
+bool capture_next_frame(const char *path)
 {
     if (path == nullptr || *path == '\0') {
-        return;
+        return false;
     }
-    /* draw_frame() sees this before pvr_scene_finish() increments the
-     * completed count, so its >= comparison selects the scene in flight. */
-    g_screenshot_checked = true;
+    load_screenshot_request_from_environment();
+    if (g_screenshot_pending) {
+        return false;
+    }
     g_screenshot_path = path;
     g_screenshot_frame = g_presented_frames;
-    g_screenshot_captured = false;
+    g_screenshot_pending = true;
+    return true;
 }
 
-void pvr_list_begin(pvr_list_t list) { pc_endjinn_pvr::list_begin(list); }
+void pvr_list_begin(pvr_list_t list) { enj_host_pvr::list_begin(list); }
 void pvr_list_finish(void) {}
 void pvr_wait_render_done(void) {}
 void pvr_set_pal_format(pvr_palfmt_t mode) {
-    pc_endjinn_pvr::palette_format(mode);
+    enj_host_pvr::palette_format(mode);
 }
 
 void pvr_fog_table_color(float a, float r, float g, float b)
@@ -2541,12 +2419,12 @@ void pvr_fog_table_linear(float start, float end)
 
 void *pvr_dr_target(void)
 {
-    return pc_endjinn_pvr::dr_target();
+    return enj_host_pvr::dr_target();
 }
 
 void pvr_dr_commit(void *ptr)
 {
-    pc_endjinn_pvr::dr_commit(ptr);
+    enj_host_pvr::dr_commit(ptr);
 }
 
 }  // namespace pc_endjinn

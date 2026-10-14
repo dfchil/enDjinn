@@ -1,11 +1,11 @@
-#include "pc_endjinn_translucent_sort.h"
+#include "host_translucent_sort.h"
 
 #include <cassert>
 #include <cstdio>
 #include <vector>
 
-using pc_endjinn_pvr::QueuedPrimitive;
-namespace translucent_sort = pc_endjinn_translucent_sort;
+using enj_host_pvr::QueuedPrimitive;
+namespace translucent_sort = enj_host_translucent_sort;
 
 namespace {
 

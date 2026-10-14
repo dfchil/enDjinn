@@ -27,16 +27,22 @@ $(error Unsupported pc-enDjinn host '$(PC_ENDJINN_HOST_OS)')
 endif
 
 PC_ENDJINN_PLATFORM_SRCS := \
-	$(PC_ENDJINN_BACKEND_DIR)kos_abi_compat.cpp \
 	$(PC_ENDJINN_BACKEND_DIR)enj_platform_pc_endjinn.cpp \
-	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_pvr.cpp \
-	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_translucent_sort.cpp \
-	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_vulkan.cpp \
-	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_input.cpp \
-	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_fs.cpp
+	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_frame.cpp \
+	$(PC_ENDJINN_BACKEND_DIR)pc_endjinn_vulkan.cpp
+ENJ_HOST_COMMON_DIR := $(ENJDIR)backends/host-common
+ENJ_HOST_COMMON_SRCS := \
+	$(ENJ_HOST_COMMON_DIR)/host_kos_abi.cpp \
+	$(ENJ_HOST_COMMON_DIR)/host_input.cpp \
+	$(ENJ_HOST_COMMON_DIR)/host_audio.cpp \
+	$(ENJ_HOST_COMMON_DIR)/host_fs.cpp \
+	$(ENJ_HOST_COMMON_DIR)/host_stubs.cpp \
+	$(ENJ_HOST_COMMON_DIR)/host_pvr.cpp \
+	$(ENJ_HOST_COMMON_DIR)/host_translucent_sort.cpp
 PC_ENDJINN_KOS_HEADERS := $(shell find $(PC_ENDJINN_BACKEND_DIR)include \
 	-type f -name '*.h')
 PC_ENDJINN_BACKEND_HEADERS := $(wildcard $(PC_ENDJINN_BACKEND_DIR)*.h)
+ENJ_HOST_COMMON_HEADERS := $(wildcard $(ENJ_HOST_COMMON_DIR)/*.h)
 PC_ENDJINN_KOS_ABI_CONTRACT := \
 	$(PC_ENDJINN_BACKEND_DIR)include/pc_endjinn/kos_abi_contract.generated.h
 PC_ENDJINN_CPPFLAGS := -I$(PC_ENDJINN_BACKEND_DIR)include \

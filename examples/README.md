@@ -62,15 +62,13 @@ between a main mode, an information mode, and short animation modes.
 <img style="height:220px" src="../docs/img/examples/enj_modes.png" alt="enj_modes example screen" />
 </div>
 
-## enj_modifiers
+## enj_flat_modifiers
 
-Uses raw PVR modifier-volume commands alongside enDjinn’s render-list loop and
-sh4zam vector types. The example submits a closed depth slab: pc-enDjinn's
-opaque path uses Vulkan depth/stencil parity so only the receiver band inside
-the slab selects its area-1 color. In translucent mode, every receiver fragment
-evaluates the submitted modifier crossings at its own depth.
+Introduces modifier rendering with a planar, screen-oriented rectangle and a
+colored receiver. `flat` is an enDjinn teaching term, not a separate KOS API;
+KOS exposes modifier-volume primitives and list/material modes.
 
-## enj_modifier_volume_zclip
+## enj_deep_modifiers
 
 Adapts the closed 12-triangle cube from KallistiOS's
 `modifier_volume_zclip` example into enDjinn's render-list loop. The rotating

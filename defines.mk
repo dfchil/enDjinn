@@ -1,5 +1,12 @@
 ifdef RELEASEBUILD
-	DEFINES += -s -DRELEASEBUILD
+	DEFINES += -DRELEASEBUILD
+	ifeq ($(ENJ_TARGET),dreamcast)
+		ENJ_LDFLAGS += -s
+	else ifeq ($(ENJ_TARGET),pc-endjinn)
+		ENJ_LDFLAGS += -Wl,-S
+	else ifeq ($(ENJ_TARGET),web-endjinn)
+		ENJ_LDFLAGS += -g0
+	endif
 else
 	DEFINES += -g
 endif

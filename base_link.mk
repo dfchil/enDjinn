@@ -14,13 +14,6 @@ ifneq (,$(wildcard ./local.cfg.mk))
   include ./local.cfg.mk
 endif
 
-# Optional engine integrations are disabled unless the application enables
-# them from local.cfg.mk or the make command line.
-ENJ_USE_SH4ZAM ?= 0
-ifeq ($(ENJ_USE_SH4ZAM),1)
-  include ${ENJDIR}features/sh4zam.mk
-endif
-
 # WebAssembly SIMD is opt-in so applications can retain a scalar compatibility
 # build. Keep this separate from ENJ_WEB_{C,CXX}FLAGS because applications may
 # replace those variables wholesale on the make command line.
@@ -73,8 +66,9 @@ ENJ_HOST_TARGET ?= $(ENJ_HOST_BINDIR)/$(ENJ_BASENAME)
 
 ENJ_HOST_CFLAGS ?= -std=gnu23 -O2 -g -Wall -Wextra \
 	-Wno-unused-function -Wno-unused-variable
-ENJ_HOST_CXXFLAGS ?= -std=c++17 -O2 -g -Wall -Wextra -pedantic \
-	-Wno-c99-extensions -Wno-missing-field-initializers -Wno-unused-function
+ENJ_HOST_CXXFLAGS ?= -std=c++23 -O2 -g -Wall -Wextra -pedantic \
+	-Wno-c99-extensions -Wno-gnu-anonymous-struct -Wno-nested-anon-types \
+	-Wno-missing-field-initializers -Wno-unused-function
 
 ENJ_HOST_CPPFLAGS += \
 	-I$(shell pwd)/include \
@@ -91,8 +85,10 @@ ENJ_HOST_CORE_SRCS ?= $(sort $(wildcard ${ENJDIR}code/*.c))
 ENJ_HOST_APP_SRCS ?= $(patsubst ./%,%,$(shell find $(ENJ_CODEDIR) -name '*.c' -not -path "./.git/*"))
 ENJ_HOST_CORE_OBJS := $(patsubst ${ENJDIR}%.c,$(ENJ_HOST_BUILD_DIR)/enDjinn/%.o,$(ENJ_HOST_CORE_SRCS))
 ENJ_HOST_APP_OBJS := $(patsubst %.c,$(ENJ_HOST_BUILD_DIR)/%.o,$(ENJ_HOST_APP_SRCS))
+ENJ_HOST_COMMON_OBJS := $(addprefix $(ENJ_HOST_BUILD_DIR)/enDjinn/backends/host-common/,$(notdir $(ENJ_HOST_COMMON_SRCS:.cpp=.o)))
 ENJ_HOST_BACKEND_OBJS := $(addprefix $(ENJ_HOST_BUILD_DIR)/enDjinn/backends/pc-endjinn/,$(notdir $(PC_ENDJINN_PLATFORM_SRCS:.cpp=.o)))
-ENJ_HOST_OBJS := $(ENJ_HOST_CORE_OBJS) $(ENJ_HOST_APP_OBJS) $(ENJ_HOST_BACKEND_OBJS) $(ENJ_HOST_EXTRA_OBJS)
+ENJ_HOST_OBJS := $(ENJ_HOST_CORE_OBJS) $(ENJ_HOST_APP_OBJS) \
+	$(ENJ_HOST_COMMON_OBJS) $(ENJ_HOST_BACKEND_OBJS) $(ENJ_HOST_EXTRA_OBJS)
 ENJ_HOST_DEPS := $(filter %.d,$(ENJ_HOST_OBJS:.o=.d))
 
 -include $(ENJ_HOST_DEPS)
@@ -114,6 +110,10 @@ $(ENJ_HOST_BUILD_DIR)/%.o: %.c $(ENJ_MAKEFILE) $(ENJ_ASSETS) | $(ENJ_HOST_BUILD_
 	@mkdir -p $(dir $@)
 	$(ENJ_CC) $(ENJ_HOST_CFLAGS) $(ENJ_HOST_CPPFLAGS) $(ENJ_HOST_APP_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
 
+$(ENJ_HOST_BUILD_DIR)/enDjinn/backends/host-common/%.o: $(ENJ_HOST_COMMON_DIR)/%.cpp $(ENJ_HOST_COMMON_HEADERS) $(PC_ENDJINN_KOS_HEADERS) | $(ENJ_HOST_BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(ENJ_CXX) $(ENJ_HOST_CXXFLAGS) $(ENJ_HOST_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
+
 $(ENJ_HOST_BUILD_DIR)/enDjinn/backends/pc-endjinn/%.o: $(PC_ENDJINN_BACKEND_DIR)%.cpp $(PC_ENDJINN_BACKEND_HEADERS) $(PC_ENDJINN_KOS_HEADERS) $(PC_ENDJINN_KOS_ABI_CONTRACT) | $(ENJ_HOST_BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(ENJ_CXX) $(ENJ_HOST_CXXFLAGS) $(ENJ_HOST_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
@@ -121,7 +121,7 @@ $(ENJ_HOST_BUILD_DIR)/enDjinn/backends/pc-endjinn/%.o: $(PC_ENDJINN_BACKEND_DIR)
 $(ENJ_HOST_TARGET): $(ENJ_HOST_OBJS) $(ENJ_HOST_EXTRA_DEPS)
 	@mkdir -p $(dir $@)
 	$(ENJ_CXX) $(ENJ_HOST_CXXFLAGS) $(ENJ_HOST_CPPFLAGS) $(DEFINES) \
-		$(ENJ_HOST_OBJS) -o $@ $(PC_ENDJINN_LDFLAGS)
+		$(ENJ_HOST_OBJS) -o $@ $(PC_ENDJINN_LDFLAGS) $(ENJ_LDFLAGS)
 
 clean:
 	rm -rf $(ENJ_HOST_BUILD_DIR)
@@ -142,7 +142,7 @@ include ${ENJDIR}defines.mk
 
 ENJ_WEB_CFLAGS ?= -std=gnu23 -O2 -g -Wall -Wextra \
 	-Wno-unused-function -Wno-unused-variable
-ENJ_WEB_CXXFLAGS ?= -std=c++17 -O2 -g -Wall -Wextra
+ENJ_WEB_CXXFLAGS ?= -std=c++23 -O2 -g -Wall -Wextra
 ENJ_WEB_CPPFLAGS += -I$(shell pwd)/include -I${ENJDIR}include
 # Emscripten's packager treats an empty directory as an error. Evaluate this
 # lazily at link time, after generated assets have been built.
@@ -154,9 +154,10 @@ ENJ_WEB_APP_CXX_SRCS := $(patsubst ./%,%,$(shell find $(ENJ_CODEDIR) -name '*.cp
 ENJ_WEB_CORE_OBJS := $(patsubst ${ENJDIR}%.c,$(ENJ_WEB_BUILD_DIR)/enDjinn/%.o,$(ENJ_WEB_CORE_SRCS))
 ENJ_WEB_APP_OBJS := $(patsubst %.c,$(ENJ_WEB_BUILD_DIR)/%.o,$(ENJ_WEB_APP_SRCS))
 ENJ_WEB_APP_CXX_OBJS := $(patsubst %.cpp,$(ENJ_WEB_BUILD_DIR)/%.o,$(ENJ_WEB_APP_CXX_SRCS))
+ENJ_WEB_COMMON_OBJS := $(addprefix $(ENJ_WEB_BUILD_DIR)/enDjinn/backends/host-common/,$(notdir $(ENJ_HOST_COMMON_SRCS:.cpp=.o)))
 ENJ_WEB_BACKEND_OBJS := $(addprefix $(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/,$(notdir $(WEB_ENDJINN_PLATFORM_SRCS:.cpp=.o)))
 ENJ_WEB_OBJS := $(ENJ_WEB_CORE_OBJS) $(ENJ_WEB_APP_OBJS) $(ENJ_WEB_APP_CXX_OBJS) \
-	$(ENJ_WEB_BACKEND_OBJS) $(ENJ_WEB_EXTRA_OBJS)
+	$(ENJ_WEB_COMMON_OBJS) $(ENJ_WEB_BACKEND_OBJS) $(ENJ_WEB_EXTRA_OBJS)
 ENJ_WEB_DEPS := $(filter %.d,$(ENJ_WEB_OBJS:.o=.d))
 
 -include $(ENJ_WEB_DEPS)
@@ -182,7 +183,7 @@ $(ENJ_WEB_BUILD_DIR)/%.o: %.cpp $(ENJ_MAKEFILE) $(ENJ_ASSETS) | $(ENJ_WEB_BUILD_
 	@mkdir -p $(dir $@)
 	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
 
-$(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/%.o: ${ENJDIR}backends/pc-endjinn/%.cpp | $(ENJ_WEB_BUILD_DIR)
+$(ENJ_WEB_BUILD_DIR)/enDjinn/backends/host-common/%.o: $(ENJ_HOST_COMMON_DIR)/%.cpp $(ENJ_HOST_COMMON_HEADERS) | $(ENJ_WEB_BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
 
@@ -193,7 +194,7 @@ $(ENJ_WEB_BUILD_DIR)/enDjinn/backends/web-endjinn/%.o: ${ENJDIR}backends/web-end
 $(ENJ_WEB_TARGET): $(ENJ_WEB_OBJS) $(ENJ_ASSETS) $(ENJ_WEB_EXTRA_DEPS) | $(ROMBASEPATH)
 	@mkdir -p $(dir $@)
 	$(EMXX) $(ENJ_WEB_CXXFLAGS) $(ENJ_WEB_SIMD_FLAGS) $(ENJ_WEB_CPPFLAGS) $(DEFINES) \
-		$(ENJ_WEB_OBJS) -o $@ $(ENJ_WEB_LDFLAGS) $(ENJ_WEB_PRELOAD_FLAGS)
+		$(ENJ_WEB_OBJS) -o $@ $(ENJ_WEB_LDFLAGS) $(ENJ_LDFLAGS) $(ENJ_WEB_PRELOAD_FLAGS)
 
 clean:
 	rm -rf $(ENJ_WEB_BUILD_DIR)
@@ -234,7 +235,7 @@ $(ENJ_BUILDDIR)/%.o: %.c $(ENJ_MAKEFILE) $(ENJ_ASSETS)
 $(ENJ_BINDIR)/${ENJ_BASENAME}.elf: $(OBJS)
 	@mkdir -p $(shell dirname $@)
 	@echo "Linking $@..."
-	$(ENJ_CC) $(ENJ_INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(ENJ_LDLIBS) 
+	$(ENJ_CC) $(ENJ_INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(ENJ_LDLIBS) $(ENJ_LDFLAGS)
 
 $(ENJ_BINDIR)/${ENJ_BASENAME}.cdi: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf $(ENJ_IPLOGO) | $(ROMBASEPATH)
 	mkdcdisc \

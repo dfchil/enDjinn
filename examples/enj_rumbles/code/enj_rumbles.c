@@ -1,5 +1,6 @@
 #include <enDjinn/enj_enDjinn.h>
 #include <dc/maple/purupuru.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -160,7 +161,7 @@ void render(void* data) {
   enj_qfont_color_set(255, 255, 255); /* White */
   enj_qfont_write("Effect as hex value:", textpos_x, textpos_y, PVR_LIST_PT_POLY);
   enj_qfont_color_set(255, 0, 255); /* Magenta */
-  snprintf(str_buffer, STRBUFSIZE, "0x%08lx", state->effect.raw);
+  snprintf(str_buffer, STRBUFSIZE, "0x%08" PRIx32, state->effect.raw);
   textpos_x = 170;
   enj_qfont_write(str_buffer, textpos_x, textpos_y, PVR_LIST_PT_POLY);
   textpos_y += enj_qfont_get_header()->line_height *2;
