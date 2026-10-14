@@ -1,0 +1,11 @@
+# Copy to environ.local.sh (not in git) and fill in. environ.sh sources it
+# after its defaults, so anything here overrides them.
+
+# The Dreamcast running dc-load-ip.
+export DCTOOL_HOST=192.168.1.50
+
+# PixelFX HDMI mod, for remote restarts (ensure_dctool_ready). Leave the login
+# out to be asked for it when a restart is needed.
+export PFX_HOST=192.168.1.51
+export PFX_USER=
+export PFX_PASSWD=
