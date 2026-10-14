@@ -75,7 +75,8 @@ static vec3_t project_world(vec3_t world) {
   const float depth = relative_y * forward_y + relative_z * forward_z;
   const float camera_y = relative_y * up_y + relative_z * up_z;
   return (vec3_t){
-      .x = screen_x_offset + 160.0f + CAMERA_FOCAL * world.x / depth,
+      .x = (screen_x_offset + 160.0f + CAMERA_FOCAL * world.x / depth) *
+           ENJ_XSCALE,
       .y = screen_y_offset + 112.0f - CAMERA_FOCAL * camera_y / depth,
       .z = CAMERA_NEAR / depth,
   };
@@ -393,7 +394,8 @@ static void render_modifier(void *__unused data) {
 static vec3_t unproject_camera(vec3_t projected) {
   const float depth = CAMERA_NEAR / projected.z;
   return (vec3_t){
-      .x = (projected.x - screen_x_offset - 160.0f) * depth / CAMERA_FOCAL,
+      .x = (projected.x / ENJ_XSCALE - screen_x_offset - 160.0f) * depth /
+           CAMERA_FOCAL,
       .y = -(projected.y - screen_y_offset - 112.0f) * depth / CAMERA_FOCAL,
       .z = depth,
   };
