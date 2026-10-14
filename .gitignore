@@ -42,3 +42,6 @@ tests/resource_safety_test
 tests/texture_shim_test
 tests/translucent_sort_test
 tests/web_frame_test
+
+# Machine settings and PixelFX login, see environ.local.sh.example
+environ.local.sh
