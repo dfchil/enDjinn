@@ -1,5 +1,7 @@
 # pc-enDjinn
 
+[Documentation](../../docs/README.md)
+
 pc-enDjinn is the host backend for compiling enDjinn programs on PC while
 keeping the Dreamcast/KOS path as the reference target.
 
@@ -150,17 +152,20 @@ In particular, sound builds require `dcaconv` on `PATH` or an explicit
 
 On macOS, the backend discovers SDL2 with `sdl2-config`, uses MoltenVK from
 Homebrew's `opt` prefix, and links the required Apple frameworks. On Linux,
-SDL2 and the native Vulkan loader are discovered with `pkg-config`. `QSB`,
-`SDL2_CONFIG`, `PKG_CONFIG`, `SDL_CFLAGS`, `SDL_LIBS`, `VULKAN_CFLAGS`, and
-`VULKAN_LIBS` remain overridable.
+SDL2 and the native Vulkan loader are discovered with `pkg-config`. Other host
+systems are rejected.
 
 Typical Debian/Ubuntu package requirements are SDL2 development headers, the
 Vulkan loader and headers, Vulkan drivers for the installed GPU, and Qt's
 Shader Tools package providing `qsb`.
 
-On macOS, `HOMEBREW_PREFIX` defaults to `/opt/homebrew`; override it for
-another Homebrew location. `QSB`, `SDL2_CONFIG`, `PKG_CONFIG`, `SDL_CFLAGS`,
-`SDL_LIBS`, `VULKAN_CFLAGS`, and `VULKAN_LIBS` can also be supplied to `make`.
+On macOS, `HOMEBREW_PREFIX` defaults to `/opt/homebrew`, `QSB` to
+`$(HOMEBREW_PREFIX)/bin/qsb` and `MOLTENVK_PREFIX` to
+`$(HOMEBREW_PREFIX)/opt/molten-vk`; override them for another Homebrew
+location. `QSB`, `SDL2_CONFIG`, `PKG_CONFIG`, `SDL_CFLAGS`, `SDL_LIBS`,
+`VULKAN_CFLAGS`, and `VULKAN_LIBS` can also be supplied to `make`. The
+remaining build variables are listed in the
+[configuration reference](../../docs/configuration.md#host-backends).
 
 ## Runtime Controls
 
@@ -174,6 +179,20 @@ another Homebrew location. `QSB`, `SDL2_CONFIG`, `PKG_CONFIG`, `SDL_CFLAGS`,
 
 Up to four SDL GameControllers are assigned to Maple ports A-D in connection
 order. They use SDL's standard buttons, D-pad, left stick, and triggers.
+
+## Runtime Environment Variables
+
+These are read by the executable at startup and are meant for tests and
+diagnostics. Each is enabled by the value `1` unless noted.
+
+| Variable | Effect |
+| --- | --- |
+| `ENJ_SCREENSHOT_PATH` | Write one presented frame to this path as a binary PPM. |
+| `ENJ_SCREENSHOT_FRAME` | Number of presented frames to wait before that capture (default 0). |
+| `ENJ_OFFSCREEN_CAPTURE` | Render into an offscreen image with a hidden window; see above. |
+| `ENJ_NATIVE_COMPOSITION_RASTER` | Use the integer-present aperture directly for offscreen capture. |
+| `ENJ_TRANSLUCENT_SORT_DIAGNOSTICS` | Print translucent sorting counters every 60 frames. |
+| `ENJ_RAISE_WINDOW` | Show and raise the window on startup, for runs launched from a terminal on macOS. |
 
 ## KOS ABI Contract
 

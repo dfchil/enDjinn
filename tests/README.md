@@ -1,5 +1,7 @@
 # Tests
 
+[Documentation](../docs/README.md)
+
 The default suite is fast and renderer-independent:
 
 ```sh
@@ -26,9 +28,21 @@ Explicit integration targets exercise heavier platform seams:
 | `modifier-volume-web-visual` | Drives all six modes in a real headless browser and checks canvas output | Chrome/Chromium |
 | `modifier-volume-benchmark` | Measures transparent receiver cost from 0 through 4,096 modifier triangles | PC backend dependencies |
 
+Run one with, for example, `make -C tests modifier-volume-visual`. The
+default suite does not need the renderer dependencies. Set
+`CHROME=/path/to/chrome` when the browser is not in a conventional install
+location; `modifier-volume-web-visual` starts only a temporary localhost
+server and browser profile. The benchmark's workload, current baseline,
+practical budget and hard limit are recorded in the
+[support matrix](../backends/pc-endjinn/SUPPORTED.md#modifier-volume-semantics).
+
 `modifier-volume-visual-update` rewrites the PC golden data. Use it only for a
 reviewed rendering correction, and record why the expected output changed.
 
 The PC backend's `pc-endjinn-kos-abi-contract` target regenerates and validates
-the supported KOS ABI subset when a Dreamcast toolchain is active. Example
-trees can be compiled independently with `make -C examples ENJ_TARGET=...`.
+the supported KOS ABI subset when a Dreamcast toolchain is active. Build every
+example against the native development backend with:
+
+```sh
+make -C examples ENJ_TARGET=pc-endjinn
+```
