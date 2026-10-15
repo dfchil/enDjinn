@@ -1,5 +1,7 @@
 # enDjinn examples
 
+[Documentation](../docs/README.md)
+
 Each example directory contains a `Makefile` symlink to
 [`base_link.mk`](../base_link.mk), its C sources in `code/`, and any
 project-specific build options in `local.cfg.mk`. With a KallistiOS
@@ -20,12 +22,18 @@ Most examples also build for the browser with
 `ENJ_TARGET=web-endjinn`; browser prerequisites and invocation are covered in
 the [web backend README](../backends/web-endjinn/README.md).
 
-Textures, fonts, PCM sound effects, controllers, and depth-aware opaque and
-transparent modifier volumes work on PC. Rumble and VMU LCD output remain
-no-ops; see the
+Textures, fonts, 16-bit PCM sound effects, controllers, rumble on
+rumble-capable game controllers, and depth-aware opaque and transparent
+modifier volumes work on PC. VMU LCD output is a no-op, and the 8-bit PCM and
+ADPCM sounds in `enj_sounds` do not load; see the
 [pc-enDjinn support matrix](../backends/pc-endjinn/SUPPORTED.md) for the exact
 differences. web-enDjinn implements the same depth-aware opaque and transparent
 modifier classification through WebGL 2 stencil state and fragment evaluation.
+
+The examples embed their generated assets in the executable with C23
+`#embed` instead of reading files: their `local.cfg.mk` sets
+`ENJ_ROMDIR:=embeds`. [Assets](../docs/assets.md#embedding-assets-in-the-executable)
+explains the pattern.
 
 ## enj_hello
 

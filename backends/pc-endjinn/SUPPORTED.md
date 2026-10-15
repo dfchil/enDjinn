@@ -1,5 +1,7 @@
 # pc-enDjinn Backend Support
 
+[Documentation](../../docs/README.md)
+
 pc-enDjinn compiles the normal enDjinn application entry point for PC while
 keeping Dreamcast/KOS as the reference target. The application still calls
 `enj_state_startup()`, `enj_state_run()`, and the PVR-shaped rendering API;

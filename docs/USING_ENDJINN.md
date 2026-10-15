@@ -1,5 +1,7 @@
 # Using enDjinn in another project
 
+[Documentation](README.md)
+
 This guide describes enDjinn's source-integration contract. Read it alongside
 the [hello example](../examples/enj_hello/code/enj_hello.c) and the
 [feature examples](../examples/README.md).
@@ -52,7 +54,9 @@ make
 
 The symlink is intentional: `base_link.mk` resolves the enDjinn directory from
 its real path, so the project can live anywhere. Keep application overrides in
-`local.cfg.mk`; do not edit the engine's `cfg.mk`.
+`local.cfg.mk`; do not edit the engine's `cfg.mk`. [Build system](build.md)
+describes the targets and outputs, and the
+[configuration reference](configuration.md) lists every variable.
 
 Useful first commands are:
 
@@ -68,60 +72,19 @@ The exact native and browser prerequisites are documented in the
 [PC backend README](../backends/pc-endjinn/README.md) and
 [web backend README](../backends/web-endjinn/README.md).
 
-## Runtime lifecycle
+## Runtime contract
 
-The required order is:
+The runtime rules an application must follow are described in the topic
+guides; in short:
 
-1. Call `enj_state_init_defaults()`.
-2. Change fields returned by `enj_state_get()` if the defaults are unsuitable.
-3. Call `enj_state_startup()` and handle a non-zero result.
-4. Keep at least one caller-owned `enj_mode_t` alive and push it with
-   `enj_mode_push()`.
-5. Call `enj_state_run()`.
-
-`enj_state_run()` owns the frame loop and shuts down enDjinn subsystems when it
-finishes. Request shutdown with `enj_state_flag_shutdown(NULL)`. Mode objects
-and their `data` are borrowed, not copied: they must remain alive while present
-on the mode stack. `mode_updater` must not be null. A mode name has room for
-`ENJ_MODE_NAME_CAPACITY - 1` visible characters plus the terminating null byte.
-
-Index zero is the base mode and cannot be popped. Pushing a mode covers the
-current mode. Popping or jumping back reveals an earlier mode and calls its
-`on_activation_fn(previous, next)` callback. `enj_mode_set()` replaces the
-current pointer without calling activation callbacks; use it only when that is
-the intended transition.
-
-## Update and render phases
-
-Each frame, the active mode's updater runs first. The updater changes game
-state and queues work with `enj_render_list_add()`. enDjinn later invokes each
-renderer in PVR-list order between `pvr_list_begin()` and `pvr_list_finish()`.
-
-The render queue copies the callback and the `data` pointer, not the pointed-to
-payload. Consequently:
-
-- `data` must remain valid until the renderer is called later that frame;
-- durable mode/game state is the safest payload;
-- a pointer to an updater's automatic local variable is unsafe after the
-  updater returns; and
-- render callbacks must submit commands compatible with the list they were
-  queued into.
-
-Invalid render-list values and null callbacks are ignored. The queue allocates
-additional fixed-size segments when a list grows; use
-`enj_render_print_list_sizes()` in a debug build to inspect its footprint.
-
-## Input
-
-`enj_ctrl_get_states()` returns an enDjinn-owned array with
-`MAPLE_PORT_COUNT` entries. A null entry means that no controller is connected
-at that port. Non-null entries are refreshed once per frame before the mode
-updater runs and remain owned by enDjinn.
-
-Each button is a two-bit state: up, down, pressed this frame, or released this
-frame. `enj_ctrlr_button_combo()` is useful for chords that must include a new
-press. Abstract controllers let bots or replay streams populate the same
-`enj_ctrlr_state_t` representation as physical controllers.
+- Call `enj_state_init_defaults()`, adjust `enj_state_get()` if needed, call
+  `enj_state_startup()`, push a mode and call `enj_state_run()`. See
+  [Modes and the frame loop](modes.md).
+- Mode objects and their `data` are borrowed while they are on the stack.
+- Renderers queued with `enj_render_list_add()` run later in the same frame;
+  their `data` must still be valid then. See [Rendering](rendering.md).
+- Controller states from `enj_ctrl_get_states()` are owned by enDjinn and
+  refreshed once per frame. See [Input](input.md).
 
 ## Resource ownership
 
@@ -145,7 +108,9 @@ for the caller to release.
 Texture and palette files use enDjinn's generated `DcTx` and `DPAL` formats;
 fonts use `.enjfont`; sounds use `.dca`. Prefer the build rules over hand-made
 binary data, because the loaders intentionally assume converter-valid payload
-sizes after checking their headers.
+sizes after checking their headers. [Assets](assets.md) describes the build
+rules; [Textures](textures.md), [Fonts](fonts.md) and [Sound](sound.md) the
+loaders.
 
 ## Portability checklist
 
@@ -156,6 +121,7 @@ For code intended to run on all three targets:
 - check the backend support matrix before using VMU, rumble, or uncommon PVR
   state;
 - use paths below `ENJ_CBASEPATH` for packaged read-only assets;
+- use 16-bit PCM for sound effects the host backends must play;
 - test both a reference Dreamcast build and the development backend you ship or
   use; and
 - do not treat the PC or browser backend as cycle-accurate Dreamcast emulation.

@@ -1,5 +1,7 @@
 # Dreamcast profiling
 
+[Documentation](../docs/README.md)
+
 enDjinn retains two target-side profiling mechanisms because both are reusable
 across Dreamcast applications:
 
@@ -9,10 +11,12 @@ across Dreamcast applications:
 - `ENJ_DCPROF=1` enables the sampling profiler and writes `/pc/gmon.out` for
   `sh-elf-gprof`.
 
-Both output paths require the application to run through dcload with a writable
-`/pc` mount. Launch commands, network addresses, selected game modes, output
-directories, and compiler exclusions belong to the consuming application's
-scripts; they are deliberately not encoded here.
+Both are Dreamcast only: set them in `local.cfg.mk` (or on the `make` command
+line) for a Dreamcast build; the host backends do not build the profiler
+objects. Both output paths require the application to run through dcload with
+a writable `/pc` mount. Launch commands, network addresses, selected game
+modes, output directories, and compiler exclusions belong to the consuming
+application's scripts; they are deliberately not encoded here.
 
 Example analysis commands:
 

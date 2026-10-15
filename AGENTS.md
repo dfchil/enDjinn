@@ -1,5 +1,7 @@
 ## Agent skills
 
+The documentation index is `docs/README.md`.
+
 ### Issue tracker
 
 Issues and specifications are tracked as local Markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
