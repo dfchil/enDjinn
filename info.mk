@@ -27,6 +27,7 @@ auto_variables:
 	@echo "  ENJ_FONTFILES  = $(ENJ_FONTFILES)"
 	@echo "  DEFINES        = $(DEFINES)"
 	@echo "  OBJS           = $(OBJS)"
+	@echo "  ENJ_LIB_OBJS   = $(ENJ_LIB_OBJS)"
 
 help:
 	@echo "Usage: make [TARGET] [ENJ_TARGET=dreamcast|pc-endjinn|web-endjinn]"
