@@ -185,7 +185,10 @@ function _ensure_dctool_ready_locked(){
     sleep 2
   done
   echo "Checking dc-load-ip readiness on DCTOOL_HOST ($DCTOOL_HOST)..."
-  local timeout=6 started=$SECONDS deadline=$((SECONDS + timeout)) elapsed
+  # After a program exits, dc-load-ip can take more than 6 s to answer again;
+  # restarting the console then (through PixelFX) is needless and also drops
+  # the HDMI capture's audio. Wait up to $DCTOOL_READY_WAIT seconds first.
+  local timeout=${DCTOOL_READY_WAIT:-20} started=$SECONDS deadline=$((SECONDS + timeout)) elapsed
   while ! dctool_loader_ready "$DCTOOL_HOST" >/dev/null; do
     elapsed=$((SECONDS - started))
     echo "Waiting for DCTOOL_HOST ($DCTOOL_HOST) to return dc-load-ip STAT for $timeout seconds... ($elapsed seconds elapsed)"
