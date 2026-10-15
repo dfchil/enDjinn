@@ -128,7 +128,9 @@ clean:
 
 mrproper: clean
 	rm -rf $(ENJ_HOST_BINDIR)
-	find . -type d -empty -delete
+	# Only enDjinn's own output trees: a sweep of . would reach .git (empty
+	# refs directories after a gc) and uninitialised submodules.
+	-find $(ROMBASEPATH) -depth -type d -empty -delete 2>/dev/null
 
 .PHONY: all assets pc-endjinn pc-endjinn-objects clean mrproper list help info
 include ${ENJDIR}info.mk
@@ -260,7 +262,9 @@ mrproper: clean
 	rm -rf $(ENJ_BINDIR)/$(ENJ_BASENAME).elf $(ENJ_BINDIR)/$(ENJ_BASENAME).cdi $(ENJ_BINDIR)/$(ENJ_BASENAME).bin
 	rm -rf $(ENJ_TEXTURES) $(ENJ_SNDFXFILES)  $(addsuffix .pal,$(ENJ_TEXTURES)) $(ENJ_FONTFILES)
 	rm -f ${FONTMACHINE}
-	find . -type d -empty -delete
+	# Only enDjinn's own output trees: a sweep of . would reach .git (empty
+	# refs directories after a gc) and uninitialised submodules.
+	-find $(ROMBASEPATH) $(ENJ_BINDIR) -depth -type d -empty -delete 2>/dev/null
 
 .PRECIOUS: $(ENJ_ASSETS) $(ENJ_IPLOGO)
 .PHONY: all assets clean mrproper list help info

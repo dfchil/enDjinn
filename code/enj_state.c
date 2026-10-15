@@ -18,7 +18,7 @@
 #endif
 
 #ifdef ENJ_DCPROF
-#include "../../enDjinn/profilers/dcprof/profiler.h"
+#include "../profilers/dcprof/profiler.h"
 #endif
 #ifdef ENJ_DBG_PRINT
 #include <dc/perf_monitor.h>
