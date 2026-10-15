@@ -17,7 +17,9 @@ typedef struct enj_state_s {
       uint32_t end_mode : 1;
       uint32_t shut_down : 1;
       uint32_t soft_reset_enabled : 1;
-      uint32_t : 27;
+      uint32_t no_snd_init : 1;   /**< startup leaves the AICA to the application */
+      uint32_t no_input_init : 1; /**< startup does not set up enDjinn's controllers and rumble */
+      uint32_t : 25;
     };
     uint32_t raw;
   } flags;
@@ -49,7 +51,11 @@ void enj_state_soft_reset_set(uint32_t pattern);
 void enj_state_init_defaults(void);
 
 /** Initialize enDjinn subsystems based on the current state
- * @return 0 on success, -1 on failure
+ *
+ * Sets the video mode, initializes the PVR, the injected quick font, the
+ * controllers and rumble (unless flags.no_input_init) and the sound driver
+ * (unless flags.no_snd_init).
+ * @return 0 on success, -1 on failure, including a failed pvr_init()
  */
 int enj_state_startup(void);
 

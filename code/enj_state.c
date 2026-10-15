@@ -133,7 +133,10 @@ int enj_state_startup(void) {
   }
 
   vid_set_mode(state->video.display_mode, state->video.pixel_mode);
-  pvr_init(&state->video.pvr_params);
+  if (pvr_init(&state->video.pvr_params) < 0) {
+    ENJ_DEBUG_PRINT("pvr_init failed.\n");
+    return -1;
+  }
   pvr_set_bg_color(state->video.bg_color.r / 255.0f,
                    state->video.bg_color.g / 255.0f,
                    state->video.bg_color.b / 255.0f);
@@ -158,9 +161,15 @@ int enj_state_startup(void) {
 
   state->flags.started = 1;
 
-  enj_ctrl_init_local_devices();
-  enj_rumble_init_local_devices();
-  snd_init();
+  if (!state->flags.no_input_init) {
+    enj_ctrl_init_local_devices();
+    enj_rumble_init_local_devices();
+  }
+  // An application with its own AICA firmware (AICAflow, for one) loads it
+  // itself; snd_init would load KOS's sound driver first.
+  if (!state->flags.no_snd_init) {
+    snd_init();
+  }
 
   return 0;
 }
