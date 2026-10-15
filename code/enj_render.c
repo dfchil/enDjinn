@@ -89,12 +89,7 @@ void enj_render_list_add(pvr_list_t renderlist, void (*renderer)(void *data),
   list->count++;
 }
 
-void enj_render_next_frame(enj_mode_t *current_updater) {
-  if (current_updater == NULL || current_updater->mode_updater == NULL) {
-    ENJ_DEBUG_PRINT("Error: current mode has no updater\n");
-    return;
-  }
-  // clean up renderlists
+static void enj_render_lists_clear(void) {
   for (int i = PVR_LIST_OP_POLY; i <= PVR_LIST_PT_POLY; i++) {
     active_renderlists[i] = first_renderlists[i];
     enj_renderlist_t *list = active_renderlists[i];
@@ -103,87 +98,99 @@ void enj_render_next_frame(enj_mode_t *current_updater) {
       list = list->next_list;
     }
   }
+}
 
+/* Whether pvr_init gave the list any bins. Opening a list without bins and
+ * finishing it marks it transferred, and the PVR then waits for a list it can
+ * never receive. Without enDjinn's startup the parameters are unknown, so
+ * every list counts as enabled, as before. */
+static int enj_render_list_enabled(int rlist) {
+  enj_state_t *state = enj_state_get();
+  if (!state->flags.started) {
+    return 1;
+  }
+  return state->video.pvr_params.opb_sizes[rlist] != PVR_BINSIZE_0;
+}
+
+static int enj_render_list_queued(int rlist) {
+  for (enj_renderlist_t *list = first_renderlists[rlist]; list != NULL;
+       list = list->next_list) {
+    if (list->count > 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+void enj_render_scene(void) {
 #if ENJ_SHOWFRAMETIMES == 1
-  vid_border_color(0, 0, 255);
-  uint64_t phase_start_ns = timer_ns_gettime64();
-#endif
-
-#ifdef ENJ_DBG_PRINT
-  perf_monitor();
-#endif
-
-  // update game logic and build custom rendering list
-  current_updater->mode_updater(current_updater->data);
-
-#if ENJ_SHOWFRAMETIMES == 1
-  uint64_t phase_end_ns = timer_ns_gettime64();
-  uint64_t update_ns = phase_end_ns - phase_start_ns;
-  vid_border_color(255, 255, 0);
-  phase_start_ns = phase_end_ns;
+  vid_border_color(255, 255, 0); // waiting for the PVR
 #endif
   pvr_wait_ready();
 #if ENJ_SHOWFRAMETIMES == 1
-  phase_end_ns = timer_ns_gettime64();
-  uint64_t wait_ns = phase_end_ns - phase_start_ns;
-  uint64_t render_ns = 0;
-  vid_border_color(0, 255, 0);
-  phase_start_ns = phase_end_ns;
+  vid_border_color(0, 255, 0); // submitting the lists
 #endif
   pvr_scene_begin();
   for (int rlist = PVR_LIST_OP_POLY; rlist <= PVR_LIST_PT_POLY; rlist++) {
+    // A list with nothing queued need not be opened: pvr_scene_finish blanks
+    // the enabled lists that were not submitted.
+    if (!enj_render_list_queued(rlist) || !enj_render_list_enabled(rlist)) {
+      continue;
+    }
     pvr_list_begin(rlist);
-    if (first_renderlists[rlist] != NULL) {
-      enj_renderlist_t *list = first_renderlists[rlist];
-      while (list != NULL) {
-        for (int j = 0; j < list->count; j++) {
-          list->items[j].renderer(list->items[j].data);
-        }
-        list->count = 0;
-        list = list->next_list;
+    for (enj_renderlist_t *list = first_renderlists[rlist]; list != NULL;
+         list = list->next_list) {
+      for (int j = 0; j < list->count; j++) {
+        list->items[j].renderer(list->items[j].data);
       }
     }
     pvr_list_finish();
   }
   if (enj_palette_mode_switch_pending) {
 #if ENJ_SHOWFRAMETIMES == 1
-    phase_end_ns = timer_ns_gettime64();
-    render_ns += phase_end_ns - phase_start_ns;
     vid_border_color(255, 255, 0);
-    phase_start_ns = phase_end_ns;
 #endif
     pvr_wait_render_done();
 #if ENJ_SHOWFRAMETIMES == 1
-    phase_end_ns = timer_ns_gettime64();
-    wait_ns += phase_end_ns - phase_start_ns;
     vid_border_color(0, 255, 0);
-    phase_start_ns = phase_end_ns;
 #endif
     pvr_set_pal_format(enj_palette_mode_switch);
     enj_palette_mode_switch_pending = 0;
   }
 #if ENJ_SHOWFRAMETIMES == 1
-  phase_end_ns = timer_ns_gettime64();
-  render_ns += phase_end_ns - phase_start_ns;
   vid_border_color(255, 255, 0);
-  phase_start_ns = phase_end_ns;
 #endif
   pvr_scene_finish();
 #if ENJ_SHOWFRAMETIMES == 1
-  phase_end_ns = timer_ns_gettime64();
-  wait_ns += phase_end_ns - phase_start_ns;
   vid_border_color(0, 255, 0);
-  phase_start_ns = phase_end_ns;
 #endif
+  enj_render_lists_clear();
 
   if (_render_post_call != NULL) {
     _render_post_call(_render_post_data);
   }
 #if ENJ_SHOWFRAMETIMES == 1
-  phase_end_ns = timer_ns_gettime64();
-  render_ns += phase_end_ns - phase_start_ns;
   vid_border_color(255, 0, 0);
 #endif
+}
+
+void enj_render_next_frame(enj_mode_t *current_updater) {
+  if (current_updater == NULL || current_updater->mode_updater == NULL) {
+    ENJ_DEBUG_PRINT("Error: current mode has no updater\n");
+    return;
+  }
+  enj_render_lists_clear();
+
+#if ENJ_SHOWFRAMETIMES == 1
+  vid_border_color(0, 0, 255);
+#endif
+#ifdef ENJ_DBG_PRINT
+  perf_monitor();
+#endif
+
+  // update game logic and build custom rendering list
+  current_updater->mode_updater(current_updater->data);
+  enj_render_scene();
 }
 
 void enj_render_print_list_sizes(void) {

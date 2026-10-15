@@ -31,6 +31,20 @@ void enj_render_list_add(pvr_list_t renderlist, void (*renderer)(void *data),
 void enj_render_next_frame(enj_mode_t *updater);
 
 /**
+ * Submit one PVR scene from the queued render lists, then empty them.
+ *
+ * Waits for the PVR, begins the scene, calls every queued renderer between
+ * pvr_list_begin() and pvr_list_finish() of its list, finishes the scene and
+ * runs the post-render callback. Lists with nothing queued, and lists that
+ * enj_state_startup() gave no bins, are not opened.
+ *
+ * enj_render_next_frame() calls this after the mode updater. An application
+ * that runs its own frame loop can queue renderers with enj_render_list_add()
+ * and call this directly instead of enj_state_run().
+ */
+void enj_render_scene(void);
+
+/**
  * Set a callback to be called after each rendering iteration
  * @param render_post_call Pointer to the callback function
  * @param data Pointer to data to pass to the callback
