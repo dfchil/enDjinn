@@ -55,6 +55,15 @@ std::vector<pvr_vertex_t> g_triangle_vertices;
 std::vector<enj_host_pvr::QueuedPrimitive> g_primitives;
 HeaderState g_header;
 std::unordered_map<pvr_ptr_t, TextureUpload> g_uploads;
+/* pvr_mem_free keeps a texture through the next scene, so a scene that
+   replays the previous one's primitives (pc_endjinn/retain.h) still finds
+   it. Handles are never reused, so the delay cannot alias a new texture. */
+struct PendingTextureFree {
+  pvr_ptr_t ptr;
+  uint64_t scene;
+};
+std::vector<PendingTextureFree> g_pending_texture_frees;
+uint64_t g_scene_serial = 0u;
 std::array<uint32_t, 1024> g_palette{};
 pvr_palfmt_t g_palette_format = PVR_PAL_ARGB8888;
 uint64_t g_palette_revision = 1u;
@@ -470,6 +479,16 @@ void append_primitives(const QueuedPrimitive *first, size_t count) {
 }
 
 void scene_begin() {
+  ++g_scene_serial;
+  std::vector<PendingTextureFree> kept;
+  for (const PendingTextureFree &pending : g_pending_texture_frees) {
+    if (pending.scene + 1u < g_scene_serial) {
+      g_uploads.erase(pending.ptr);
+    } else {
+      kept.push_back(pending);
+    }
+  }
+  g_pending_texture_frees.swap(kept);
   g_primitives.clear();
   g_triangle_vertices.clear();
   g_has_sprite_first = false;
@@ -628,7 +647,9 @@ void *texture_alloc(size_t size) {
 }
 
 void texture_free(pvr_ptr_t ptr) {
-  g_uploads.erase(ptr);
+  if (g_uploads.find(ptr) != g_uploads.end()) {
+    g_pending_texture_frees.push_back({ptr, g_scene_serial});
+  }
 }
 
 void texture_load(const void *src, pvr_ptr_t dst, size_t count) {
