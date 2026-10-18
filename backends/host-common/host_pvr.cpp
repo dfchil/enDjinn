@@ -462,6 +462,13 @@ namespace enj_host_pvr {
 
 const std::vector<QueuedPrimitive> &primitives() { return g_primitives; }
 
+void append_primitives(const QueuedPrimitive *first, size_t count) {
+  if (first == nullptr || count == 0u) {
+    return;
+  }
+  g_primitives.insert(g_primitives.end(), first, first + count);
+}
+
 void scene_begin() {
   g_primitives.clear();
   g_triangle_vertices.clear();
