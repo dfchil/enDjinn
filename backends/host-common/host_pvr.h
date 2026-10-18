@@ -51,6 +51,8 @@ struct DecodedTexture {
 };
 
 const std::vector<QueuedPrimitive> &primitives();
+/* Queue copies of already decoded primitives into the current scene. */
+void append_primitives(const QueuedPrimitive *first, size_t count);
 void scene_begin();
 void list_begin(pvr_list_t list);
 void *dr_target();
