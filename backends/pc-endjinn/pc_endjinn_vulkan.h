@@ -2,6 +2,7 @@
 #define PC_ENDJINN_VULKAN_H
 
 #include <kos.h>
+#include <pc_endjinn/timing.h>
 
 namespace pc_endjinn {
 
@@ -20,6 +21,7 @@ void pvr_scene_finish();
  * presented PVR scenes and has no effect on collection or rendering. */
 uint64_t pvr_presented_frame_count();
 bool capture_next_frame(const char *path);
+void frame_timing_get(enj_pc_frame_timing *out);
 void pvr_list_begin(pvr_list_t list);
 void pvr_list_finish();
 void pvr_wait_render_done();

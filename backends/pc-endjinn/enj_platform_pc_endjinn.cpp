@@ -1,6 +1,7 @@
 #include <kos.h>
 
 #include <pc_endjinn/capture.h>
+#include <pc_endjinn/timing.h>
 
 #include "../host-common/host_pvr.h"
 #include "pc_endjinn_vulkan.h"
@@ -49,6 +50,9 @@ uint64_t enj_pc_presented_frame_count(void) {
 }
 bool enj_pc_capture_next_frame(const char *path) {
   return pc_endjinn::capture_next_frame(path);
+}
+void enj_pc_frame_timing_get(enj_pc_frame_timing *out) {
+  pc_endjinn::frame_timing_get(out);
 }
 void pvr_list_begin(pvr_list_t list) { pc_endjinn::pvr_list_begin(list); }
 void pvr_list_finish(void) { pc_endjinn::pvr_list_finish(); }
