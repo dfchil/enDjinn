@@ -62,6 +62,17 @@ dctool_unlock
 `dctool_clients` lists running `kos-tool` processes other than `--ready`
 probes.
 
+`dctool_queue [HOST]` shows the state of one console (default `DCTOOL_HOST`):
+
+- **holder:** the process that holds the lock, from the `.who` file.
+- **running:** the `kos-tool` client running on that console.
+- **waiting:** every other process that has the lock file open, with its age,
+  directory and command. These are waiting for the lock, or keep it open
+  between their own runs.
+
+The lock has no order: whichever waiter the kernel wakes first gets the
+console.
+
 ## Checking that the console is ready
 
 `ensure_dctool_ready` checks that dc-load-ip answers `kos-tool --ready`,
