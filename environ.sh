@@ -87,6 +87,45 @@ dctool_clients() {
   ps -Ao pid=,args= | awk '$2 ~ /(^|\/)kos-tool$/ && !/ --ready/ { sub(/^ +/, ""); print }'
 }
 
+# Shows who holds the console lock, the kos-tool client running on it, and
+# every other process with the lock file open. Those are waiting for the lock,
+# or hold it open between runs (dctool_unlock keeps the descriptor). The lock
+# has no order: whichever waiter the kernel wakes first gets the console.
+dctool_queue() {
+  local host=${1:-${DCTOOL_HOST:-default}}
+  local lock=/tmp/dctool-$host.lock who=/tmp/dctool-$host.who holder= line pid cwd
+  [[ -r $who ]] && holder=${${(z)$(<$who)}[2]}
+  print -r -- "console $host"
+  if [[ -n $holder ]] && kill -0 $holder 2>/dev/null; then
+    print -r -- "  holder:  $(<$who)"
+  else
+    print -r -- "  holder:  none${holder:+ (last: $(<$who))}"
+  fi
+  # Clients for this host: "-t host", or no -t at all (kos-tool then uses DCTOOL_HOST).
+  local -a clients=(${(f)"$(dctool_clients | awk -v h="$host" -v d="${DCTOOL_HOST:-}" \
+    'index($0, " -t " h) || (!index($0, " -t ") && h == d)')"})
+  if (( $#clients )); then
+    for line in $clients; print -r -- "  running: $line"
+  else
+    print -r -- "  running: none"
+  fi
+  local -a pids=(${(f)"$(lsof -t $lock 2>/dev/null)"})
+  pids=(${pids:#$holder})
+  if (( ! $#pids )); then
+    print -r -- "  waiting: none"
+    return 0
+  fi
+  print -r -- "  waiting or between runs (age of the process, its directory, its command):"
+  for pid in $pids; do
+    cwd=$(lsof -a -p $pid -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')
+    line=$(ps -o etime=,args= -p $pid 2>/dev/null) || continue
+    line=${line## #}
+    local age=${line%% *} cmd=${line#* }
+    cmd=${cmd#*eval \'}   # an agent's shell: the command it was given, not its setup
+    print -r -- "    $pid $age ${cwd/#$HOME/~}: ${cmd[1,140]}"
+  done
+}
+
 function reset_dctool_wait(){
   if [[ -z "$DCTOOL_HOST" ]]; then
     echo -n "Enter DCTOOL_HOST IP OR HOSTNAME: "
