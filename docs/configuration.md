@@ -59,6 +59,15 @@ There is no `ENJ_DEBUG` variable; use `ENJ_DBG_PRINT`.
 | `ENJ_LDLIBS` | empty | Extra libraries for the Dreamcast link. |
 | `ENJ_LDFLAGS` | empty | Extra link flags on every target. |
 | `OBJS` | empty | Extra Dreamcast objects; may be started in `local.cfg.mk`. |
+| `ENJ_AR` | `$KOS_AR` (`sh-elf-gcc-ar`) | Archiver for the Dreamcast runtime library. |
+
+For Dreamcast builds, the runtime in enDjinn's `code/` is archived into
+`$(ENJ_BUILDDIR)/enDjinn/libenDjinn.a` and linked after the application objects
+and `ENJ_LDLIBS`, so an executable contains only the enDjinn modules it calls,
+directly or through other enDjinn modules. An application that does not use
+`enj_state` therefore does not get its `KOS_INIT_FLAGS` and may declare its own.
+The archiver must understand LTO objects when `ENJ_CFLAGS` contains `-flto`,
+which `gcc-ar` does.
 
 C macros that are not Make variables can be passed in the compiler flags, for
 example `ENJ_CFLAGS += -DENJ_MODE_STACK_SIZE=32` (default 16).

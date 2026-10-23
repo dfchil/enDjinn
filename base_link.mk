@@ -213,11 +213,18 @@ ifndef OBJS  # this allows OBJS to be be started in local.cfg.mk
 	OBJS :=
 endif
 
-OBJS += $(shell find ${ENJDIR}code/ -name '*.c' -not -path "${ENJDIR}.git/*" |sed -e 's,${ENJDIR}\(.*\).c,$(ENJ_BUILDDIR)/enDjinn/\1.o,g')	
 OBJS += $(shell find ${ENJ_CODEDIR} -name '*.c' -not -path "./.git/*" |sed -e 's,\.\(.*\).c,$(ENJ_BUILDDIR)\1.o,g')
 
+# The enDjinn runtime goes into a static library that is linked after the
+# application, so an application only gets the modules it references (and the
+# modules those reference). gcc-ar adds the LTO symbol index that -flto
+# objects need.
+ENJ_AR ?= $(if $(KOS_AR),$(KOS_AR),sh-elf-gcc-ar)
+ENJ_LIB := $(ENJ_BUILDDIR)/enDjinn/libenDjinn.a
+ENJ_LIB_OBJS := $(patsubst ${ENJDIR}%.c,$(ENJ_BUILDDIR)/enDjinn/%.o,$(sort $(shell find ${ENJDIR}code/ -name '*.c')))
+
 include ${ENJDIR}defines.mk
-ENJ_DREAMCAST_DEPS := $(OBJS:.o=.d)
+ENJ_DREAMCAST_DEPS := $(OBJS:.o=.d) $(ENJ_LIB_OBJS:.o=.d)
 
 -include $(ENJ_DREAMCAST_DEPS)
 
@@ -234,10 +241,16 @@ $(ENJ_BUILDDIR)/%.o: %.c $(ENJ_MAKEFILE) $(ENJ_ASSETS)
 	@echo "Building $@ from $<..."
 	$(ENJ_CC) $(ENJ_INCLUDES) $(ENJ_CFLAGS) $(DEFINES) $(ENJ_DEPFLAGS) -c $< -o $@
 
-$(ENJ_BINDIR)/${ENJ_BASENAME}.elf: $(OBJS)
+$(ENJ_LIB): $(ENJ_LIB_OBJS)
+	@echo "Archiving $@..."
+	@rm -f $@
+	@$(ENJ_AR) rcs $@ $^
+
+# ENJ_LIB follows ENJ_LDLIBS so that a project library can call enDjinn too.
+$(ENJ_BINDIR)/${ENJ_BASENAME}.elf: $(OBJS) $(ENJ_LIB)
 	@mkdir -p $(shell dirname $@)
 	@echo "Linking $@..."
-	$(ENJ_CC) $(ENJ_INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(ENJ_LDLIBS) $(ENJ_LDFLAGS)
+	$(ENJ_CC) $(ENJ_INCLUDES) $(KOS_CFLAGS) $(DEFINES) -o $@ $(OBJS) $(ENJ_LDLIBS) $(ENJ_LIB) $(ENJ_LDFLAGS)
 
 $(ENJ_BINDIR)/${ENJ_BASENAME}.cdi: $(ENJ_BINDIR)/${ENJ_BASENAME}.elf $(ENJ_IPLOGO) | $(ROMBASEPATH)
 	mkdcdisc \
