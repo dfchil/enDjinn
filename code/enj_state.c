@@ -26,7 +26,10 @@
 
 #include <enDjinn/embeds/enj_logo_header.h>
 
-KOS_INIT_FLAGS(INIT_DEFAULT);
+#ifndef ENJ_KOS_INIT_FLAGS
+#define ENJ_KOS_INIT_FLAGS INIT_DEFAULT
+#endif
+KOS_INIT_FLAGS(ENJ_KOS_INIT_FLAGS);
 
 alignas(32) static enj_state_t state = {0};
 enj_state_t *enj_state_get(void) { return &state; }
