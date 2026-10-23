@@ -18,8 +18,9 @@ void vid_set_mode(vid_display_mode_generic_t mode,
   web_endjinn::vid_set_mode(mode, pixel_mode);
 }
 
-void pvr_init(const pvr_init_params_t *params) {
+int pvr_init(const pvr_init_params_t *params) {
   web_endjinn::pvr_init(params);
+  return 0;
 }
 void pvr_shutdown(void) { web_endjinn::pvr_shutdown(); }
 void pvr_set_bg_color(float r, float g, float b) {
