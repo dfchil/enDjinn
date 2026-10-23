@@ -28,6 +28,9 @@ void pvr_set_bg_color(float r, float g, float b) {
 void pvr_wait_ready(void) {}
 void pvr_scene_begin(void) { web_endjinn::pvr_scene_begin(); }
 void pvr_scene_finish(void) { web_endjinn::pvr_scene_finish(); }
+/* enj_render_hold_frame(): no scene_begin, so the last scene's primitives
+ * are still queued; present them again. */
+void enj_host_scene_repeat(void) { web_endjinn::pvr_scene_finish(); }
 void pvr_list_begin(pvr_list_t list) { enj_host_pvr::list_begin(list); }
 void pvr_list_finish(void) {}
 void pvr_wait_render_done(void) {}

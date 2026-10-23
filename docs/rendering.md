@@ -43,6 +43,11 @@ translucent and punch-through text.
   current frame's lists are submitted. enDjinn first waits for the PVR to
   finish rendering (`pvr_wait_render_done()`), then calls
   `pvr_set_pal_format()`.
+- `enj_render_hold_frame()`, called from an updater, shows the previous frame
+  again instead of this frame's lists. A game that shows one step on two
+  display refreshes uses it where the second refresh must not redraw. On the
+  Dreamcast no scene is submitted and the PVR keeps the last frame; the host
+  backends present the last scene's primitives again.
 
 ## Sprites and 64-byte primitives
 
