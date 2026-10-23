@@ -247,7 +247,7 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
 PC_ENDJINN_BEGIN_DECLS
 uint32_t enj_host_pvr_register_modifier_texture(
     const pvr_context_txr_t *texture);
-void pvr_init(const pvr_init_params_t *params);
+int pvr_init(const pvr_init_params_t *params);
 void pvr_shutdown(void);
 void pvr_set_bg_color(float r, float g, float b);
 void pvr_wait_ready(void);
