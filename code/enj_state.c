@@ -110,10 +110,13 @@ static void enj_state_wait_for_frame_deadline(uint64_t *deadline_ns) {
   uint64_t now_ns = timer_ns_gettime64();
 
   if (*deadline_ns == 0 || now_ns >= *deadline_ns + frame_ns) {
-    *deadline_ns = now_ns + frame_ns;
-  } else {
-    *deadline_ns += frame_ns;
+    /* More than a frame late: start the schedule again from now without
+     * sleeping. Setting the next deadline a whole frame ahead made every
+     * late frame sleep one more frame period (33 ms at 30 Hz). */
+    *deadline_ns = now_ns;
+    return;
   }
+  *deadline_ns += frame_ns;
 
   now_ns = timer_ns_gettime64();
   if (now_ns < *deadline_ns) {
