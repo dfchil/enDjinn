@@ -45,6 +45,23 @@ void enj_render_next_frame(enj_mode_t *updater);
 void enj_render_scene(void);
 
 /**
+ * Show the previous frame again instead of this frame's render lists.
+ *
+ * Call it from a mode updater (or before enj_render_scene() in an
+ * application's own loop). The next enj_render_scene() then discards the
+ * queued render lists, presents the last submitted scene once more and runs
+ * the post-render callback. For a game that holds its picture for a display
+ * refresh, for example one that shows each 30 Hz step on two 60 Hz refreshes
+ * and must not redraw the first refresh's state.
+ *
+ * Dreamcast: no scene is submitted; the PVR keeps displaying the last frame.
+ * pc-enDjinn and web-enDjinn: the last scene's primitives are drawn again.
+ * Textures it used stay valid even if they were freed since; texture data
+ * that was reloaded in between is shown as it is now.
+ */
+void enj_render_hold_frame(void);
+
+/**
  * Set a callback to be called after each rendering iteration
  * @param render_post_call Pointer to the callback function
  * @param data Pointer to data to pass to the callback

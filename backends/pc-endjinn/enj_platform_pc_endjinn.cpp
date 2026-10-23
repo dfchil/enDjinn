@@ -44,6 +44,9 @@ void pvr_set_bg_color(float r, float g, float b) {
 void pvr_wait_ready(void) { pc_endjinn::pvr_wait_ready(); }
 void pvr_scene_begin(void) { pc_endjinn::pvr_scene_begin(); }
 void pvr_scene_finish(void) { pc_endjinn::pvr_scene_finish(); }
+/* enj_render_hold_frame(): no scene_begin, so the last scene's primitives
+ * are still queued; present them again. */
+void enj_host_scene_repeat(void) { pc_endjinn::pvr_scene_finish(); }
 uint64_t enj_pc_presented_frame_count(void) {
   return pc_endjinn::pvr_presented_frame_count();
 }

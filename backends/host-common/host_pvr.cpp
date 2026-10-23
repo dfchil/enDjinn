@@ -53,6 +53,11 @@ pvr_modifier_vol_t g_modifier_volume_first{};
 bool g_has_modifier_volume_first = false;
 std::vector<pvr_vertex_t> g_triangle_vertices;
 std::vector<enj_host_pvr::QueuedPrimitive> g_primitives;
+/* Textures freed since the last scene began. They are released when the
+ * next scene begins, so a held frame (enj_render_hold_frame), which draws
+ * the last scene's primitives again, still finds every texture they name.
+ * Handles are never reused, so the delay cannot alias a new texture. */
+std::vector<pvr_ptr_t> g_freed_textures;
 HeaderState g_header;
 std::unordered_map<pvr_ptr_t, TextureUpload> g_uploads;
 std::array<uint32_t, 1024> g_palette{};
@@ -463,6 +468,10 @@ namespace enj_host_pvr {
 const std::vector<QueuedPrimitive> &primitives() { return g_primitives; }
 
 void scene_begin() {
+  for (pvr_ptr_t ptr : g_freed_textures) {
+    g_uploads.erase(ptr);
+  }
+  g_freed_textures.clear();
   g_primitives.clear();
   g_triangle_vertices.clear();
   g_has_sprite_first = false;
@@ -621,7 +630,9 @@ void *texture_alloc(size_t size) {
 }
 
 void texture_free(pvr_ptr_t ptr) {
-  g_uploads.erase(ptr);
+  if (g_uploads.find(ptr) != g_uploads.end()) {
+    g_freed_textures.push_back(ptr);
+  }
 }
 
 void texture_load(const void *src, pvr_ptr_t dst, size_t count) {

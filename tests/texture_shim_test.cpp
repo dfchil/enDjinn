@@ -206,5 +206,19 @@ int main() {
   enj_host_pvr::texture_free(compressed);
   enj_host_pvr::texture_free(indices);
   enj_host_pvr::texture_free(texture);
+
+  /* enj_render_hold_frame draws the last scene's primitives again without a
+   * scene_begin: a texture freed after that scene stays valid until the
+   * next scene begins, and is released then. */
+  enj_host_pvr::scene_begin();
+  pvr_ptr_t held = enj_host_pvr::texture_alloc(64u);
+  const uint8_t held_bytes[64] = {1u};
+  enj_host_pvr::texture_load(held_bytes, held, sizeof(held_bytes));
+  const uint64_t held_revision = enj_host_pvr::texture_revision(held);
+  assert(held_revision != 0u);
+  enj_host_pvr::texture_free(held);
+  assert(enj_host_pvr::texture_revision(held) == held_revision);
+  enj_host_pvr::scene_begin();
+  assert(enj_host_pvr::texture_revision(held) == 0u);
   return 0;
 }
