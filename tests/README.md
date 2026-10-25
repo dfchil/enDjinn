@@ -26,6 +26,7 @@ Explicit integration targets exercise heavier platform seams:
 | `modifier-volume-visual` | Six PC/Vulkan modifier modes against golden framebuffer fingerprints | SDL2, Vulkan/MoltenVK, Qt Shader Tools |
 | `modifier-volume-web` | Compiles the deep modifier example for WebAssembly/WebGL 2 | Emscripten |
 | `modifier-volume-web-visual` | Drives all six modes in a real headless browser and checks canvas output | Chrome/Chromium |
+| `frame-pacing-hw` | Runs each frame pacing under translucent load on a Dreamcast and checks that DROP_LATE keeps real time where STRICT slows and HALF shows every second scene | A shell that sourced `environ.sh`, a loader-ready console at `DCTOOL_HOST` |
 | `modifier-volume-benchmark` | Measures transparent receiver cost from 0 through 4,096 modifier triangles | PC backend dependencies |
 
 Run one with, for example, `make -C tests modifier-volume-visual`. The
