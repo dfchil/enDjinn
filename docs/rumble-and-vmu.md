@@ -2,11 +2,12 @@
 
 [Documentation](README.md)
 
-Rumble has a small API with per-port rate limiting. VMUs have no enDjinn API;
-this page says what enDjinn does with them anyway. Rumble declarations are in
+Rumble has a small API with per-port rate limiting, and VMUs have a save-file
+API. Rumble declarations are in
 [`enj_rumble.h`](../include/enDjinn/enj_rumble.h), and the
 [rumbles example](../examples/enj_rumbles/code/enj_rumbles.c) is an
-interactive effect editor.
+interactive effect editor. Save declarations are in
+[`enj_vmu.h`](../include/enDjinn/enj_vmu.h).
 
 ## Rumble
 
@@ -34,15 +35,55 @@ On pc-enDjinn and web-enDjinn, rumble-capable game controllers report a rumble
 pack. The effect's power and frequency drive the controller's low- and
 high-frequency motors through SDL or the browser Gamepad vibration actuator.
 
-## VMU
+## VMU saves
 
-enDjinn has no VMU screen or save API. It touches VMUs in two places:
+An application has one save: a block of its own memory, described by an
+`enj_vmu_save_t` with the file name, the two descriptions the file menus
+show, an application id and an optional 16-colour icon (1 to 3 frames of
+32x32 pixels, 4 bits each). On the Dreamcast it is stored as a VMS file whose
+CRC is checked on load.
+
+```c
+static enj_vmu_save_t save = {
+    .name = "MYGAME", .desc_short = "My Game", .desc_long = "My Game save",
+    .app_id = "MYGAME", .icon_palette = icon_pal, .icon_frames = icon,
+    .icon_frame_count = 1, .data = &game_save, .size = sizeof(game_save),
+};
+
+if (enj_vmu_save_load(&save) != ENJ_VMU_LOADED) {
+  /* start from defaults */
+}
+enj_vmu_save_start(&save, 500);
+
+/* whenever the game changes its save */
+enj_vmu_save_lock();
+game_save.best_lap = lap;
+enj_vmu_save_unlock();
+enj_vmu_save_changed();
+```
+
+`enj_vmu_save_load()` reads the save from the first VMU that holds it and
+says what it found. `enj_vmu_save_write()` writes it at once and blocks for the
+maple transfers. `enj_vmu_save_start()` starts a background saver instead: a
+low-priority thread that writes a copy once the save has not changed for the
+given number of milliseconds, so the game thread never waits for the VMU. A
+failed write is tried again, and a VMU plugged in after the load that already
+holds a save is left alone. For a reset or quit, `enj_vmu_save_exit_after_flush()`
+has the saver write waiting changes and then exit; it returns 0 when there is
+nothing to save.
+
+On the host backends the save is a plain file of the data alone, written at
+once on every `enj_vmu_save_changed()`.
+
+## VMU screens
+
+enDjinn has no VMU screen API. It touches VMU screens in two places:
 
 - on shutdown it clears the LCD of every attached VMU;
 - `enj_ctrl.h`'s `enj_maple_port_type(port, MAPLE_FUNC_LCD)` finds a VMU
   screen on a port, for use with the KOS `vmufb_*` functions.
 
-Applications use KOS directly for VMU screens and save files. On the host
+Applications use KOS directly for VMU screens. On the host
 backends, KOS file calls on paths under `/vmu/` are redirected: pc-enDjinn
 writes them below `vmu/` in the working directory, and web-enDjinn keeps them
 in an IndexedDB-backed `/vmu` directory that survives page reloads. VMU
