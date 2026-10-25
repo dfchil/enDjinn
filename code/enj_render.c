@@ -30,6 +30,15 @@ static void (*_render_post_call)(void *) = NULL;
 static pvr_palfmt_t enj_palette_mode_switch;
 static int enj_palette_mode_switch_pending;
 
+static int enj_render_hold_pending;
+
+#ifndef __DREAMCAST__
+/* Host backends: present the last scene's primitives again. */
+void enj_host_scene_repeat(void);
+#endif
+
+void enj_render_hold_frame(void) { enj_render_hold_pending = 1; }
+
 void enj_render_palette_mode_set(pvr_palfmt_t mode) {
   enj_palette_mode_switch = mode;
   enj_palette_mode_switch_pending = 1;
@@ -123,6 +132,17 @@ static int enj_render_list_queued(int rlist) {
 }
 
 void enj_render_scene(void) {
+  if (enj_render_hold_pending) {
+    enj_render_hold_pending = 0;
+#ifndef __DREAMCAST__
+    enj_host_scene_repeat();
+#endif
+    enj_render_lists_clear();
+    if (_render_post_call != NULL) {
+      _render_post_call(_render_post_data);
+    }
+    return;
+  }
 #if ENJ_SHOWFRAMETIMES == 1
   vid_border_color(255, 255, 0); // waiting for the PVR
 #endif
