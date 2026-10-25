@@ -12,6 +12,7 @@ MODIFIER_VISUAL_BINARY := $(MODIFIER_VISUAL_BUILD)/enj_deep_modifiers
 MODIFIER_BENCH_APP := $(CURDIR)/apps/modifier_benchmark
 MODIFIER_BENCH_BUILD := $(CURDIR)/build/modifier-benchmark-pc
 MODIFIER_BENCH_BINARY := $(MODIFIER_BENCH_BUILD)/modifier_benchmark
+FRAME_PACING_APP := $(CURDIR)/apps/frame_pacing
 PUBLIC_HEADERS := $(notdir $(wildcard $(ROOT)/include/enDjinn/*.h))
 CFLAGS := -std=gnu23 -Wall -Wextra -Werror \
 	-I$(ROOT)/backends/pc-endjinn/include -I$(ROOT)/include \
@@ -89,6 +90,11 @@ modifier-volume-benchmark:
 		ENJ_HOST_TARGET=$(MODIFIER_BENCH_BINARY)
 	$(PYTHON) modifier_volume_benchmark.py $(MODIFIER_BENCH_BINARY)
 
+frame-pacing-hw:
+	$(MAKE) -C $(FRAME_PACING_APP) -f $(abspath $(ROOT)/base_link.mk) \
+		ENJ_TARGET=dreamcast
+	$(PYTHON) frame_pacing_hw.py $(FRAME_PACING_APP)/bin/frame_pacing.elf
+
 $(CPP_API_TARGET): public_api_cpp_test.cpp
 	$(CXX) -std=c++23 -Wall -Wextra -Werror \
 		-I$(ROOT)/backends/pc-endjinn/include -I$(ROOT)/include \
@@ -97,8 +103,8 @@ $(CPP_API_TARGET): public_api_cpp_test.cpp
 clean:
 	rm -f $(TARGET) $(TEXTURE_TARGET) $(CPP_API_TARGET) $(RESOURCE_TARGET) \
 		$(TRANSLUCENT_SORT_TARGET) $(WEB_FRAME_TARGET)
-	rm -rf build
+	rm -rf build $(FRAME_PACING_APP)/bin $(FRAME_PACING_APP)/build
 
-.PHONY: check clean public-headers modifier-volume-visual \
+.PHONY: check clean public-headers frame-pacing-hw modifier-volume-visual \
 	modifier-volume-visual-update modifier-volume-web \
 	modifier-volume-web-visual modifier-volume-benchmark
