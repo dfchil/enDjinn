@@ -31,8 +31,9 @@ void vid_set_mode(vid_display_mode_generic_t display_mode,
   pc_endjinn::vid_set_mode(display_mode, pixel_mode);
 }
 
-void pvr_init(const pvr_init_params_t *params) {
+int pvr_init(const pvr_init_params_t *params) {
   pc_endjinn::pvr_init(params);
+  return 0;
 }
 
 void pvr_shutdown(void) { pc_endjinn::pvr_shutdown(); }
