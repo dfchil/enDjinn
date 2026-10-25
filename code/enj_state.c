@@ -101,6 +101,13 @@ void enj_state_soft_reset_set(uint32_t pattern) {
 void enj_state_flag_shutdown(void *__unused) { state.flags.shut_down = 1; }
 
 void enj_ctrl_init_local_devices(void);
+void enj_pacing_tick_begin(void);
+#ifdef __EMSCRIPTEN__
+int enj_pacing_web_due(void);
+int enj_pacing_tick_end_web(void);
+#else
+void enj_pacing_tick_end(void);
+#endif
 void enj_rumble_init_local_devices(void);
 void enj_rumble_update(void);
 
@@ -221,6 +228,7 @@ static int enj_state_run_frame(enj_state_t *state,
       }
     }
   }
+  enj_pacing_tick_begin();
   enj_render_next_frame(enj_mode_get());
   enj_rumble_update();
   return 1;
@@ -279,6 +287,22 @@ static double enj_state_web_next_frame_ms;
 #endif
 
 static void enj_state_web_frame(void *arg) {
+  if (enj_pacing_get() != ENJ_PACING_FREE) {
+    if (!enj_pacing_web_due()) {
+      return;
+    }
+    int running = enj_state_run_frame(enj_state_get(), arg);
+    if (running && enj_pacing_tick_end_web()) {
+      running = enj_state_run_frame(enj_state_get(), arg);
+      enj_pacing_tick_end_web();
+    }
+    if (running) {
+      return;
+    }
+    emscripten_cancel_main_loop();
+    enj_state_shutdown();
+    return;
+  }
 #if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
   const double frame_ms = 1000.0 / ENJ_FRAME_RATE;
   const double now_ms = emscripten_get_now();
@@ -295,6 +319,7 @@ static void enj_state_web_frame(void *arg) {
 #endif
 
   if (enj_state_run_frame(enj_state_get(), arg)) {
+    enj_pacing_tick_end_web();
     return;
   }
   emscripten_cancel_main_loop();
@@ -327,8 +352,13 @@ void enj_state_run(void) {
 #endif
   while (enj_state_run_frame(state, cstates)) {
 #if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
-    enj_state_wait_for_frame_deadline(&frame_deadline_ns);
+    if (enj_pacing_get() == ENJ_PACING_FREE) {
+      enj_state_wait_for_frame_deadline(&frame_deadline_ns);
+    } else {
+      frame_deadline_ns = 0;   // the deadline starts again if FREE comes back
+    }
 #endif
+    enj_pacing_tick_end();
   }
   enj_state_shutdown();
 #endif
