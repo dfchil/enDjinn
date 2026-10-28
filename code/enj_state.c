@@ -125,6 +125,51 @@ static void enj_state_wait_for_frame_deadline(uint64_t *deadline_ns) {
 }
 #endif
 
+static void (*video_reset_callback)(void *data);
+static void *video_reset_data;
+
+int enj_video_fsaa(void) { return enj_state_get()->video.pvr_params.fsaa_enabled ? 1 : 0; }
+
+int enj_video_xscale(void) { return enj_video_fsaa() ? 2 : 1; }
+
+void enj_video_set_reset_callback(void (*callback)(void *data), void *data) {
+  video_reset_callback = callback;
+  video_reset_data = data;
+}
+
+int enj_video_set_fsaa(int enabled) {
+  enj_state_t *state = enj_state_get();
+
+  enabled = enabled ? 1 : 0;
+  if (!state->flags.started) {
+    state->video.pvr_params.fsaa_enabled = enabled;
+    return 0;
+  }
+  if (enj_video_fsaa() == enabled) {
+    return 0;
+  }
+  // The last scene must be through the PVR before its memory goes.
+  pvr_wait_ready();
+  pvr_shutdown();
+  state->video.pvr_params.fsaa_enabled = enabled;
+  if (pvr_init(&state->video.pvr_params) < 0) {
+    ENJ_DEBUG_PRINT("pvr_init failed switching FSAA.\n");
+    return -1;
+  }
+  pvr_set_bg_color(state->video.bg_color.r / 255.0f,
+                   state->video.bg_color.g / 255.0f,
+                   state->video.bg_color.b / 255.0f);
+#ifdef ENJ_INJECT_QFONT
+  if (enj_qfont_init() != 0) {
+    ENJ_DEBUG_PRINT("Could not reload the injected quick font.\n");
+  }
+#endif
+  if (video_reset_callback != NULL) {
+    video_reset_callback(video_reset_data);
+  }
+  return 0;
+}
+
 int enj_state_startup(void) {
   enj_state_t *state = enj_state_get();
 

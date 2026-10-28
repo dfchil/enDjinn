@@ -1,6 +1,7 @@
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_draw.h>
 #include <enDjinn/enj_font.h>
+#include <enDjinn/enj_state.h>
 #include <enDjinn/enj_bitmap.h>
 #include <errno.h>
 #include <malloc.h>
@@ -264,8 +265,8 @@ int enj_font_render_glyph(char glyph, enj_font_header_t *font, int16_t x,
   int startx = glyph_start.x_min > glyph_end.x_min ? 0 : glyph_start.x_min;
   int width = (glyph_end.x_min - startx) * enj_font_scale;
 
-  float min_x = x * ENJ_XSCALE;
-  float max_x = (x + width) * ENJ_XSCALE;
+  float min_x = x * enj_video_xscale();
+  float max_x = (x + width) * enj_video_xscale();
   float max_y = y + (font->line_height * enj_font_scale);
 
   float corners[4][3] = {{min_x, max_y, enj_font_zvalue},
