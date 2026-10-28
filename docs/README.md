@@ -16,7 +16,7 @@
 - [Textures](textures.md) — loading textures and palettes.
 - [Fonts](fonts.md) — the quick font and generated `.enjfont` fonts.
 - [Sound](sound.md) — loading and playing DCA sound effects.
-- [Rumble and VMU](rumble-and-vmu.md) — rate-limited rumble, and what enDjinn does with VMUs.
+- [Rumble and VMU](rumble-and-vmu.md) — rate-limited rumble and VMU save files.
 - C API: [everything](../include/enDjinn/enj_enDjinn.h),
   [state](../include/enDjinn/enj_state.h), [modes](../include/enDjinn/enj_mode.h),
   [render lists](../include/enDjinn/enj_render.h), [drawing](../include/enDjinn/enj_draw.h),
