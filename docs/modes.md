@@ -38,7 +38,8 @@ instead of returning to the loader.
 1. If the current mode was flagged to end, it is popped.
 2. Controller states are refreshed.
 3. The soft-reset combination is checked (see below).
-4. The current mode's `mode_updater(data)` runs.
+4. The current mode's `mode_updater(data)` runs. Under a refresh-locked
+   [frame pacing](#frame-pacing), the scene of this tick may be dropped.
 5. enDjinn waits for the PVR, then calls the queued renderers list by list
    between `pvr_list_begin()` and `pvr_list_finish()`. See
    [Rendering](rendering.md).
@@ -85,11 +86,41 @@ disables it everywhere.
 
 ## Frame pacing
 
-On Dreamcast the loop runs as fast as the PVR allows, normally at the display
-rate. Set `ENJ_FRAME_RATE` to a positive value to add a frame deadline: the
-Dreamcast and PC loops sleep until the next deadline, and the browser skips
-`requestAnimationFrame` callbacks that arrive early. Without it, the browser
-runs one frame per `requestAnimationFrame` callback.
+By default (`ENJ_PACING_FREE`) the Dreamcast loop runs as fast as the PVR
+allows, normally at the display rate. Set `ENJ_FRAME_RATE` to a positive value
+to add a frame deadline: the Dreamcast and PC loops sleep until the next
+deadline, and the browser skips `requestAnimationFrame` callbacks that arrive
+early. Without it, the browser runs one frame per `requestAnimationFrame`
+callback.
+
+`enj_pacing_set()` ([`enj_pacing.h`](../include/enDjinn/enj_pacing.h)) locks the
+loop to the display refresh instead, one tick (updater plus scene) per refresh,
+and decides what a late frame costs. It can be changed at any time, for
+example from an options menu, and replaces the `ENJ_FRAME_RATE` deadline while
+it is not `ENJ_PACING_FREE`:
+
+| Pacing | A frame is late | Shown as |
+| --- | --- | --- |
+| `ENJ_PACING_STRICT` | every later tick is delayed: the game slows | 60 fps with slowdown |
+| `ENJ_PACING_DROP_LATE` | the next tick runs its updater but shows no new scene, and the schedule keeps its place: game time keeps up | 60 fps that drops frames |
+| `ENJ_PACING_HALF` | as `ENJ_PACING_STRICT` | a new scene on every second tick: 30 fps |
+
+A dropped scene is a hold (`enj_render_hold_frame()`): the updater still runs,
+so game state must advance in the updater and never in a renderer.
+`enj_pacing_scene_dropped()` tells the updater that the scene it is about to
+queue will not be shown, so it can skip building it and keep per-scene
+bookkeeping (interpolation, once-per-picture effects) in step. DROP_LATE drops
+at most every second scene; a stall of more than three refreshes, such as a
+load, starts the schedule again instead of dropping. `enj_pacing_stats()`
+counts ticks, rendered and dropped scenes and late ticks.
+
+On Dreamcast the refresh is counted by a vblank handler that the first
+refresh-locked `enj_pacing_set()` installs. PC and the browser count 60 Hz
+periods of the host clock; the browser runs a dropped tick in the same
+`requestAnimationFrame` callback as the late one. A game that paces its own
+loop (built with `ENJ_FRAME_RATE=0` and waiting on vblank itself) stays with
+`ENJ_PACING_FREE` and calls `enj_render_hold_frame()` for the refreshes it
+chooses to drop.
 
 `ENJ_SHOWFRAMETIMES=1` colours the Dreamcast video border by phase (update,
 waiting for the PVR, rendering) so frame timing is visible on screen.
