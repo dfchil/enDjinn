@@ -1,6 +1,11 @@
 #include <kos.h>
 
 #include <pc_endjinn/capture.h>
+#include <pc_endjinn/retain.h>
+#include <pc_endjinn/timing.h>
+
+#include <array>
+#include <vector>
 
 #include "../host-common/host_pvr.h"
 #include "pc_endjinn_vulkan.h"
@@ -54,6 +59,43 @@ uint64_t enj_pc_presented_frame_count(void) {
 bool enj_pc_capture_next_frame(const char *path) {
   return pc_endjinn::capture_next_frame(path);
 }
+void enj_pc_frame_timing_get(enj_pc_frame_timing *out) {
+  pc_endjinn::frame_timing_get(out);
+}
+namespace {
+std::array<std::vector<enj_host_pvr::QueuedPrimitive>, ENJ_PC_RETAIN_SLOTS>
+    g_retained_primitives;
+}  // namespace
+
+size_t enj_pc_queued_primitive_count(void) {
+  return enj_host_pvr::primitives().size();
+}
+
+bool enj_pc_retain_primitives(uint32_t slot, size_t first) {
+  const std::vector<enj_host_pvr::QueuedPrimitive> &queued =
+      enj_host_pvr::primitives();
+  if (slot >= ENJ_PC_RETAIN_SLOTS || first > queued.size()) {
+    return false;
+  }
+  g_retained_primitives[slot].assign(queued.begin() + first, queued.end());
+  return true;
+}
+
+bool enj_pc_replay_primitives(uint32_t slot) {
+  if (slot >= ENJ_PC_RETAIN_SLOTS || g_retained_primitives[slot].empty()) {
+    return false;
+  }
+  enj_host_pvr::append_primitives(g_retained_primitives[slot].data(),
+                                  g_retained_primitives[slot].size());
+  return true;
+}
+
+void enj_pc_clear_retained_primitives(uint32_t slot) {
+  if (slot < ENJ_PC_RETAIN_SLOTS) {
+    g_retained_primitives[slot].clear();
+  }
+}
+
 void pvr_list_begin(pvr_list_t list) { pc_endjinn::pvr_list_begin(list); }
 void pvr_list_finish(void) { pc_endjinn::pvr_list_finish(); }
 void pvr_wait_render_done(void) { pc_endjinn::pvr_wait_render_done(); }
