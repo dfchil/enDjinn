@@ -53,13 +53,18 @@ pvr_modifier_vol_t g_modifier_volume_first{};
 bool g_has_modifier_volume_first = false;
 std::vector<pvr_vertex_t> g_triangle_vertices;
 std::vector<enj_host_pvr::QueuedPrimitive> g_primitives;
-/* Textures freed since the last scene began. They are released when the
- * next scene begins, so a held frame (enj_render_hold_frame), which draws
- * the last scene's primitives again, still finds every texture they name.
- * Handles are never reused, so the delay cannot alias a new texture. */
-std::vector<pvr_ptr_t> g_freed_textures;
 HeaderState g_header;
 std::unordered_map<pvr_ptr_t, TextureUpload> g_uploads;
+/* pvr_mem_free keeps a texture through the next scene, so a scene that
+   replays the previous one's primitives (pc_endjinn/retain.h) or a held
+   frame (enj_render_hold_frame) still finds it. Handles are never reused,
+   so the delay cannot alias a new texture. */
+struct PendingTextureFree {
+  pvr_ptr_t ptr;
+  uint64_t scene;
+};
+std::vector<PendingTextureFree> g_pending_texture_frees;
+uint64_t g_scene_serial = 0u;
 std::array<uint32_t, 1024> g_palette{};
 pvr_palfmt_t g_palette_format = PVR_PAL_ARGB8888;
 uint64_t g_palette_revision = 1u;
@@ -467,11 +472,24 @@ namespace enj_host_pvr {
 
 const std::vector<QueuedPrimitive> &primitives() { return g_primitives; }
 
-void scene_begin() {
-  for (pvr_ptr_t ptr : g_freed_textures) {
-    g_uploads.erase(ptr);
+void append_primitives(const QueuedPrimitive *first, size_t count) {
+  if (first == nullptr || count == 0u) {
+    return;
   }
-  g_freed_textures.clear();
+  g_primitives.insert(g_primitives.end(), first, first + count);
+}
+
+void scene_begin() {
+  ++g_scene_serial;
+  std::vector<PendingTextureFree> kept;
+  for (const PendingTextureFree &pending : g_pending_texture_frees) {
+    if (pending.scene + 1u < g_scene_serial) {
+      g_uploads.erase(pending.ptr);
+    } else {
+      kept.push_back(pending);
+    }
+  }
+  g_pending_texture_frees.swap(kept);
   g_primitives.clear();
   g_triangle_vertices.clear();
   g_has_sprite_first = false;
@@ -631,7 +649,7 @@ void *texture_alloc(size_t size) {
 
 void texture_free(pvr_ptr_t ptr) {
   if (g_uploads.find(ptr) != g_uploads.end()) {
-    g_freed_textures.push_back(ptr);
+    g_pending_texture_frees.push_back({ptr, g_scene_serial});
   }
 }
 
