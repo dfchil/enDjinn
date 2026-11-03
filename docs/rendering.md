@@ -39,6 +39,14 @@ translucent and punch-through text.
 
 - `enj_render_post_callback_set(fn, data)` registers one callback that runs
   after `pvr_scene_finish()` every frame.
+- `enj_render_hooks_set(&hooks)` sets what runs around the lists of a
+  submitted scene: `scene_begin` after `pvr_scene_begin()`, `list_begin` after
+  each `pvr_list_begin()`, `lists_done` after the last list closed and before
+  `pvr_scene_finish()`. A game that queues each draw straight into its list
+  needs them: a list is then a pass of its own over the frame, and
+  `list_begin` puts back what the pass starts from.
+- `enj_render_lists_clear()` drops everything queued, for a frame abandoned
+  half way.
 - `enj_render_palette_mode_set(fmt)` changes the PVR palette format once the
   current frame's lists are submitted. enDjinn first waits for the PVR to
   finish rendering (`pvr_wait_render_done()`), then calls
