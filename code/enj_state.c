@@ -78,6 +78,13 @@ void enj_state_init_defaults(void) {
                                                        .X = ENJ_BUTTON_DOWN,
                                                        .Y = ENJ_BUTTON_DOWN}})
                            .button.raw;
+#ifdef ENJ_DEBUG_MENU
+  state.debug_menu_pattern =
+      ((enj_ctrlr_state_t){.button = {.UP = ENJ_BUTTON_DOWN,
+                                      .X = ENJ_BUTTON_DOWN,
+                                      .Y = ENJ_BUTTON_DOWN}})
+          .button.raw;
+#endif
 
   state.video.pvr_params = (pvr_init_params_t){
       .opb_sizes = {PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16,
@@ -273,6 +280,17 @@ static int enj_state_run_frame(enj_state_t *state,
       }
     }
   }
+#ifdef ENJ_DEBUG_MENU
+  // Not part of the soft reset above: a game mode may well have no_soft_reset.
+  if (state->debug_menu_open != NULL) {
+    for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+      if (cstates[i] && enj_ctrlr_button_combo_raw(cstates[i]->button.raw,
+                                                   state->debug_menu_pattern)) {
+        state->debug_menu_open(cstates[i]);
+      }
+    }
+  }
+#endif
   enj_pacing_tick_begin();
   enj_render_next_frame(enj_mode_get());
   enj_rumble_update();

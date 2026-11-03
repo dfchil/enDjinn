@@ -70,6 +70,12 @@ between a main mode, an information mode, and short animation modes.
 <img style="height:220px" src="../docs/img/examples/enj_modes.png" alt="enj_modes example screen" />
 </div>
 
+## enj_debug_menu
+
+Builds in the optional [debug menu](../docs/debug-menu.md). Hold both triggers
+and press Up+X+Y to freeze the moving squares and change them from choice,
+integer and float rows.
+
 ## enj_flat_modifiers
 
 Introduces modifier rendering with a planar, screen-oriented rectangle and a

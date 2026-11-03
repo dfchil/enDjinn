@@ -31,6 +31,11 @@ typedef struct enj_state_s {
     pvr_init_params_t pvr_params;
     enj_color_t bg_color;
   } video;
+#ifdef ENJ_DEBUG_MENU
+  uint32_t debug_menu_pattern;
+  /** Called when debug_menu_pattern is pressed. Set by enj_debug_menu_set(). */
+  void (*debug_menu_open)(enj_ctrlr_state_t *cstate);
+#endif
 } enj_state_t;
 
 enj_state_t *enj_state_get(void);

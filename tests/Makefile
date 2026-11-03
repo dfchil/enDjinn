@@ -2,6 +2,7 @@ CC ?= clang
 PYTHON ?= python3
 ROOT := ..
 TARGET := core_safety_test
+DEBUG_MENU_TARGET := debug_menu_test
 TEXTURE_TARGET := texture_shim_test
 CPP_API_TARGET := public_api_cpp_test
 RESOURCE_TARGET := resource_safety_test
@@ -18,10 +19,12 @@ CFLAGS := -std=gnu23 -Wall -Wextra -Werror \
 	-I$(ROOT)/backends/pc-endjinn/include -I$(ROOT)/include \
 	-DENJ_CBASEPATH=\"/tmp/\"
 
-check: public-headers $(CPP_API_TARGET) $(TARGET) $(RESOURCE_TARGET) \
-		$(TEXTURE_TARGET) $(TRANSLUCENT_SORT_TARGET) $(WEB_FRAME_TARGET)
+check: public-headers $(CPP_API_TARGET) $(TARGET) $(DEBUG_MENU_TARGET) \
+		$(RESOURCE_TARGET) $(TEXTURE_TARGET) $(TRANSLUCENT_SORT_TARGET) \
+		$(WEB_FRAME_TARGET)
 	./$(CPP_API_TARGET)
 	./$(TARGET)
+	./$(DEBUG_MENU_TARGET)
 	./$(RESOURCE_TARGET)
 	./$(TEXTURE_TARGET)
 	./$(TRANSLUCENT_SORT_TARGET)
@@ -30,12 +33,18 @@ check: public-headers $(CPP_API_TARGET) $(TARGET) $(RESOURCE_TARGET) \
 
 public-headers:
 	@for header in $(PUBLIC_HEADERS); do \
-		$(CC) $(CFLAGS) -DENJ_INJECT_QFONT=1 -fsyntax-only \
+		$(CC) $(CFLAGS) -DENJ_INJECT_QFONT=1 -DENJ_DEBUG_MENU=1 -fsyntax-only \
 			-include enDjinn/$$header -x c /dev/null || exit 1; \
 	done
 
 $(TARGET): core_safety_test.c $(ROOT)/code/enj_mode.c $(ROOT)/code/enj_bitmap.c
 	$(CC) $(CFLAGS) $^ -o $@ -lm
+
+# Includes the code under test, for its static helpers.
+$(DEBUG_MENU_TARGET): debug_menu_test.c $(ROOT)/code/enj_debug_menu.c \
+		$(ROOT)/code/enj_debug_menu_mode.c $(ROOT)/code/enj_mode.c
+	$(CC) $(CFLAGS) -DENJ_INJECT_QFONT=1 -DENJ_DEBUG_MENU=1 \
+		debug_menu_test.c $(ROOT)/code/enj_mode.c -o $@
 
 $(RESOURCE_TARGET): resource_safety_test.c $(ROOT)/code/enj_texture.c
 	$(CC) $(CFLAGS) $^ -o $@
@@ -98,11 +107,11 @@ frame-pacing-hw:
 $(CPP_API_TARGET): public_api_cpp_test.cpp
 	$(CXX) -std=c++23 -Wall -Wextra -Werror \
 		-I$(ROOT)/backends/pc-endjinn/include -I$(ROOT)/include \
-		-DENJ_CBASEPATH=\"/tmp/\" -DENJ_INJECT_QFONT=1 $< -o $@
+		-DENJ_CBASEPATH=\"/tmp/\" -DENJ_INJECT_QFONT=1 -DENJ_DEBUG_MENU=1 $< -o $@
 
 clean:
-	rm -f $(TARGET) $(TEXTURE_TARGET) $(CPP_API_TARGET) $(RESOURCE_TARGET) \
-		$(TRANSLUCENT_SORT_TARGET) $(WEB_FRAME_TARGET)
+	rm -f $(TARGET) $(DEBUG_MENU_TARGET) $(TEXTURE_TARGET) $(CPP_API_TARGET) \
+		$(RESOURCE_TARGET) $(TRANSLUCENT_SORT_TARGET) $(WEB_FRAME_TARGET)
 	rm -rf build $(FRAME_PACING_APP)/bin $(FRAME_PACING_APP)/build
 
 .PHONY: check clean public-headers frame-pacing-hw modifier-volume-visual \

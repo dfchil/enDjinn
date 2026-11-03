@@ -11,9 +11,10 @@ compiler flags. `make cfg_info` and `make auto_variables` print the result.
 
 The feature switches below are tested with Make's `ifdef`: they are on when
 set to any non-empty value, **including `0`**. Leave a switch unset, or set it
-to the empty string, to turn it off. The commented `ENJ_INJECT_QFONT:=0` and
-`ENJ_ADD_LOGO_TEXTURE:=0` lines in `cfg.mk` would turn the features on if
-uncommented. `ENJ_WEB_SIMD` is the exception: it is compared with `1`.
+to the empty string, to turn it off. The commented `ENJ_INJECT_QFONT:=0`,
+`ENJ_DEBUG_MENU:=0` and `ENJ_ADD_LOGO_TEXTURE:=0` lines in `cfg.mk` would turn
+the features on if uncommented. `ENJ_WEB_SIMD` is the exception: it is compared
+with `1`.
 
 ## Project and paths
 
@@ -36,6 +37,7 @@ uncommented. `ENJ_WEB_SIMD` is the exception: it is compared with `1`.
 | Variable | Effect |
 | --- | --- |
 | `ENJ_INJECT_QFONT` | Compiles in and initialises the [quick font](fonts.md#the-quick-font). |
+| `ENJ_DEBUG_MENU` | Compiles in the [debug menu](debug-menu.md), and turns on `ENJ_INJECT_QFONT`. |
 | `ENJ_ADD_LOGO_TEXTURE` | Adds enDjinn's logo textures to the generated assets. |
 | `ENJ_FSAA` | Passed as `-DENJ_FSAA=<value>`; `1` enables horizontal FSAA and sets `ENJ_XSCALE` to 2. |
 | `ENJ_FRAME_RATE` | Positive value: frame deadline in frames per second. See [frame pacing](modes.md#frame-pacing). |

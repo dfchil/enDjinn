@@ -13,6 +13,7 @@ It covers:
 - independent inclusion of every public C header;
 - public C headers consumed from C++;
 - mode-stack, bitmap, and allocation-failure safety;
+- debug menu opening, values, closing and layout;
 - texture resource ownership and invalid input;
 - host PVR texture and palette decoding;
 - translucent dependency ordering;

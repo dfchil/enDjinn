@@ -30,4 +30,8 @@
 #include <enDjinn/enj_qfont.h>
 #endif
 
+#ifdef ENJ_DEBUG_MENU
+#include <enDjinn/enj_debug_menu.h>
+#endif
+
 #endif // ENJ_ENDJINN_H
