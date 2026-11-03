@@ -3,12 +3,14 @@
 #include "../host-common/host_limits.h"
 #include "../host-common/host_pvr.h"
 #include "pc_endjinn_frame.h"
+#include <pc_endjinn/timing.h>
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -141,6 +143,15 @@ GpuImage g_palette_texture;
 std::vector<GpuTexture> g_texture_cache;
 VkDescriptorSet g_default_texture_descriptor = VK_NULL_HANDLE;
 uint64_t g_uploaded_palette_revision = 0u;
+enj_pc_frame_timing g_frame_timing{};
+enj_pc_frame_timing g_frame_timing_pending{};
+
+uint64_t timing_now_ns()
+{
+    return static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
+}
 
 bool create_draw_resources();
 
@@ -1694,11 +1705,14 @@ bool draw_frame(const FrameDrawData &frame)
     /* Palette and texture refreshes can replace images used by the preceding
      * frame, so wait before mutating either cache.  Keep the fence signalled
      * until every fallible preparation step has completed. */
+    uint64_t phase_ns = timing_now_ns();
     if (vkWaitForFences(g_device, 1u, &g_in_flight, VK_TRUE, UINT64_MAX) !=
         VK_SUCCESS) {
         set_window_title("pc-enDjinn - frame fence wait failed");
         return false;
     }
+    g_frame_timing_pending.fence_ns = timing_now_ns() - phase_ns;
+    phase_ns = timing_now_ns();
     if (!update_palette_texture()) {
         set_window_title("pc-enDjinn - palette upload failed");
         return false;
@@ -1708,6 +1722,8 @@ bool draw_frame(const FrameDrawData &frame)
             std::fprintf(stderr, "pc-enDjinn: texture decode/upload failed\n");
         }
     }
+    g_frame_timing_pending.texture_ns = timing_now_ns() - phase_ns;
+    phase_ns = timing_now_ns();
     uint32_t image_index = 0u;
     if (!g_offscreen_capture) {
         VkResult acquire = vkAcquireNextImageKHR(
@@ -1721,6 +1737,8 @@ bool draw_frame(const FrameDrawData &frame)
         }
     }
 
+    g_frame_timing_pending.acquire_ns = timing_now_ns() - phase_ns;
+    phase_ns = timing_now_ns();
     if (!ensure_vertex_buffer(frame.vertices.size())) {
         set_window_title("pc-enDjinn - vertex buffer failed");
         return false;
@@ -1741,6 +1759,8 @@ bool draw_frame(const FrameDrawData &frame)
         return false;
     }
 
+    g_frame_timing_pending.vertex_ns = timing_now_ns() - phase_ns;
+    phase_ns = timing_now_ns();
     const char *const requested_screenshot = screenshot_path();
     const bool capture_screenshot = requested_screenshot != nullptr &&
         (g_offscreen_capture || g_swapchain_readback_supported);
@@ -2012,6 +2032,8 @@ bool draw_frame(const FrameDrawData &frame)
         set_window_title("pc-enDjinn - queue submit failed");
         return false;
     }
+    g_frame_timing_pending.record_ns = timing_now_ns() - phase_ns;
+    phase_ns = timing_now_ns();
 
     if (capture_screenshot) {
         vkWaitForFences(g_device, 1u, &g_in_flight, VK_TRUE, UINT64_MAX);
@@ -2041,6 +2063,7 @@ bool draw_frame(const FrameDrawData &frame)
     present.pSwapchains = &g_swapchain;
     present.pImageIndices = &image_index;
     const VkResult presented = vkQueuePresentKHR(g_graphics_queue, &present);
+    g_frame_timing_pending.present_ns = timing_now_ns() - phase_ns;
     if (presented == VK_ERROR_OUT_OF_DATE_KHR || presented == VK_SUBOPTIMAL_KHR) {
         (void)recreate_draw_resources();
     }
@@ -2340,8 +2363,13 @@ void pvr_scene_finish(void)
     if (g_device == VK_NULL_HANDLE) {
         return;
     }
+    const uint64_t scene_start_ns = timing_now_ns();
+    g_frame_timing_pending = enj_pc_frame_timing{};
     const FrameDrawData frame = pc_endjinn::build_frame_draw_data(
         g_vid_mode, g_fsaa_enabled, g_translucent_autosort);
+    g_frame_timing_pending.build_ns = timing_now_ns() - scene_start_ns;
+    g_frame_timing_pending.primitives = enj_host_pvr::primitives().size();
+    g_frame_timing_pending.vertices = frame.vertices.size();
     const char *const sort_diagnostics =
         std::getenv("ENJ_TRANSLUCENT_SORT_DIAGNOSTICS");
     if (sort_diagnostics != nullptr && std::strcmp(sort_diagnostics, "1") == 0 &&
@@ -2363,6 +2391,8 @@ void pvr_scene_finish(void)
             diagnostics.average_depth_fallback ? "yes" : "no");
     }
     (void)draw_frame(frame);
+    g_frame_timing_pending.total_ns = timing_now_ns() - scene_start_ns;
+    g_frame_timing = g_frame_timing_pending;
     g_presented_frames++;
     if (g_window != nullptr && (g_presented_frames <= 3u || (g_presented_frames % 30u) == 0u)) {
         char title[128];
@@ -2379,6 +2409,13 @@ void pvr_scene_finish(void)
 uint64_t pvr_presented_frame_count(void)
 {
     return g_presented_frames;
+}
+
+void frame_timing_get(enj_pc_frame_timing *out)
+{
+    if (out != nullptr) {
+        *out = g_frame_timing;
+    }
 }
 
 bool capture_next_frame(const char *path)
