@@ -38,12 +38,14 @@ instead of returning to the loader.
 1. If the current mode was flagged to end, it is popped.
 2. Controller states are refreshed.
 3. The soft-reset combination is checked (see below).
-4. The current mode's `mode_updater(data)` runs. Under a refresh-locked
+4. In a build with `ENJ_DEBUG_MENU`, the [debug menu](debug-menu.md)'s
+   combination is checked.
+5. The current mode's `mode_updater(data)` runs. Under a refresh-locked
    [frame pacing](#frame-pacing), the scene of this tick may be dropped.
-5. enDjinn waits for the PVR, then calls the queued renderers list by list
+6. enDjinn waits for the PVR, then calls the queued renderers list by list
    between `pvr_list_begin()` and `pvr_list_finish()`. See
    [Rendering](rendering.md).
-6. The scene is finished, the optional post-render callback runs, and pending
+7. The scene is finished, the optional post-render callback runs, and pending
    rumble commands are sent.
 
 ## The mode stack
