@@ -285,7 +285,12 @@ static void enj_state_web_frame(void *arg) {
   if (enj_state_web_next_frame_ms == 0.0) {
     enj_state_web_next_frame_ms = now_ms;
   }
-  if (now_ms < enj_state_web_next_frame_ms) {
+  /* Animation frames come a little before or after their refresh, so a
+   * frame due within 3 ms runs now: without the slack, a frame rate equal
+   * to the display's skipped every frame whose callback came early. The
+   * callbacks between frames on a faster display come at least a refresh
+   * early (4.2 ms at 240 Hz) and still wait. */
+  if (now_ms + 3.0 < enj_state_web_next_frame_ms) {
     return;
   }
   if (now_ms - enj_state_web_next_frame_ms > frame_ms) {
