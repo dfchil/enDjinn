@@ -5,8 +5,9 @@
 dc-load-ip serves one `kos-tool` client at a time. When several shells,
 scripts or agents share one Dreamcast, a second upload can break the first
 one's session. enDjinn's [`environ.sh`](../environ.sh) and the
-[`tools/dctool/kos-tool`](../tools/dctool/kos-tool) wrapper queue clients on
-a lock instead. Both are zsh scripts and need zsh's `zsh/system` module.
+[`tools/dctool/kos-tool-queued`](../tools/dctool/kos-tool-queued) wrapper queue
+clients on a lock instead. Both are zsh scripts and need zsh's `zsh/system`
+module.
 
 ## Setting up
 
@@ -17,7 +18,7 @@ source /path/to/enDjinn/environ.sh
 ```
 
 It sources `/opt/toolchains/dc/kos/environ.sh`, adds `/opt/toolchains/dc/bin`
-to `PATH`, puts `tools/dctool` first on `PATH`, sets default `DCTOOL_HOST` and
+to `PATH`, puts `tools/dctool` on `PATH`, sets default `DCTOOL_HOST` and
 `PFX_HOST` addresses, and finally sources `environ.local.sh` from the same
 directory if it exists.
 
@@ -32,11 +33,13 @@ Copy [`environ.local.sh.example`](../environ.local.sh.example) and set:
 
 ## How the queue works
 
-With `tools/dctool` first on `PATH`, every `kos-tool` command reaches the
-wrapper before the real `kos-tool`. Except for `--ready` probes, the wrapper
-takes an exclusive lock on `/tmp/dctool-<host>.lock` and then replaces itself
-with the real `kos-tool`, so the lock lasts exactly as long as that process.
-The host is `DCTOOL_HOST`, or the host given with `-t HOST[:PORT]`.
+`kos-tool-queued` takes the same arguments as `kos-tool`. Except for `--ready`
+probes, it takes an exclusive lock on `/tmp/dctool-<host>.lock` and then
+replaces itself with `kos-tool`, so the lock lasts exactly as long as that
+process. The host is `DCTOOL_HOST`, or the host given with `-t HOST[:PORT]`.
+
+Plain `kos-tool` is the real tool and takes no lock. On a shared console, use
+`kos-tool-queued` or hold `dctool_lock`.
 
 A client that finds the console busy prints who holds it (from
 `/tmp/dctool-<host>.who`) and waits up to `DCTOOL_LOCK_WAIT` seconds (default
@@ -49,8 +52,8 @@ releases the lock when the process ends, however it ends.
 
 `dctool_lock` takes the same lock for the current shell, so that a sequence
 of uploads, resets and captures is not interleaved with anyone else's.
-`kos-tool` commands started from that shell skip the lock their shell already
-holds. `dctool_unlock` releases it, as does closing the shell.
+Inside it, use plain `kos-tool`; `kos-tool-queued` skips the lock its shell
+already holds. `dctool_unlock` releases it, as does closing the shell.
 
 ```sh
 dctool_lock || return
@@ -88,4 +91,5 @@ to finish and otherwise reports the console busy with status 75.
 
 A PixelFX restart also disturbs anything else attached to the console, such
 as HDMI capture, so it is meant only for a loader that does not respond. For
-an ordinary reset use the loader instead: `kos-tool -t "$DCTOOL_HOST" -r`.
+an ordinary reset use the loader instead:
+`kos-tool-queued -t "$DCTOOL_HOST" -r`.

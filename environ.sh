@@ -3,7 +3,8 @@
 source /opt/toolchains/dc/kos/environ.sh
 
 PATH=$PATH:/opt/toolchains/dc/bin
-# kos-tool goes through tools/dctool/kos-tool, which queues clients for a console.
+# tools/dctool/kos-tool-queued runs kos-tool in the queue for a console. Plain
+# kos-tool is the real tool and takes no lock.
 _dctool_dir=${${(%):-%x}:A:h}/tools/dctool
 [[ ":$PATH:" == *":$_dctool_dir:"* ]] || PATH=$_dctool_dir:$PATH
 unset _dctool_dir
@@ -55,14 +56,14 @@ dctool_loader_ready() {
 }
 
 # Holds the console lock in this shell until dctool_unlock or the shell ends,
-# so several kos-tool runs in a row keep the console (tools/dctool/kos-tool
-# takes the lock for one run). Waits up to $DCTOOL_LOCK_WAIT seconds
-# (default 900); returns 75 if the console stays in use.
+# so several kos-tool runs in a row keep the console (kos-tool-queued takes the
+# lock for one run). Waits up to $DCTOOL_LOCK_WAIT seconds (default 900);
+# returns 75 if the console stays in use.
 dctool_lock() {
   [[ -n "$DCTOOL_LOCK_HELD" ]] && return 0
   zmodload zsh/system || return 70
   # A POSIX lock, lost if this shell closes any descriptor of the lock file;
-  # who holds it goes in the .who file (see tools/dctool/kos-tool).
+  # who holds it goes in the .who file (see tools/dctool/kos-tool-queued).
   local lock=/tmp/dctool-${DCTOOL_HOST:-default}.lock who=/tmp/dctool-${DCTOOL_HOST:-default}.who fd
   : >> "$lock" || return 73
   if ! zsystem flock -t 0 -f fd "$lock" 2>/dev/null; then
@@ -154,7 +155,9 @@ function reset_dctool_wait(){
     return 1
   fi
   echo "Waiting for DCTOOL_HOST ($DCTOOL_HOST) to return dc-load-ip STAT after system restart..."
-  local timeout=30 started=$SECONDS deadline=$((SECONDS + timeout)) elapsed
+  local timeout=30 started deadline elapsed
+  started=$SECONDS
+  deadline=$((SECONDS + timeout))
   while dctool_loader_ready "$DCTOOL_HOST" >/dev/null; do
     elapsed=$((SECONDS - started))
     echo "Waiting for DCTOOL_HOST ($DCTOOL_HOST) to leave the old dc-load-ip session... ($elapsed seconds elapsed)"
@@ -203,7 +206,7 @@ function _ensure_dctool_ready_locked(){
     return 127
   fi
   # Only one local client may own dc-load-ip's TCP session. A client started
-  # without the lock (another machine's PATH, an old shell) is never killed:
+  # without the lock (plain kos-tool, an old shell) is never killed:
   # wait up to $DCTOOL_WAIT seconds (default 0) for it to finish, and report the
   # console busy if it does not. DCTOOL_FORCE=1 takes the console anyway.
   local clients wait_deadline=$((SECONDS + ${DCTOOL_WAIT:-0}))
