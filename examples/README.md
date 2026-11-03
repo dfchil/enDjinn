@@ -106,6 +106,14 @@ Demonstrates the rumble subsystem, including its command rate limiting.
 <img style="height:220px" src="../docs/img/examples/enj_rumbles.png" alt="enj_rumbles example screen" />
 </div>
 
+## enj_pacing
+
+Moves a bar one step per tick under each frame pacing. A switches the pacing,
+Up and Down add or remove full-screen translucent layers until frames run
+late; the counters show ticks, rendered and dropped scenes and late ticks.
+Under `ENJ_PACING_DROP_LATE` the bar keeps its speed and jumps where a scene
+was dropped; under `ENJ_PACING_STRICT` it slows down.
+
 ## enj_sounds
 
 Demonstrates conversion, loading, and playback of `.dca` sound-effect assets.
