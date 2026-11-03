@@ -23,6 +23,7 @@
 #include <enDjinn/enj_draw.h>
 #include <enDjinn/enj_rumble.h>
 #include <enDjinn/enj_sound.h>
+#include <enDjinn/enj_vmu.h>
 
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/enj_qfont.h>
