@@ -17,13 +17,14 @@
 - [Fonts](fonts.md) — the quick font and generated `.enjfont` fonts.
 - [Sound](sound.md) — loading and playing DCA sound effects.
 - [Rumble and VMU](rumble-and-vmu.md) — rate-limited rumble and VMU save files.
+- [Debug menu](debug-menu.md) — an optional settings menu over a frozen game.
 - C API: [everything](../include/enDjinn/enj_enDjinn.h),
   [state](../include/enDjinn/enj_state.h), [modes](../include/enDjinn/enj_mode.h),
   [render lists](../include/enDjinn/enj_render.h), [drawing](../include/enDjinn/enj_draw.h),
   [controllers](../include/enDjinn/enj_ctrl.h), [rumble](../include/enDjinn/enj_rumble.h),
   [textures](../include/enDjinn/enj_texture.h), [fonts](../include/enDjinn/enj_font.h),
   [quick font](../include/enDjinn/enj_qfont.h), [sound](../include/enDjinn/enj_sound.h),
-  [bitmaps](../include/enDjinn/enj_bitmap.h).
+  [bitmaps](../include/enDjinn/enj_bitmap.h), [debug menu](../include/enDjinn/enj_debug_menu.h).
 
 ## Build system and configuration
 

@@ -14,11 +14,17 @@ ENJ_BEGIN_DECLS
  */
 void enj_font_scale_set(uint8_t scale);
 
+/** Get the integer scale for font rendering */
+uint8_t enj_font_scale_get(void);
+
 /**
  * Set the Z value used for font rendering
  * @param zvalue The Z value to use for rendering
  */
 void enj_font_zvalue_set(float zvalue);
+
+/** Get the Z value used for font rendering */
+float enj_font_zvalue_get(void);
 
 /**
  * Set the letter spacing for font rendering

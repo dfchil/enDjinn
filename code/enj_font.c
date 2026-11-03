@@ -21,7 +21,11 @@ void enj_font_scale_set(uint8_t scale) {
   enj_font_scale = scale;
 }
 
+uint8_t enj_font_scale_get(void) { return enj_font_scale; }
+
 void enj_font_zvalue_set(float zvalue) { enj_font_zvalue = zvalue; }
+
+float enj_font_zvalue_get(void) { return enj_font_zvalue; }
 
 void enj_font_letter_spacing_set(uint8_t spacing) {
   enj_font_letter_spacing = spacing;
