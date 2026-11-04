@@ -53,7 +53,8 @@ palette format with `pvr_set_pal_format()`; the other two leave it as it is.
 - `enj_font_string_width()` measures a string without drawing it.
 - `enj_font_scale_set()` sets an integer scale, `enj_font_letter_spacing_set()`
   adds pixels between glyphs and `enj_font_zvalue_set()` sets the depth. These
-  are global and apply to the quick font too.
+  are global and apply to the quick font too. `enj_font_scale_get()` and
+  `enj_font_zvalue_get()` read the scale and depth back.
 
 Glyphs cover the printable ASCII range `!` to `~`. A space, or a glyph the
 font lacks, advances by a quarter of the scaled line height. The glyph

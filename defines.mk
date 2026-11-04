@@ -54,6 +54,12 @@ DEFINES += -DENJ_DCPROF
 OBJS += $(ENJ_BUILDDIR)/enDjinn/profilers/dcprof/profiler.o
 endif
 
+ifdef ENJ_DEBUG_MENU
+	DEFINES += -DENJ_DEBUG_MENU=1
+	# The menu draws with the quick font.
+	ENJ_INJECT_QFONT := 1
+endif
+
 ifdef ENJ_INJECT_QFONT
 	DEFINES += -DENJ_INJECT_QFONT=1
 endif

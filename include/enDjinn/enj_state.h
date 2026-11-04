@@ -31,6 +31,11 @@ typedef struct enj_state_s {
     pvr_init_params_t pvr_params;
     enj_color_t bg_color;
   } video;
+#ifdef ENJ_DEBUG_MENU
+  uint32_t debug_menu_pattern;
+  /** Called when debug_menu_pattern is pressed. Set by enj_debug_menu_set(). */
+  void (*debug_menu_open)(enj_ctrlr_state_t *cstate);
+#endif
 } enj_state_t;
 
 enj_state_t *enj_state_get(void);
@@ -67,6 +72,31 @@ void enj_state_run(void);
  * function
  */
 void enj_state_flag_shutdown(void *__unused);
+
+/** Whether the PVR renders with FSAA (twice as wide, filtered down to the
+ * screen): as enj_state_startup started it or enj_video_set_fsaa last set it. */
+int enj_video_fsaa(void);
+
+/** Render coordinates per screen pixel across: 2 with FSAA, 1 without. Code
+ * that switches FSAA at runtime scales by this; ENJ_XSCALE is the build-time
+ * value it starts with. */
+int enj_video_xscale(void);
+
+/** Switch FSAA on or off while running, by restarting the PVR with the
+ * current parameters and the new setting.
+ *
+ * Every video memory allocation is lost. enDjinn reloads its own (the
+ * injected quick font) and then calls the reset callback, so the application
+ * reloads its textures and anything else in video memory. Call between
+ * frames, with no scene open: a scene load is a good place.
+ * @param enabled 1 for FSAA, 0 without
+ * @return 0 on success or when nothing changes, -1 if pvr_init() failed
+ */
+int enj_video_set_fsaa(int enabled);
+
+/** The function enj_video_set_fsaa calls after it restarted the PVR, with
+ * data; NULL for none. */
+void enj_video_set_reset_callback(void (*callback)(void *data), void *data);
 
 ENJ_END_DECLS
 

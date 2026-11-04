@@ -78,6 +78,13 @@ void enj_state_init_defaults(void) {
                                                        .X = ENJ_BUTTON_DOWN,
                                                        .Y = ENJ_BUTTON_DOWN}})
                            .button.raw;
+#ifdef ENJ_DEBUG_MENU
+  state.debug_menu_pattern =
+      ((enj_ctrlr_state_t){.button = {.UP = ENJ_BUTTON_DOWN,
+                                      .X = ENJ_BUTTON_DOWN,
+                                      .Y = ENJ_BUTTON_DOWN}})
+          .button.raw;
+#endif
 
   state.video.pvr_params = (pvr_init_params_t){
       .opb_sizes = {PVR_BINSIZE_16, PVR_BINSIZE_16, PVR_BINSIZE_16,
@@ -101,6 +108,13 @@ void enj_state_soft_reset_set(uint32_t pattern) {
 void enj_state_flag_shutdown(void *__unused) { state.flags.shut_down = 1; }
 
 void enj_ctrl_init_local_devices(void);
+void enj_pacing_tick_begin(void);
+#ifdef __EMSCRIPTEN__
+int enj_pacing_web_due(void);
+int enj_pacing_tick_end_web(void);
+#else
+void enj_pacing_tick_end(void);
+#endif
 void enj_rumble_init_local_devices(void);
 void enj_rumble_update(void);
 
@@ -124,6 +138,51 @@ static void enj_state_wait_for_frame_deadline(uint64_t *deadline_ns) {
   }
 }
 #endif
+
+static void (*video_reset_callback)(void *data);
+static void *video_reset_data;
+
+int enj_video_fsaa(void) { return enj_state_get()->video.pvr_params.fsaa_enabled ? 1 : 0; }
+
+int enj_video_xscale(void) { return enj_video_fsaa() ? 2 : 1; }
+
+void enj_video_set_reset_callback(void (*callback)(void *data), void *data) {
+  video_reset_callback = callback;
+  video_reset_data = data;
+}
+
+int enj_video_set_fsaa(int enabled) {
+  enj_state_t *state = enj_state_get();
+
+  enabled = enabled ? 1 : 0;
+  if (!state->flags.started) {
+    state->video.pvr_params.fsaa_enabled = enabled;
+    return 0;
+  }
+  if (enj_video_fsaa() == enabled) {
+    return 0;
+  }
+  // The last scene must be through the PVR before its memory goes.
+  pvr_wait_ready();
+  pvr_shutdown();
+  state->video.pvr_params.fsaa_enabled = enabled;
+  if (pvr_init(&state->video.pvr_params) < 0) {
+    ENJ_DEBUG_PRINT("pvr_init failed switching FSAA.\n");
+    return -1;
+  }
+  pvr_set_bg_color(state->video.bg_color.r / 255.0f,
+                   state->video.bg_color.g / 255.0f,
+                   state->video.bg_color.b / 255.0f);
+#ifdef ENJ_INJECT_QFONT
+  if (enj_qfont_init() != 0) {
+    ENJ_DEBUG_PRINT("Could not reload the injected quick font.\n");
+  }
+#endif
+  if (video_reset_callback != NULL) {
+    video_reset_callback(video_reset_data);
+  }
+  return 0;
+}
 
 int enj_state_startup(void) {
   enj_state_t *state = enj_state_get();
@@ -221,6 +280,18 @@ static int enj_state_run_frame(enj_state_t *state,
       }
     }
   }
+#ifdef ENJ_DEBUG_MENU
+  // Not part of the soft reset above: a game mode may well have no_soft_reset.
+  if (state->debug_menu_open != NULL) {
+    for (int i = 0; i < MAPLE_PORT_COUNT; i++) {
+      if (cstates[i] && enj_ctrlr_button_combo_raw(cstates[i]->button.raw,
+                                                   state->debug_menu_pattern)) {
+        state->debug_menu_open(cstates[i]);
+      }
+    }
+  }
+#endif
+  enj_pacing_tick_begin();
   enj_render_next_frame(enj_mode_get());
   enj_rumble_update();
   return 1;
@@ -279,6 +350,22 @@ static double enj_state_web_next_frame_ms;
 #endif
 
 static void enj_state_web_frame(void *arg) {
+  if (enj_pacing_get() != ENJ_PACING_FREE) {
+    if (!enj_pacing_web_due()) {
+      return;
+    }
+    int running = enj_state_run_frame(enj_state_get(), arg);
+    if (running && enj_pacing_tick_end_web()) {
+      running = enj_state_run_frame(enj_state_get(), arg);
+      enj_pacing_tick_end_web();
+    }
+    if (running) {
+      return;
+    }
+    emscripten_cancel_main_loop();
+    enj_state_shutdown();
+    return;
+  }
 #if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
   const double frame_ms = 1000.0 / ENJ_FRAME_RATE;
   const double now_ms = emscripten_get_now();
@@ -300,6 +387,7 @@ static void enj_state_web_frame(void *arg) {
 #endif
 
   if (enj_state_run_frame(enj_state_get(), arg)) {
+    enj_pacing_tick_end_web();
     return;
   }
   emscripten_cancel_main_loop();
@@ -332,8 +420,13 @@ void enj_state_run(void) {
 #endif
   while (enj_state_run_frame(state, cstates)) {
 #if defined(ENJ_FRAME_RATE) && ENJ_FRAME_RATE > 0
-    enj_state_wait_for_frame_deadline(&frame_deadline_ns);
+    if (enj_pacing_get() == ENJ_PACING_FREE) {
+      enj_state_wait_for_frame_deadline(&frame_deadline_ns);
+    } else {
+      frame_deadline_ns = 0;   // the deadline starts again if FREE comes back
+    }
 #endif
+    enj_pacing_tick_end();
   }
   enj_state_shutdown();
 #endif

@@ -4,6 +4,7 @@
 #endif
 #include <enDjinn/enj_enDjinn.h>
 #include <malloc.h>
+#include <string.h>
 
 #define RENDERLIST_SEGMENT_SIZE 64
 #define NUM_RENDERLISTS PVR_LIST_PT_POLY - PVR_LIST_OP_POLY + 1
@@ -27,6 +28,8 @@ alignas(32) static enj_renderlist_t *active_renderlists[NUM_RENDERLISTS] = {0};
 static void *_render_post_data = NULL;
 static void (*_render_post_call)(void *) = NULL;
 
+static enj_render_hooks_t _render_hooks;
+
 static pvr_palfmt_t enj_palette_mode_switch;
 static int enj_palette_mode_switch_pending;
 
@@ -42,6 +45,14 @@ void enj_render_hold_frame(void) { enj_render_hold_pending = 1; }
 void enj_render_palette_mode_set(pvr_palfmt_t mode) {
   enj_palette_mode_switch = mode;
   enj_palette_mode_switch_pending = 1;
+}
+
+void enj_render_hooks_set(const enj_render_hooks_t *hooks) {
+  if (hooks != NULL) {
+    _render_hooks = *hooks;
+  } else {
+    memset(&_render_hooks, 0, sizeof(_render_hooks));
+  }
 }
 
 void enj_render_post_callback_set(void (*post_call)(void *), void *data) {
@@ -98,7 +109,7 @@ void enj_render_list_add(pvr_list_t renderlist, void (*renderer)(void *data),
   list->count++;
 }
 
-static void enj_render_lists_clear(void) {
+void enj_render_lists_clear(void) {
   for (int i = PVR_LIST_OP_POLY; i <= PVR_LIST_PT_POLY; i++) {
     active_renderlists[i] = first_renderlists[i];
     enj_renderlist_t *list = active_renderlists[i];
@@ -151,6 +162,9 @@ void enj_render_scene(void) {
   vid_border_color(0, 255, 0); // submitting the lists
 #endif
   pvr_scene_begin();
+  if (_render_hooks.scene_begin != NULL) {
+    _render_hooks.scene_begin(_render_hooks.data);
+  }
   for (int rlist = PVR_LIST_OP_POLY; rlist <= PVR_LIST_PT_POLY; rlist++) {
     // A list with nothing queued need not be opened: pvr_scene_finish blanks
     // the enabled lists that were not submitted.
@@ -158,6 +172,9 @@ void enj_render_scene(void) {
       continue;
     }
     pvr_list_begin(rlist);
+    if (_render_hooks.list_begin != NULL) {
+      _render_hooks.list_begin(rlist, _render_hooks.data);
+    }
     for (enj_renderlist_t *list = first_renderlists[rlist]; list != NULL;
          list = list->next_list) {
       for (int j = 0; j < list->count; j++) {
@@ -165,6 +182,9 @@ void enj_render_scene(void) {
       }
     }
     pvr_list_finish();
+  }
+  if (_render_hooks.lists_done != NULL) {
+    _render_hooks.lists_done(_render_hooks.data);
   }
   if (enj_palette_mode_switch_pending) {
 #if ENJ_SHOWFRAMETIMES == 1

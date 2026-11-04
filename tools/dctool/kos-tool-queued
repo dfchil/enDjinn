@@ -1,13 +1,13 @@
 #!/usr/bin/env zsh
-# Queues kos-tool clients for one Dreamcast. environ.sh puts this directory
-# first on PATH, so every session that sources it, and every gtimeout or
-# script it runs, gets here before the real kos-tool.
+# Runs kos-tool in the queue for one Dreamcast. environ.sh puts this directory
+# on PATH. Plain kos-tool stays the real tool and takes no lock, so a shared
+# console needs this command or dctool_lock.
 #
 # Uploads, resets and everything else except --ready probes take a lock on
-# /tmp/dctool-$DCTOOL_HOST.lock and then exec the real kos-tool, so the lock is
-# held by the kos-tool process itself. The kernel releases it when that process
-# ends, however it ends (kill -9 and gtimeout included); the files left in /tmp
-# are not the lock and need no cleanup.
+# /tmp/dctool-$DCTOOL_HOST.lock and then exec kos-tool, so the lock is held by
+# the kos-tool process itself. The kernel releases it when that process ends,
+# however it ends (kill -9 and gtimeout included); the files left in /tmp are
+# not the lock and need no cleanup.
 #
 # zsystem flock takes a POSIX (fcntl) lock, which a process loses when it closes
 # any descriptor of the file, so who holds it goes in a separate .who file.
@@ -18,22 +18,8 @@
 
 zmodload zsh/system || exit 70
 
-self_dir=${0:A:h}
-real=
-for dir in $path; do
-  [[ ${dir:A} == $self_dir ]] && continue
-  if [[ -x $dir/kos-tool && ! -d $dir/kos-tool ]]; then
-    real=$dir/kos-tool
-    break
-  fi
-done
-if [[ -z $real ]]; then
-  print -u2 "kos-tool: the real kos-tool is not on PATH"
-  exit 127
-fi
-
 if [[ -n $DCTOOL_LOCK_HELD || ${argv[(I)--ready]} -gt 0 ]]; then
-  exec $real "$@"
+  exec kos-tool "$@"
 fi
 
 host=${DCTOOL_HOST:-default}
@@ -44,15 +30,15 @@ if (( i < $#argv )); then
 fi
 lock=/tmp/dctool-$host.lock
 who=/tmp/dctool-$host.who
-: >> $lock 2>/dev/null || { print -u2 "kos-tool: cannot create $lock"; exit 73 }
+: >> $lock 2>/dev/null || { print -u2 "kos-tool-queued: cannot create $lock"; exit 73 }
 
 if ! zsystem flock -t 0 -e -f fd $lock 2>/dev/null; then
-  print -u2 "kos-tool: $host is in use, waiting up to ${DCTOOL_LOCK_WAIT:-900} s for: $(<$who)"
+  print -u2 "kos-tool-queued: $host is in use, waiting up to ${DCTOOL_LOCK_WAIT:-900} s for: $(<$who)"
   if ! zsystem flock -t ${DCTOOL_LOCK_WAIT:-900} -e -f fd $lock 2>/dev/null; then
-    print -u2 "kos-tool: $host still in use by: $(<$who)"
+    print -u2 "kos-tool-queued: $host still in use by: $(<$who)"
     exit 75
   fi
 fi
 # Who holds it, for the next client's message; only informative.
 print -r -- "pid $$ in ${PWD/#$HOME/~} since $(date '+%H:%M:%S'): kos-tool $*" > $who
-exec $real "$@"
+exec kos-tool "$@"

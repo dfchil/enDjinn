@@ -70,6 +70,12 @@ between a main mode, an information mode, and short animation modes.
 <img style="height:220px" src="../docs/img/examples/enj_modes.png" alt="enj_modes example screen" />
 </div>
 
+## enj_debug_menu
+
+Builds in the optional [debug menu](../docs/debug-menu.md). Hold both triggers
+and press Up+X+Y to freeze the moving squares and change them from choice,
+integer and float rows.
+
 ## enj_flat_modifiers
 
 Introduces modifier rendering with a planar, screen-oriented rectangle and a
@@ -105,6 +111,14 @@ Demonstrates the rumble subsystem, including its command rate limiting.
 <div>
 <img style="height:220px" src="../docs/img/examples/enj_rumbles.png" alt="enj_rumbles example screen" />
 </div>
+
+## enj_pacing
+
+Moves a bar one step per tick under each frame pacing. A switches the pacing,
+Up and Down add or remove full-screen translucent layers until frames run
+late; the counters show ticks, rendered and dropped scenes and late ticks.
+Under `ENJ_PACING_DROP_LATE` the bar keeps its speed and jumps where a scene
+was dropped; under `ENJ_PACING_STRICT` it slows down.
 
 ## enj_sounds
 

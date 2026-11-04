@@ -38,10 +38,11 @@ No build target depends on it, so builds use the committed header; make the
 header file as an explicit target, with `ENJ_INJECT_QFONT` set, to refresh
 it.
 
-## kos-tool wrapper
+## kos-tool-queued
 
-[`tools/dctool/kos-tool`](../tools/dctool/kos-tool) queues `kos-tool`
-clients for one console. It is described in [Console queue](console-queue.md).
+[`tools/dctool/kos-tool-queued`](../tools/dctool/kos-tool-queued) queues
+`kos-tool` clients for one console. It is described in
+[Console queue](console-queue.md).
 
 ## Profilers
 

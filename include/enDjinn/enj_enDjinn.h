@@ -15,6 +15,7 @@
 #include <enDjinn/enj_defs.h>
 #include <enDjinn/enj_mode.h>
 #include <enDjinn/enj_state.h>
+#include <enDjinn/enj_pacing.h>
 #include <enDjinn/enj_ctrl.h>
 #include <enDjinn/enj_texture.h>
 #include <enDjinn/enj_font.h>
@@ -23,9 +24,14 @@
 #include <enDjinn/enj_draw.h>
 #include <enDjinn/enj_rumble.h>
 #include <enDjinn/enj_sound.h>
+#include <enDjinn/enj_vmu.h>
 
 #ifdef ENJ_INJECT_QFONT
 #include <enDjinn/enj_qfont.h>
+#endif
+
+#ifdef ENJ_DEBUG_MENU
+#include <enDjinn/enj_debug_menu.h>
 #endif
 
 #endif // ENJ_ENDJINN_H
