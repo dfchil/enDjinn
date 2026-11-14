@@ -14,12 +14,16 @@ the selected backend owns SDL, Vulkan, and host input details.
 - Swapchain recreation after resize or out-of-date presentation
 - Color and inverse-Z depth attachments
 - 640x480 PVR coordinates (1280x480 with FSAA) scaled to the Vulkan viewport
-- `timer_ns_gettime64`, `vid_mode`, and fixed 640x480 `vid_set_mode`
+- `timer_ns_gettime64`, `timer_us_gettime64`, `timer_ms_gettime64`,
+  `thd_pass`, `thd_sleep`, `vid_mode`, and fixed 640x480 `vid_set_mode`
 - `pvr_init` and `pvr_shutdown`
 - `pvr_scene_begin` and `pvr_scene_finish` frame collection/presentation
 - `pvr_set_bg_color` as the Vulkan color clear value
 - host `enj_state_startup()` and `enj_state_run()`
 - SDL Audio playback for 16-bit mono and stereo PCM sound effects
+- one more 44.1 kHz stereo source from `enj_host_audio_source_set()`
+  (`<enDjinn/enj_host_audio.h>`), such as AICAflow's host backend; setting
+  it opens the audio device when `flags.no_snd_init` left it closed
 - host `/vmu/` path redirection for save files
 
 ## Implemented Rendering Subset

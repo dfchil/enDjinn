@@ -1,5 +1,7 @@
 #include <kos.h>
 
+#include <SDL.h>
+
 #include <cstdio>
 #include <cstring>
 
@@ -18,6 +20,10 @@ void vmufb_clear(vmufb_t *fb)
     }
 }
 void vmufb_present(const vmufb_t *, maple_device_t *) {}
+uint64_t timer_us_gettime64(void) { return timer_ns_gettime64() / 1000u; }
+uint64_t timer_ms_gettime64(void) { return timer_ns_gettime64() / 1000000u; }
+void thd_pass(void) { SDL_Delay(0); }
+void thd_sleep(unsigned int milliseconds) { SDL_Delay(milliseconds); }
 void vmufb_print_string_into(vmufb_t *, const vmufb_font_t *, unsigned int,
                              unsigned int, unsigned int, unsigned int,
                              unsigned int, const char *) {}

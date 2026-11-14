@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include <arch/timer.h>
+#include <kos/thread.h>
 #include <dc/maple.h>
 #include <dc/maple/controller.h>
 #include <dc/maple/purupuru.h>
