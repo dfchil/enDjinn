@@ -576,6 +576,18 @@ bool bind_scene_framebuffer(int width, int height) {
   if (g_scene_framebuffer == 0u || width != g_scene_width ||
       height != g_scene_height) {
     if (g_scene_framebuffer == 0u) {
+      /* WebGL cannot blit into a multisampled canvas, which a page gets
+       * when it asked for the context first with the default attributes. */
+      GLint sample_buffers = 0;
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      glGetIntegerv(GL_SAMPLE_BUFFERS, &sample_buffers);
+      if (sample_buffers > 0) {
+        std::fprintf(stderr,
+                     "web-enDjinn: multisampled canvas; drawing to its "
+                     "24-bit depth\n");
+        g_scene_failed = true;
+        return false;
+      }
       glGenFramebuffers(1, &g_scene_framebuffer);
       glGenRenderbuffers(1, &g_scene_color);
       glGenRenderbuffers(1, &g_scene_depth);
