@@ -34,8 +34,9 @@ compatibility build. The other `ENJ_WEB_*` variables are listed in the
 
 Implemented rendering covers the same projected colored/textured packets used
 by the PC backend, including palettized textures, punch-through alpha, and the
-shared overlap-aware translucent sorter. Like the PC backend, it plays only
-16-bit PCM sound effects.
+shared overlap-aware translucent sorter. Like the PC backend, it plays 16-bit
+PCM sound effects and one more 44.1 kHz source from
+`enj_host_audio_source_set()`, such as AICAflow's host backend.
 
 Applications may define both `ENJ_INTEGER_PRESENT_WIDTH` and
 `ENJ_INTEGER_PRESENT_HEIGHT` in their Web preprocessor flags. The WebGL backend

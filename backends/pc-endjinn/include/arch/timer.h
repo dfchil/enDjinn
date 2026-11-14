@@ -5,6 +5,8 @@
 
 PC_ENDJINN_BEGIN_DECLS
 uint64_t timer_ns_gettime64(void);
+uint64_t timer_us_gettime64(void);
+uint64_t timer_ms_gettime64(void);
 PC_ENDJINN_END_DECLS
 
 #endif

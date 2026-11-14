@@ -7,14 +7,15 @@ project's `local.cfg.mk`, then the `make` command line, each overriding the
 previous. [`defines.mk`](../defines.mk) turns the feature switches into
 compiler flags. `make cfg_info` and `make auto_variables` print the result.
 
-## Switches are on when set
+## Switches are off at 0
 
-The feature switches below are tested with Make's `ifdef`: they are on when
-set to any non-empty value, **including `0`**. Leave a switch unset, or set it
-to the empty string, to turn it off. The commented `ENJ_INJECT_QFONT:=0`,
-`ENJ_DEBUG_MENU:=0` and `ENJ_ADD_LOGO_TEXTURE:=0` lines in `cfg.mk` would turn
-the features on if uncommented. `ENJ_WEB_SIMD` is the exception: it is compared
-with `1`.
+The on/off switches below (`ENJ_INJECT_QFONT`, `ENJ_DEBUG_MENU`,
+`ENJ_ADD_LOGO_TEXTURE`, `ENJ_DBG_PRINT`, `ENJ_DBG_GDB`, `ENJ_DCTRACE`,
+`ENJ_DCPROF` and `RELEASEBUILD`) are off when unset, empty or `0`, and on for
+any other value, so `ENJ_DEBUG_MENU=$(DEBUG_MENU)` follows a project's own
+0/1 switch. `ENJ_WEB_SIMD` is compared with `1`. `ENJ_FSAA`,
+`ENJ_FRAME_RATE` and `ENJ_SHOWFRAMETIMES` pass their value to the compiler,
+which compares it.
 
 ## Project and paths
 

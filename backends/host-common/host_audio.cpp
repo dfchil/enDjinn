@@ -1,5 +1,6 @@
 #include "host_audio.h"
 
+#include <enDjinn/enj_host_audio.h>
 #include <kos.h>
 
 #include <SDL.h>
@@ -28,6 +29,8 @@ SDL_AudioDeviceID g_audio_device = 0;
 SDL_AudioSpec g_audio_spec{};
 std::vector<Sound> g_sounds;
 std::vector<Voice> g_voices;
+enj_host_audio_source_fn g_source = nullptr;
+void *g_source_user = nullptr;
 
 int16_t clamp_sample(int value)
 {
@@ -39,6 +42,9 @@ void audio_callback(void *, Uint8 *stream, int bytes)
     auto *output = reinterpret_cast<int16_t *>(stream);
     const int frames = bytes / static_cast<int>(sizeof(*output) * 2u);
     std::memset(stream, 0, static_cast<size_t>(bytes));
+    if (g_source != nullptr) {
+        g_source(output, static_cast<uint32_t>(frames), g_source_user);
+    }
     for (Voice &voice : g_voices) {
         if (voice.sound < 0 || static_cast<size_t>(voice.sound) >= g_sounds.size()) {
             continue;
@@ -82,6 +88,8 @@ void audio_shutdown()
     }
     g_voices.clear();
     g_sounds.clear();
+    g_source = nullptr;
+    g_source_user = nullptr;
 }
 
 }  // namespace enj_host
@@ -152,6 +160,22 @@ void snd_sfx_unload(sfxhnd_t handle)
     if (g_audio_device != 0) {
         SDL_UnlockAudioDevice(g_audio_device);
     }
+}
+
+int enj_host_audio_source_set(enj_host_audio_source_fn source, void *user)
+{
+    if (g_audio_device == 0 && source != nullptr) {
+        snd_init();
+    }
+    if (g_audio_device != 0) {
+        SDL_LockAudioDevice(g_audio_device);
+    }
+    g_source = source;
+    g_source_user = user;
+    if (g_audio_device != 0) {
+        SDL_UnlockAudioDevice(g_audio_device);
+    }
+    return g_audio_device != 0 || source == nullptr ? 0 : -1;
 }
 
 int snd_sfx_play(sfxhnd_t handle, uint8_t volume, uint8_t pan)

@@ -1,4 +1,5 @@
-ifdef RELEASEBUILD
+# The on/off switches are off when unset, empty or 0, and on otherwise.
+ifneq ($(filter-out 0,$(strip $(RELEASEBUILD))),)
 	DEFINES += -DRELEASEBUILD
 	ifeq ($(ENJ_TARGET),dreamcast)
 		ENJ_LDFLAGS += -s
@@ -32,11 +33,11 @@ else
 	DEFINES += -DENJ_CBASEPATH="\"/cd/${ENJ_BASENAME}/\""
 endif
 	
-ifdef ENJ_DBG_PRINT
+ifneq ($(filter-out 0,$(strip $(ENJ_DBG_PRINT))),)
 	DEFINES += -DENJ_DBG_PRINT
 endif
 
-ifdef ENJ_DBG_GDB
+ifneq ($(filter-out 0,$(strip $(ENJ_DBG_GDB))),)
 	DEFINES += -DENJ_DBG_GDB
 endif
 
@@ -44,22 +45,22 @@ ifdef ENJ_FSAA
 	DEFINES += -DENJ_FSAA=${ENJ_FSAA}
 endif
 
-ifdef ENJ_DCTRACE
+ifneq ($(filter-out 0,$(strip $(ENJ_DCTRACE))),)
 DEFINES += -finstrument-functions -DENJ_p
 OBJS += $(ENJ_BUILDDIR)/enDjinn/profilers/dcprofiler.o
 endif 
 
-ifdef ENJ_DCPROF
+ifneq ($(filter-out 0,$(strip $(ENJ_DCPROF))),)
 DEFINES += -DENJ_DCPROF
 OBJS += $(ENJ_BUILDDIR)/enDjinn/profilers/dcprof/profiler.o
 endif
 
-ifdef ENJ_DEBUG_MENU
+ifneq ($(filter-out 0,$(strip $(ENJ_DEBUG_MENU))),)
 	DEFINES += -DENJ_DEBUG_MENU=1
 	# The menu draws with the quick font.
 	ENJ_INJECT_QFONT := 1
 endif
 
-ifdef ENJ_INJECT_QFONT
+ifneq ($(filter-out 0,$(strip $(ENJ_INJECT_QFONT))),)
 	DEFINES += -DENJ_INJECT_QFONT=1
 endif

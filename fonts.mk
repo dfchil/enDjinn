@@ -7,7 +7,7 @@ endif
 
 FONTMACHINE=${ENJDIR}tools/font_enj/bin/font_enj
 
-ifdef ENJ_INJECT_QFONT
+ifneq ($(filter-out 0,$(strip $(ENJ_INJECT_QFONT))),)
 # special case: add the enDjinn logo texture
 ENJ_FONTINJECTTION=${ENJDIR}include/enDjinn/embeds/enj_qfont_data.h
 

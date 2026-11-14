@@ -11,7 +11,7 @@ ifneq (,$(wildcard $(ENJ_TEXTURE_SRC_DIR)))
 endif
 
 
-ifdef ENJ_ADD_LOGO_TEXTURE
+ifneq ($(filter-out 0,$(strip $(ENJ_ADD_LOGO_TEXTURE))),)
 # special case: add the enDjinn logo texture
 ENJ_TEXTURES += $(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal8_vq_tw/enDjinn512.dt
 ENJ_TEXTURES += $(ROMBASEPATH)/$(ROMBASETEXTUREDIR)/pal8_vq_tw/enDjinn256.dt
