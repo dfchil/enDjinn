@@ -11,14 +11,24 @@
 
 namespace {
 
+/* A texture's memory, as VRAM on the Dreamcast: pvr_mem_malloc returns it,
+ * so a program may write texels into it directly as well as through
+ * pvr_txr_load. used is the bytes a load wrote (all of it for a texture
+ * written directly), which the VQ decoder's codebook size follows. A
+ * texture no load ever wrote is checksummed once a scene that draws it and
+ * gets a new revision when its contents change. */
 struct TextureUpload {
   size_t capacity{};
-  std::vector<uint8_t> bytes;
+  uint8_t *memory{};
+  size_t used{};
   uint32_t width{};
   uint32_t height{};
   uint32_t load_flags{};
   uint64_t revision{};
   bool linear{};
+  bool loaded{};
+  uint64_t checksum{};
+  uint64_t checked_scene{};
 };
 
 struct HeaderState {
@@ -39,6 +49,7 @@ struct HeaderState {
   pvr_cull_mode_t culling{PVR_CULLING_NONE};
   bool depth_test{true};
   bool depth_write{true};
+  pvr_depthcmp_mode_t depth_cmp{PVR_DEPTHCMP_GREATER};
   bool alpha_cutout{};
 };
 
@@ -58,6 +69,7 @@ std::vector<enj_host_pvr::QueuedPrimitive> g_primitives;
  * the last scene's primitives again, still finds every texture they name.
  * Handles are never reused, so the delay cannot alias a new texture. */
 std::vector<pvr_ptr_t> g_freed_textures;
+uint64_t g_scene_serial = 0;
 HeaderState g_header;
 std::unordered_map<pvr_ptr_t, TextureUpload> g_uploads;
 std::array<uint32_t, 1024> g_palette{};
@@ -67,7 +79,6 @@ uint64_t g_palette_format_revision = 1u;
 std::array<uint64_t, 64> g_palette_4bpp_revisions{};
 std::array<uint64_t, 4> g_palette_8bpp_revisions{};
 uint64_t g_texture_revision = 1u;
-uintptr_t g_next_texture_handle = 0x10000u;
 uint32_t g_next_modifier_texture_id = 1u;
 std::unordered_map<uint32_t, pvr_context_txr_t> g_modifier_textures;
 
@@ -88,6 +99,7 @@ void copy_header_state(enj_host_pvr::QueuedPrimitive &primitive) {
   primitive.culling = g_header.culling;
   primitive.depth_test = g_header.depth_test;
   primitive.depth_write = g_header.depth_write;
+  primitive.depth_cmp = g_header.depth_cmp;
   primitive.alpha_cutout = g_header.alpha_cutout;
   primitive.textured = g_header.textured;
   primitive.texture = g_header.texture;
@@ -202,6 +214,7 @@ void queue_modifier_volume(const pvr_modifier_vol_t &first, const void *tail) {
   primitive.culling = g_header.culling;
   primitive.depth_test = true;
   primitive.depth_write = false;
+  primitive.depth_cmp = PVR_DEPTHCMP_GREATER;
   primitive.modifier_receiver = false;
   primitive.modifier_volume = true;
   primitive.modifier_volume_last = g_header.modifier_volume_last;
@@ -367,11 +380,10 @@ bool source_level(const TextureUpload &upload, uint32_t format,
   size_t offset = mipmapped ? mip_offset(pixel_format, vq, source_level) : 0u;
   size_t size = level_bytes(pixel_format, width, height);
   if (!vq) {
-    if (offset > upload.bytes.size() || size > upload.bytes.size() - offset) {
+    if (offset > upload.used || size > upload.used - offset) {
       return false;
     }
-    bytes.assign(upload.bytes.begin() + static_cast<ptrdiff_t>(offset),
-                 upload.bytes.begin() + static_cast<ptrdiff_t>(offset + size));
+    bytes.assign(upload.memory + offset, upload.memory + offset + size);
     return true;
   }
 
@@ -380,25 +392,25 @@ bool source_level(const TextureUpload &upload, uint32_t format,
   const size_t all_index_bytes = mipmapped
       ? mip_offset(pixel_format, true, top_level) + index_count
       : index_count;
-  if (upload.bytes.size() < all_index_bytes) {
+  if (upload.used < all_index_bytes) {
     return false;
   }
   const size_t codebook_size =
-      std::min<size_t>(2048u, upload.bytes.size() - all_index_bytes);
+      std::min<size_t>(2048u, upload.used - all_index_bytes);
   const size_t indices_base = codebook_size;
-  if (offset > upload.bytes.size() - indices_base ||
-      index_count > upload.bytes.size() - indices_base - offset) {
+  if (offset > upload.used - indices_base ||
+      index_count > upload.used - indices_base - offset) {
     return false;
   }
   bytes.resize(index_count * 8u);
   for (size_t i = 0u; i < index_count; i++) {
-    const size_t entry = upload.bytes[indices_base + offset + i];
+    const size_t entry = upload.memory[indices_base + offset + i];
     const size_t codebook_offset = entry * 8u;
     if (codebook_offset + 8u > codebook_size) {
       return false;
     }
     std::memcpy(bytes.data() + i * 8u,
-                upload.bytes.data() + codebook_offset, 8u);
+                upload.memory + codebook_offset, 8u);
   }
   return true;
 }
@@ -468,8 +480,13 @@ namespace enj_host_pvr {
 const std::vector<QueuedPrimitive> &primitives() { return g_primitives; }
 
 void scene_begin() {
+  ++g_scene_serial;
   for (pvr_ptr_t ptr : g_freed_textures) {
-    g_uploads.erase(ptr);
+    const auto found = g_uploads.find(ptr);
+    if (found != g_uploads.end()) {
+      std::free(found->second.memory);
+      g_uploads.erase(found);
+    }
   }
   g_freed_textures.clear();
   g_primitives.clear();
@@ -590,8 +607,18 @@ void dr_commit(void *ptr) {
   g_header.sprite = (header->mode1 & PC_ENDJINN_PVR_HEADER_SPRITE) != 0u;
   g_header.alpha_cutout =
       (header->mode1 & PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u;
+  /* KOS's depth compare (m1.depth_cmp). NEVER, which no program asks for,
+   * stands for a header compiled before the field existed: GREATER, KOS's
+   * default. ALWAYS (or the legacy flag) tests nothing. */
+  uint32_t depth_cmp = (header->mode1 & PC_ENDJINN_PVR_HEADER_DEPTH_CMP_MASK) >>
+      PC_ENDJINN_PVR_HEADER_DEPTH_CMP_SHIFT;
+  if (depth_cmp == PVR_DEPTHCMP_NEVER) {
+    depth_cmp = PVR_DEPTHCMP_GREATER;
+  }
+  g_header.depth_cmp = static_cast<pvr_depthcmp_mode_t>(depth_cmp);
   g_header.depth_test =
-      (header->mode1 & PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE) == 0u;
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE) == 0u &&
+      depth_cmp != PVR_DEPTHCMP_ALWAYS;
   g_header.modifier = (header->mode1 & 0x40000000u) != 0u;
   g_header.modifier_volume = (header->mode1 & 0x20000000u) != 0u;
   g_header.modifier_volume_last =
@@ -600,7 +627,7 @@ void dr_commit(void *ptr) {
       (header->mode1 & PC_ENDJINN_PVR_HEADER_CULL_MASK) >>
       PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   g_header.depth_write =
-      (header->mode1 & PC_ENDJINN_PVR_HEADER_DEPTH_WRITE) != 0u;
+      (header->mode1 & PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE) == 0u;
   g_header.modifier_mode = g_header.modifier_volume ? header->oargb : 0u;
   const auto modifier_texture = g_modifier_textures.find(header->cmd & 0x0fffffffu);
   g_header.modifier_textured = modifier_texture != g_modifier_textures.end();
@@ -618,15 +645,20 @@ void *texture_alloc(size_t size) {
   if (size == 0u || size > UINT32_MAX) {
     return nullptr;
   }
-  const uintptr_t aligned_size = (size + 31u) & ~uintptr_t{31u};
-  if (g_next_texture_handle > UINT32_MAX - aligned_size) {
+  const size_t aligned_size = (size + 31u) & ~size_t{31u};
+  uint8_t *const memory =
+      static_cast<uint8_t *>(std::aligned_alloc(32u, aligned_size));
+  if (memory == nullptr) {
     return nullptr;
   }
-  const uintptr_t handle = g_next_texture_handle;
-  g_next_texture_handle += aligned_size;
-  void *ptr = reinterpret_cast<void *>(handle);
-  g_uploads[ptr].capacity = size;
-  return ptr;
+  std::memset(memory, 0, aligned_size);
+  TextureUpload &upload = g_uploads[memory];
+  upload = TextureUpload{};
+  upload.capacity = size;
+  upload.memory = memory;
+  upload.used = size;
+  upload.revision = ++g_texture_revision;
+  return memory;
 }
 
 void texture_free(pvr_ptr_t ptr) {
@@ -640,8 +672,9 @@ void texture_load(const void *src, pvr_ptr_t dst, size_t count) {
   if (src == nullptr || found == g_uploads.end() || count > found->second.capacity) {
     return;
   }
-  found->second.bytes.assign(static_cast<const uint8_t *>(src),
-                             static_cast<const uint8_t *>(src) + count);
+  std::memcpy(found->second.memory, src, count);
+  found->second.used = count;
+  found->second.loaded = true;
   found->second.linear = false;
   found->second.revision = ++g_texture_revision;
 }
@@ -662,8 +695,9 @@ void texture_load_ex(const void *src, pvr_ptr_t dst, uint32_t width,
   if (count > found->second.capacity) {
     return;
   }
-  found->second.bytes.assign(static_cast<const uint8_t *>(src),
-                             static_cast<const uint8_t *>(src) + count);
+  std::memcpy(found->second.memory, src, count);
+  found->second.used = count;
+  found->second.loaded = true;
   found->second.width = width;
   found->second.height = height;
   found->second.load_flags = flags;
@@ -706,7 +740,26 @@ uint64_t palette_revision(uint32_t texture_format) {
 
 uint64_t texture_revision(pvr_ptr_t ptr) {
   const auto found = g_uploads.find(ptr);
-  return found == g_uploads.end() ? 0u : found->second.revision;
+  if (found == g_uploads.end()) {
+    return 0u;
+  }
+  TextureUpload &upload = found->second;
+  if (!upload.loaded && upload.checked_scene != g_scene_serial) {
+    /* Written directly: FNV-1a over its words, once a scene. */
+    upload.checked_scene = g_scene_serial;
+    uint64_t hash = 1469598103934665603ull;
+    const size_t words = upload.capacity / 8u;
+    for (size_t i = 0u; i < words; ++i) {
+      uint64_t word;
+      std::memcpy(&word, upload.memory + i * 8u, sizeof(word));
+      hash = (hash ^ word) * 1099511628211ull;
+    }
+    if (hash != upload.checksum) {
+      upload.checksum = hash;
+      upload.revision = ++g_texture_revision;
+    }
+  }
+  return upload.revision;
 }
 
 std::array<uint32_t, 1024> palette_rgba() {
@@ -780,7 +833,7 @@ bool decode_texture(const QueuedPrimitive &primitive, DecodedTexture &decoded) {
           "linear=%u\n",
           reinterpret_cast<const void *>(primitive.texture),
           primitive.texture_format, width, height, source_mip, source.size(),
-          upload.bytes.size(), static_cast<unsigned>(upload.linear));
+          upload.used, static_cast<unsigned>(upload.linear));
       return false;
     }
     DecodedMip level;
@@ -820,3 +873,5 @@ extern "C" uint32_t enj_host_pvr_register_modifier_texture(
   g_modifier_textures[id] = *texture;
   return id;
 }
+
+extern "C" size_t pvr_mem_available(void) { return 8u * 1024u * 1024u; }

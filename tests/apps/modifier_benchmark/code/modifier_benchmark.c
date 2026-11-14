@@ -9,7 +9,7 @@ static void render_receiver(void *__unused data) {
   pvr_poly_cxt_col_mod(&context, PVR_LIST_TR_POLY);
   context.gen.culling = PVR_CULLING_NONE;
   context.depth.comparison = PVR_DEPTHCMP_ALWAYS;
-  context.depth.write = 0;
+  context.depth.write = PVR_DEPTHWRITE_DISABLE;
   pvr_poly_mod_hdr_t *header = (pvr_poly_mod_hdr_t *)pvr_dr_target();
   pvr_poly_mod_compile(header, &context);
   pvr_dr_commit(header);

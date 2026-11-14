@@ -62,6 +62,13 @@ VkPipeline g_opaque_no_depth_test_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_no_depth_write_pipeline = VK_NULL_HANDLE;
 VkPipeline g_translucent_pipeline = VK_NULL_HANDLE;
+/* The same with VK_COMPARE_OP_GREATER_OR_EQUAL, for PVR_DEPTHCMP_GEQUAL.
+ * The others compare GREATER, KOS's default; ALWAYS has its own above. */
+VkPipeline g_opaque_gequal_pipeline = VK_NULL_HANDLE;
+VkPipeline g_opaque_no_depth_write_gequal_pipeline = VK_NULL_HANDLE;
+VkPipeline g_punch_through_gequal_pipeline = VK_NULL_HANDLE;
+VkPipeline g_punch_through_no_depth_write_gequal_pipeline = VK_NULL_HANDLE;
+VkPipeline g_translucent_gequal_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_translucent_depth_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_xor_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_or_pipeline = VK_NULL_HANDLE;
@@ -944,6 +951,11 @@ void destroy_frame_resources()
             pipeline = VK_NULL_HANDLE;
         }
     };
+    destroy_pipeline(g_opaque_gequal_pipeline);
+    destroy_pipeline(g_opaque_no_depth_write_gequal_pipeline);
+    destroy_pipeline(g_punch_through_gequal_pipeline);
+    destroy_pipeline(g_punch_through_no_depth_write_gequal_pipeline);
+    destroy_pipeline(g_translucent_gequal_pipeline);
     destroy_pipeline(g_modifier_xor_pipeline);
     destroy_pipeline(g_modifier_or_pipeline);
     destroy_pipeline(g_modifier_include_pipeline);
@@ -1418,23 +1430,40 @@ bool create_render_pipeline()
     pipe.pColorBlendState = &blend;
     pipe.layout = g_pipeline_layout;
     pipe.renderPass = g_render_pass;
-    bool ok = vkCreateGraphicsPipelines(
-        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_opaque_pipeline) == VK_SUCCESS;
+    bool ok = true;
+    /* GREATER, then the same pipelines with GEQUAL. */
+    for (uint32_t gequal = 0u; gequal < 2u; ++gequal) {
+        depth_state.depthCompareOp = gequal != 0u
+            ? VK_COMPARE_OP_GREATER_OR_EQUAL
+            : VK_COMPARE_OP_GREATER;
+        stages[1].module = frag_module;
+        depth_state.depthWriteEnable = VK_TRUE;
+        ok = ok && vkCreateGraphicsPipelines(
+            g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+            gequal != 0u ? &g_opaque_gequal_pipeline
+                         : &g_opaque_pipeline) == VK_SUCCESS;
 
-    depth_state.depthWriteEnable = VK_FALSE;
-    ok = ok && vkCreateGraphicsPipelines(
-        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
-        &g_opaque_no_depth_write_pipeline) == VK_SUCCESS;
-    depth_state.depthWriteEnable = VK_TRUE;
+        depth_state.depthWriteEnable = VK_FALSE;
+        ok = ok && vkCreateGraphicsPipelines(
+            g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+            gequal != 0u ? &g_opaque_no_depth_write_gequal_pipeline
+                         : &g_opaque_no_depth_write_pipeline) == VK_SUCCESS;
+        depth_state.depthWriteEnable = VK_TRUE;
 
-    stages[1].module = punch_frag_module;
-    ok = ok && vkCreateGraphicsPipelines(
-        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_punch_through_pipeline) == VK_SUCCESS;
+        stages[1].module = punch_frag_module;
+        ok = ok && vkCreateGraphicsPipelines(
+            g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+            gequal != 0u ? &g_punch_through_gequal_pipeline
+                         : &g_punch_through_pipeline) == VK_SUCCESS;
 
-    depth_state.depthWriteEnable = VK_FALSE;
-    ok = ok && vkCreateGraphicsPipelines(
-        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
-        &g_punch_through_no_depth_write_pipeline) == VK_SUCCESS;
+        depth_state.depthWriteEnable = VK_FALSE;
+        ok = ok && vkCreateGraphicsPipelines(
+            g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+            gequal != 0u ? &g_punch_through_no_depth_write_gequal_pipeline
+                         : &g_punch_through_no_depth_write_pipeline) ==
+            VK_SUCCESS;
+    }
+    depth_state.depthCompareOp = VK_COMPARE_OP_GREATER;
 
     stages[1].module = frag_module;
     /* PVR_DEPTHCMP_ALWAYS bypasses the existing depth buffer. */
@@ -1454,6 +1483,16 @@ bool create_render_pipeline()
     blend_att.alphaBlendOp = VK_BLEND_OP_ADD;
     ok = ok && vkCreateGraphicsPipelines(
         g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr, &g_translucent_pipeline) == VK_SUCCESS;
+    {
+        VkPipelineDepthStencilStateCreateInfo gequal_depth = *pipe.pDepthStencilState;
+        gequal_depth.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+        const VkPipelineDepthStencilStateCreateInfo *const kept = pipe.pDepthStencilState;
+        pipe.pDepthStencilState = &gequal_depth;
+        ok = ok && vkCreateGraphicsPipelines(
+            g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+            &g_translucent_gequal_pipeline) == VK_SUCCESS;
+        pipe.pDepthStencilState = kept;
+    }
 
     /* Transparent modifier receivers evaluate the submitted volume events
      * at each fragment's own PVR depth, then discard the unselected area. */
@@ -1862,13 +1901,22 @@ bool draw_frame(const FrameDrawData &frame)
                        batch.list == PVR_LIST_TR_POLY) {
                 pipeline = g_modifier_translucent_depth_pipeline;
             } else if (batch.alpha_cutout || batch.list == PVR_LIST_PT_POLY) {
+                const bool gequal = batch.depth_cmp == PVR_DEPTHCMP_GEQUAL;
                 pipeline = batch.depth_write
-                    ? g_punch_through_pipeline
-                    : g_punch_through_no_depth_write_pipeline;
+                    ? (gequal ? g_punch_through_gequal_pipeline
+                              : g_punch_through_pipeline)
+                    : (gequal ? g_punch_through_no_depth_write_gequal_pipeline
+                              : g_punch_through_no_depth_write_pipeline);
             } else if (batch.list == PVR_LIST_TR_POLY) {
-                pipeline = g_translucent_pipeline;
+                pipeline = batch.depth_cmp == PVR_DEPTHCMP_GEQUAL
+                    ? g_translucent_gequal_pipeline
+                    : g_translucent_pipeline;
             } else if (!batch.depth_write) {
-                pipeline = g_opaque_no_depth_write_pipeline;
+                pipeline = batch.depth_cmp == PVR_DEPTHCMP_GEQUAL
+                    ? g_opaque_no_depth_write_gequal_pipeline
+                    : g_opaque_no_depth_write_pipeline;
+            } else if (batch.depth_cmp == PVR_DEPTHCMP_GEQUAL) {
+                pipeline = g_opaque_gequal_pipeline;
             }
             GpuTexture *texture = gpu_texture_for(batch);
             const VkDescriptorSet descriptor = texture == nullptr

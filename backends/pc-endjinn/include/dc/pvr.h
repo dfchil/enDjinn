@@ -92,6 +92,7 @@ typedef struct pvr_context_gen {
   int fog_type;
   int specular;
   int alpha;
+  int shading;
 } pvr_context_gen_t;
 typedef struct pvr_context_txr {
   int enable;
@@ -128,9 +129,31 @@ typedef struct pvr_poly_cxt {
   int modifier;
 } pvr_poly_cxt_t;
 
+/* mode1 as fields, under KOS's names for the ones a program sets on a
+ * compiled header (depth_cmp, depth_write_dis, culling). The bits are the
+ * host's (the PC_ENDJINN_PVR_HEADER_* below), not the PVR's. */
+typedef struct pc_endjinn_pvr_mode1 {
+  uint32_t list_type : 3;       /* 2-0 */
+  uint32_t reserved0 : 13;      /* 15-3 */
+  uint32_t depth_cmp : 3;       /* 18-16: pvr_depthcmp_mode_t */
+  uint32_t reserved1 : 3;       /* 21-19 */
+  uint32_t volume_last : 1;     /* 22 */
+  uint32_t depth_test_dis : 1;  /* 23: legacy, same as depth_cmp ALWAYS */
+  uint32_t alpha_cutout : 1;    /* 24 */
+  uint32_t depth_write_dis : 1; /* 25 */
+  uint32_t culling : 2;         /* 27-26: pvr_cull_mode_t */
+  uint32_t sprite : 1;          /* 28 */
+  uint32_t modifier_volume : 1; /* 29 */
+  uint32_t modifier : 1;        /* 30 */
+  uint32_t textured : 1;        /* 31 */
+} pc_endjinn_pvr_mode1_t;
+
 typedef struct {
   alignas(32) uint32_t cmd;
-  uint32_t mode1;
+  union {
+    uint32_t mode1;
+    pc_endjinn_pvr_mode1_t m1;
+  };
   uint32_t mode2;
   uint32_t mode3;
   uint32_t argb;
@@ -181,7 +204,17 @@ typedef struct pvr_modifier_vol {
 } pvr_modifier_vol_t;
 
 #define PVR_CULLING_CCW 2
+/* As KOS: fog modes (the host draws no fog), shading (the host takes a
+ * face's colour from its last vertex, as flat shading does), and depth
+ * writes, where 0 writes and PVR_DEPTHWRITE_DISABLE does not. */
 #define PVR_FOG_TABLE 0
+#define PVR_FOG_VERTEX 1
+#define PVR_FOG_DISABLE 2
+#define PVR_FOG_TABLE2 3
+#define PVR_SHADE_FLAT 0
+#define PVR_SHADE_GOURAUD 1
+#define PVR_DEPTHWRITE_ENABLE 0
+#define PVR_DEPTHWRITE_DISABLE 1
 #define PVR_SPECULAR_ENABLE 1
 #define PVR_BINSIZE_0 0
 #define PVR_BINSIZE_8 8
@@ -197,31 +230,43 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
   return (up.i & 0xffff0000u) | (vp.i >> 16u);
 }
 #define PC_ENDJINN_PVR_HEADER_SPRITE 0x10000000u
-#define PC_ENDJINN_PVR_HEADER_DEPTH_WRITE 0x02000000u
-/* Keep origin's depth-write encoding authoritative. Host-private flags occupy
- * separate unused bits for retained renderer state and volume boundaries. */
+/* Bit 25 set: no depth writes (m1.depth_write_dis), as KOS's bit 26. */
+#define PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE 0x02000000u
+#define PC_ENDJINN_PVR_HEADER_DEPTH_CMP_SHIFT 16u
+#define PC_ENDJINN_PVR_HEADER_DEPTH_CMP_MASK \
+  (0x7u << PC_ENDJINN_PVR_HEADER_DEPTH_CMP_SHIFT)
+/* Host-private flags occupy separate unused bits for retained renderer state
+ * and volume boundaries. */
 #define PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT 0x01000000u
 #define PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE 0x00800000u
 #define PC_ENDJINN_PVR_HEADER_VOLUME_LAST 0x00400000u
 #define PC_ENDJINN_PVR_HEADER_CULL_SHIFT 26u
 #define PC_ENDJINN_PVR_HEADER_CULL_MASK (0x3u << PC_ENDJINN_PVR_HEADER_CULL_SHIFT)
-#if ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE | \
+#if ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE | \
       PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
       PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT | \
-      PC_ENDJINN_PVR_HEADER_VOLUME_LAST) & \
+      PC_ENDJINN_PVR_HEADER_VOLUME_LAST | \
+      PC_ENDJINN_PVR_HEADER_DEPTH_CMP_MASK) & \
      (PC_ENDJINN_PVR_HEADER_CULL_MASK | PC_ENDJINN_PVR_HEADER_SPRITE)) != 0u || \
-    (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE & \
+    (PC_ENDJINN_PVR_HEADER_DEPTH_CMP_MASK & \
+     (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE | \
+      PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
+      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT | \
+      PC_ENDJINN_PVR_HEADER_VOLUME_LAST | 0x7u)) != 0u || \
+    (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE & \
      PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE) != 0u || \
-    (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE & \
+    (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE & \
      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u || \
     (PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE & \
      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u || \
-    ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE | \
+    ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE | \
       PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
       PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) & \
      PC_ENDJINN_PVR_HEADER_VOLUME_LAST) != 0u
 #error "pc-enDjinn private PVR header flags overlap another header field"
 #endif
+_Static_assert(sizeof(pc_endjinn_pvr_mode1_t) == sizeof(uint32_t),
+               "pc-enDjinn mode1 fields");
 
 #define PVR_TXRFMT_MIPMAP (1u << 31)
 #define PVR_TXRFMT_VQ_DISABLE (0u << 30)
@@ -259,6 +304,9 @@ void pvr_wait_render_done(void);
 void pvr_set_pal_format(pvr_palfmt_t mode);
 void pvr_set_pal_entry(uint32_t index, uint32_t value);
 void *pvr_mem_malloc(size_t size);
+/* The host's textures live in host memory: what a program may still
+ * allocate, reported as the Dreamcast's 8 MB of VRAM. */
+size_t pvr_mem_available(void);
 void pvr_mem_free(pvr_ptr_t ptr);
 void pvr_txr_load(const void *src, pvr_ptr_t dst, size_t count);
 void pvr_txr_load_ex(const void *src, pvr_ptr_t dst, uint32_t width,
@@ -276,8 +324,9 @@ static inline void pvr_sprite_cxt_col(pvr_sprite_cxt_t *cxt,
   cxt->gen.culling = PVR_CULLING_CCW;
   cxt->gen.fog_type = PVR_FOG_TABLE;
   cxt->gen.specular = 0;
+  cxt->gen.shading = PVR_SHADE_GOURAUD;
   cxt->depth.comparison = PVR_DEPTHCMP_GREATER;
-  cxt->depth.write = 1;
+  cxt->depth.write = PVR_DEPTHWRITE_ENABLE;
 }
 
 static inline void pvr_sprite_cxt_txr(pvr_sprite_cxt_t *cxt,
@@ -299,8 +348,9 @@ static inline void pvr_poly_cxt_col(pvr_poly_cxt_t *cxt, pvr_list_t list) {
   cxt->gen.culling = PVR_CULLING_CCW;
   cxt->gen.fog_type = PVR_FOG_TABLE;
   cxt->gen.specular = 0;
+  cxt->gen.shading = PVR_SHADE_GOURAUD;
   cxt->depth.comparison = PVR_DEPTHCMP_GREATER;
-  cxt->depth.write = 1;
+  cxt->depth.write = PVR_DEPTHWRITE_ENABLE;
 }
 
 static inline void pvr_poly_cxt_txr(pvr_poly_cxt_t *cxt, pvr_list_t list,
@@ -343,10 +393,11 @@ static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
   hdr->cmd = 0x80000000u;
   hdr->mode1 = PC_ENDJINN_PVR_HEADER_SPRITE | (uint32_t)cxt->list_type |
       (cxt->txr.enable ? 0x80000000u : 0u) |
-      (cxt->depth.write ? PC_ENDJINN_PVR_HEADER_DEPTH_WRITE : 0u) |
-      (cxt->depth.comparison == PVR_DEPTHCMP_ALWAYS
-           ? PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE
+      (cxt->depth.write == PVR_DEPTHWRITE_DISABLE
+           ? PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE
            : 0u) |
+      (((uint32_t)cxt->depth.comparison & 0x7u)
+       << PC_ENDJINN_PVR_HEADER_DEPTH_CMP_SHIFT) |
       (cxt->gen.alpha ? PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT : 0u) |
       (((uint32_t)cxt->gen.culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   hdr->mode2 = (uint32_t)cxt->txr.format;
