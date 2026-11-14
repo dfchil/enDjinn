@@ -40,6 +40,7 @@ struct HeaderState {
   uint32_t height{};
   pvr_filter_mode_t filter{PVR_FILTER_NEAREST};
   bool sprite{};
+  bool flat{};
   bool modifier{};
   bool modifier_volume{};
   bool modifier_volume_last{};
@@ -127,8 +128,11 @@ void queue_triangle(const pvr_vertex_t &a, const pvr_vertex_t &b,
     primitive.z[i] = vertices[i].z;
     primitive.u[i] = vertices[i].u;
     primitive.v[i] = vertices[i].v;
-    primitive.color[i] = vertices[i].argb != 0u ? vertices[i].argb
-                                                 : primitive.argb;
+    /* Flat shading colours the triangle with its last vertex, the one
+     * that completed it, as the PVR does. */
+    primitive.color[i] = g_header.flat ? primitive.argb
+        : vertices[i].argb != 0u ? vertices[i].argb
+                                 : primitive.argb;
   }
   g_primitives.push_back(primitive);
 }
@@ -605,6 +609,7 @@ void dr_commit(void *ptr) {
   g_header.height = header->mode3 >> 16u;
   g_header.filter = static_cast<pvr_filter_mode_t>(header->oargb);
   g_header.sprite = (header->mode1 & PC_ENDJINN_PVR_HEADER_SPRITE) != 0u;
+  g_header.flat = (header->mode1 & PC_ENDJINN_PVR_HEADER_FLAT) != 0u;
   g_header.alpha_cutout =
       (header->mode1 & PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) != 0u;
   /* KOS's depth compare (m1.depth_cmp). NEVER, which no program asks for,
