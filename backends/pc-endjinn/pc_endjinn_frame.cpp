@@ -140,6 +140,7 @@ FrameDrawData build_frame_draw_data(const vid_mode_t &video_mode,
                 frame.batches.back().list == list &&
                 frame.batches.back().depth_test == primitive->depth_test &&
                 frame.batches.back().depth_write == primitive->depth_write &&
+                frame.batches.back().depth_cmp == primitive->depth_cmp &&
                 frame.batches.back().textured == primitive->textured &&
                 frame.batches.back().texture == primitive->texture &&
                 frame.batches.back().texture_format == primitive->texture_format &&
@@ -162,6 +163,7 @@ FrameDrawData build_frame_draw_data(const vid_mode_t &video_mode,
                     static_cast<uint32_t>(frame.vertices.size());
                 batch.depth_test = primitive->depth_test;
                 batch.depth_write = primitive->depth_write;
+                batch.depth_cmp = primitive->depth_cmp;
                 batch.textured = primitive->textured;
                 batch.texture = primitive->texture;
                 batch.texture_format = primitive->texture_format;

@@ -23,6 +23,7 @@ struct QueuedPrimitive {
   pvr_cull_mode_t culling;
   bool depth_test;
   bool depth_write;
+  pvr_depthcmp_mode_t depth_cmp;
   bool alpha_cutout;
   bool textured;
   pvr_ptr_t texture;
