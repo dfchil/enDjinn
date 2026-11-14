@@ -818,6 +818,22 @@ bool create_context() {
                  SDL_GetError());
     return false;
   }
+#ifdef __EMSCRIPTEN__
+  /* Depth is the PVR's 1/w (scaled) in 0..1. GL's default maps clip z
+   * -1..1 to 0..1, which puts it in 0.5..1 and drops about 8 bits of a
+   * far face's precision: lifted decals fight the faces under them. Map
+   * clip z 0..1 to depth unchanged, as Vulkan does. */
+  if (EM_ASM_INT({
+        const ext = GLctx.getExtension('EXT_clip_control');
+        if (!ext) return 0;
+        ext.clipControlEXT(ext.LOWER_LEFT_EXT, ext.ZERO_TO_ONE_EXT);
+        return 1;
+      }) == 0) {
+    std::fprintf(stderr,
+                 "web-enDjinn: no EXT_clip_control; depth keeps half its "
+                 "range\n");
+  }
+#endif
   glGenBuffers(1, &g_vertex_buffer);
   glGenVertexArrays(1, &g_vertex_array);
   glBindVertexArray(g_vertex_array);

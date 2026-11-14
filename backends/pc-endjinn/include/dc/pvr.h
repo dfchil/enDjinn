@@ -136,7 +136,8 @@ typedef struct pc_endjinn_pvr_mode1 {
   uint32_t list_type : 3;       /* 2-0 */
   uint32_t reserved0 : 13;      /* 15-3 */
   uint32_t depth_cmp : 3;       /* 18-16: pvr_depthcmp_mode_t */
-  uint32_t reserved1 : 3;       /* 21-19 */
+  uint32_t reserved1 : 2;       /* 20-19 */
+  uint32_t flat : 1;            /* 21: PVR_SHADE_FLAT */
   uint32_t volume_last : 1;     /* 22 */
   uint32_t depth_test_dis : 1;  /* 23: legacy, same as depth_cmp ALWAYS */
   uint32_t alpha_cutout : 1;    /* 24 */
@@ -204,9 +205,9 @@ typedef struct pvr_modifier_vol {
 } pvr_modifier_vol_t;
 
 #define PVR_CULLING_CCW 2
-/* As KOS: fog modes (the host draws no fog), shading (the host takes a
- * face's colour from its last vertex, as flat shading does), and depth
- * writes, where 0 writes and PVR_DEPTHWRITE_DISABLE does not. */
+/* As KOS: fog modes (the host draws no fog), shading (PVR_SHADE_FLAT gives
+ * a triangle its last vertex's colour, as the PVR does), and depth writes,
+ * where 0 writes and PVR_DEPTHWRITE_DISABLE does not. */
 #define PVR_FOG_TABLE 0
 #define PVR_FOG_VERTEX 1
 #define PVR_FOG_DISABLE 2
@@ -240,6 +241,8 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
 #define PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT 0x01000000u
 #define PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE 0x00800000u
 #define PC_ENDJINN_PVR_HEADER_VOLUME_LAST 0x00400000u
+/* Bit 21 set: flat shading (gen.shading == PVR_SHADE_FLAT). */
+#define PC_ENDJINN_PVR_HEADER_FLAT 0x00200000u
 #define PC_ENDJINN_PVR_HEADER_CULL_SHIFT 26u
 #define PC_ENDJINN_PVR_HEADER_CULL_MASK (0x3u << PC_ENDJINN_PVR_HEADER_CULL_SHIFT)
 #if ((PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE | \
@@ -248,6 +251,12 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
       PC_ENDJINN_PVR_HEADER_VOLUME_LAST | \
       PC_ENDJINN_PVR_HEADER_DEPTH_CMP_MASK) & \
      (PC_ENDJINN_PVR_HEADER_CULL_MASK | PC_ENDJINN_PVR_HEADER_SPRITE)) != 0u || \
+    (PC_ENDJINN_PVR_HEADER_FLAT & \
+     (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE | \
+      PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
+      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT | \
+      PC_ENDJINN_PVR_HEADER_VOLUME_LAST | \
+      PC_ENDJINN_PVR_HEADER_DEPTH_CMP_MASK | 0x7u)) != 0u || \
     (PC_ENDJINN_PVR_HEADER_DEPTH_CMP_MASK & \
      (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE | \
       PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
@@ -399,6 +408,7 @@ static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
       (((uint32_t)cxt->depth.comparison & 0x7u)
        << PC_ENDJINN_PVR_HEADER_DEPTH_CMP_SHIFT) |
       (cxt->gen.alpha ? PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT : 0u) |
+      (cxt->gen.shading == PVR_SHADE_FLAT ? PC_ENDJINN_PVR_HEADER_FLAT : 0u) |
       (((uint32_t)cxt->gen.culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   hdr->mode2 = (uint32_t)cxt->txr.format;
   hdr->mode3 = (uint32_t)cxt->txr.width | ((uint32_t)cxt->txr.height << 16u);
