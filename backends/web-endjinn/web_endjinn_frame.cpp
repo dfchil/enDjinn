@@ -140,6 +140,8 @@ const FrameDrawData &build_frame(const vid_mode_t &video_mode,
                             primitive->depth_test &&
                         g_frame.batches.back().depth_write ==
                             primitive->depth_write &&
+                        g_frame.batches.back().depth_cmp ==
+                            primitive->depth_cmp &&
                         g_frame.batches.back().alpha_cutout ==
                             primitive->alpha_cutout &&
                         g_frame.batches.back().textured == primitive->textured &&
@@ -167,6 +169,7 @@ const FrameDrawData &build_frame(const vid_mode_t &video_mode,
         batch.first_vertex = static_cast<uint32_t>(g_frame.vertices.size());
         batch.depth_test = primitive->depth_test;
         batch.depth_write = primitive->depth_write;
+        batch.depth_cmp = primitive->depth_cmp;
         batch.alpha_cutout = primitive->alpha_cutout;
         batch.textured = primitive->textured;
         batch.texture = primitive->texture;

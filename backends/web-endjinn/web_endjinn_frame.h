@@ -23,6 +23,7 @@ struct DrawBatch {
   uint32_t vertex_count{};
   bool depth_test{};
   bool depth_write{};
+  pvr_depthcmp_mode_t depth_cmp{PVR_DEPTHCMP_GREATER};
   bool alpha_cutout{};
   bool textured{};
   pvr_ptr_t texture{};

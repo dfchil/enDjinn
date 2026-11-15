@@ -31,6 +31,7 @@ struct DrawBatch {
     uint32_t vertex_count;
     bool depth_test;
     bool depth_write;
+    pvr_depthcmp_mode_t depth_cmp;
     bool textured;
     pvr_ptr_t texture;
     uint32_t texture_format;

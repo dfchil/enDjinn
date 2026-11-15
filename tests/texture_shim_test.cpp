@@ -9,7 +9,7 @@ int main() {
   pvr_poly_cxt_t context{};
   pvr_poly_cxt_col(&context, PVR_LIST_TR_POLY);
   context.depth.comparison = PVR_DEPTHCMP_ALWAYS;
-  context.depth.write = 0;
+  context.depth.write = PVR_DEPTHWRITE_DISABLE;
   auto *header = static_cast<pvr_poly_hdr_t *>(enj_host_pvr::dr_target());
   pvr_poly_compile(header, &context);
   enj_host_pvr::dr_commit(header);
@@ -153,7 +153,7 @@ int main() {
 
   const uint16_t argb1555[] = {0xffffu, 0x8000u, 0x7fffu, 0x0000u};
   pvr_ptr_t texture = enj_host_pvr::texture_alloc(sizeof(argb1555));
-  assert(reinterpret_cast<uintptr_t>(texture) <= UINT32_MAX);
+  assert(texture != nullptr && reinterpret_cast<uintptr_t>(texture) % 32u == 0u);
   enj_host_pvr::texture_load_ex(argb1555, texture, 2u, 2u,
                                   PVR_TXRLOAD_16BPP);
 

@@ -427,10 +427,27 @@ bool upload_modifier_texture(
   return true;
 }
 
+/* The PVR's depth compare on a buffer of 1/w, where larger is nearer, as
+ * the same comparison in GL. NEVER stands for a header without one. */
+GLenum depth_func_for(pvr_depthcmp_mode_t mode) {
+  switch (mode) {
+  case PVR_DEPTHCMP_LESS: return GL_LESS;
+  case PVR_DEPTHCMP_EQUAL: return GL_EQUAL;
+  case PVR_DEPTHCMP_LEQUAL: return GL_LEQUAL;
+  case PVR_DEPTHCMP_NOTEQUAL: return GL_NOTEQUAL;
+  case PVR_DEPTHCMP_GEQUAL: return GL_GEQUAL;
+  case PVR_DEPTHCMP_ALWAYS: return GL_ALWAYS;
+  case PVR_DEPTHCMP_NEVER:
+  case PVR_DEPTHCMP_GREATER:
+  default: return GL_GREATER;
+  }
+}
+
 void set_draw_state(const DrawBatch &batch, DrawMode mode) {
   GenericDrawState desired{};
   desired.depth_test = batch.depth_test;
   desired.depth_write = batch.depth_write;
+  desired.depth_func = depth_func_for(batch.depth_cmp);
   desired.color_write = true;
   desired.punch_through = batch.alpha_cutout ||
                           batch.list == PVR_LIST_PT_POLY;
@@ -475,7 +492,9 @@ void set_draw_state(const DrawBatch &batch, DrawMode mode) {
     desired.stencil_func_mask = 0x01u;
     desired.stencil_write_mask = 0u;
   } else if (batch.list == PVR_LIST_TR_POLY) {
-    desired.depth_write = false;
+    /* Autosorted, the translucent list writes no depth; presorted (the
+     * PVR's autosort off) each face tests and writes as its header says. */
+    desired.depth_write = !g_translucent_autosort && batch.depth_write;
     desired.blend = true;
   }
 
@@ -539,6 +558,64 @@ void set_draw_state(const DrawBatch &batch, DrawMode mode) {
   }
   g_generic_draw_state = desired;
   g_generic_draw_state_valid = true;
+}
+
+/* The scene is drawn into a framebuffer of the canvas's size whose depth is
+ * a 32-bit float, as the PVR compares 1/w and Vulkan's D32 does; the canvas's
+ * own buffer is 24-bit, too coarse for faces a program has lifted just over
+ * others far away. Blitted to the canvas after the scene. */
+GLuint g_scene_framebuffer = 0u;
+GLuint g_scene_color = 0u;
+GLuint g_scene_depth = 0u;
+int g_scene_width = 0;
+int g_scene_height = 0;
+bool g_scene_failed = false;
+
+bool bind_scene_framebuffer(int width, int height) {
+  if (g_scene_failed) {
+    return false;
+  }
+  if (g_scene_framebuffer == 0u || width != g_scene_width ||
+      height != g_scene_height) {
+    if (g_scene_framebuffer == 0u) {
+      /* WebGL cannot blit into a multisampled canvas, which a page gets
+       * when it asked for the context first with the default attributes. */
+      GLint sample_buffers = 0;
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      glGetIntegerv(GL_SAMPLE_BUFFERS, &sample_buffers);
+      if (sample_buffers > 0) {
+        std::fprintf(stderr,
+                     "web-enDjinn: multisampled canvas; drawing to its "
+                     "24-bit depth\n");
+        g_scene_failed = true;
+        return false;
+      }
+      glGenFramebuffers(1, &g_scene_framebuffer);
+      glGenRenderbuffers(1, &g_scene_color);
+      glGenRenderbuffers(1, &g_scene_depth);
+    }
+    glBindRenderbuffer(GL_RENDERBUFFER, g_scene_color);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+    glBindRenderbuffer(GL_RENDERBUFFER, g_scene_depth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, width, height);
+    glBindFramebuffer(GL_FRAMEBUFFER, g_scene_framebuffer);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                              GL_RENDERBUFFER, g_scene_color);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                              GL_RENDERBUFFER, g_scene_depth);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+      std::fprintf(stderr,
+                   "web-enDjinn: no 32-bit depth framebuffer; drawing to the "
+                   "canvas's 24-bit depth\n");
+      g_scene_failed = true;
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      return false;
+    }
+    g_scene_width = width;
+    g_scene_height = height;
+  }
+  glBindFramebuffer(GL_FRAMEBUFFER, g_scene_framebuffer);
+  return true;
 }
 
 void draw_frame(const FrameDrawData &frame) {
@@ -608,7 +685,10 @@ void draw_frame(const FrameDrawData &frame) {
 #endif
   const int viewport_x = (width - viewport_width) / 2;
   const int viewport_y = (height - viewport_height) / 2;
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  const bool scene_framebuffer = bind_scene_framebuffer(width, height);
+  if (!scene_framebuffer) {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
   glViewport(viewport_x, viewport_y, viewport_width, viewport_height);
   glDisable(GL_SCISSOR_TEST);
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -704,6 +784,14 @@ void draw_frame(const FrameDrawData &frame) {
     }
   }
   glStencilMask(0xff);
+  if (scene_framebuffer) {
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, g_scene_framebuffer);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glDisable(GL_SCISSOR_TEST);
+    glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
   SDL_GL_SwapWindow(g_window);
 }
 
@@ -732,6 +820,22 @@ bool create_context() {
                  SDL_GetError());
     return false;
   }
+#ifdef __EMSCRIPTEN__
+  /* Depth is the PVR's 1/w (scaled) in 0..1. GL's default maps clip z
+   * -1..1 to 0..1, which puts it in 0.5..1 and drops about 8 bits of a
+   * far face's precision: lifted decals fight the faces under them. Map
+   * clip z 0..1 to depth unchanged, as Vulkan does. */
+  if (EM_ASM_INT({
+        const ext = GLctx.getExtension('EXT_clip_control');
+        if (!ext) return 0;
+        ext.clipControlEXT(ext.LOWER_LEFT_EXT, ext.ZERO_TO_ONE_EXT);
+        return 1;
+      }) == 0) {
+    std::fprintf(stderr,
+                 "web-enDjinn: no EXT_clip_control; depth keeps half its "
+                 "range\n");
+  }
+#endif
   glGenBuffers(1, &g_vertex_buffer);
   glGenVertexArrays(1, &g_vertex_array);
   glBindVertexArray(g_vertex_array);
