@@ -492,7 +492,9 @@ void set_draw_state(const DrawBatch &batch, DrawMode mode) {
     desired.stencil_func_mask = 0x01u;
     desired.stencil_write_mask = 0u;
   } else if (batch.list == PVR_LIST_TR_POLY) {
-    desired.depth_write = false;
+    /* Autosorted, the translucent list writes no depth; presorted (the
+     * PVR's autosort off) each face tests and writes as its header says. */
+    desired.depth_write = !g_translucent_autosort && batch.depth_write;
     desired.blend = true;
   }
 

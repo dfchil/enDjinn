@@ -69,6 +69,10 @@ VkPipeline g_opaque_no_depth_write_gequal_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_gequal_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_no_depth_write_gequal_pipeline = VK_NULL_HANDLE;
 VkPipeline g_translucent_gequal_pipeline = VK_NULL_HANDLE;
+/* Translucent faces that write depth: the PVR's presorted list (autosort
+ * off) tests and writes depth as each header says. */
+VkPipeline g_translucent_depth_write_pipeline = VK_NULL_HANDLE;
+VkPipeline g_translucent_depth_write_gequal_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_translucent_depth_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_xor_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_or_pipeline = VK_NULL_HANDLE;
@@ -956,6 +960,8 @@ void destroy_frame_resources()
     destroy_pipeline(g_punch_through_gequal_pipeline);
     destroy_pipeline(g_punch_through_no_depth_write_gequal_pipeline);
     destroy_pipeline(g_translucent_gequal_pipeline);
+    destroy_pipeline(g_translucent_depth_write_pipeline);
+    destroy_pipeline(g_translucent_depth_write_gequal_pipeline);
     destroy_pipeline(g_modifier_xor_pipeline);
     destroy_pipeline(g_modifier_or_pipeline);
     destroy_pipeline(g_modifier_include_pipeline);
@@ -1491,6 +1497,16 @@ bool create_render_pipeline()
         ok = ok && vkCreateGraphicsPipelines(
             g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
             &g_translucent_gequal_pipeline) == VK_SUCCESS;
+        VkPipelineDepthStencilStateCreateInfo write_depth = *kept;
+        write_depth.depthWriteEnable = VK_TRUE;
+        pipe.pDepthStencilState = &write_depth;
+        ok = ok && vkCreateGraphicsPipelines(
+            g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+            &g_translucent_depth_write_pipeline) == VK_SUCCESS;
+        write_depth.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+        ok = ok && vkCreateGraphicsPipelines(
+            g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+            &g_translucent_depth_write_gequal_pipeline) == VK_SUCCESS;
         pipe.pDepthStencilState = kept;
     }
 
@@ -1908,9 +1924,12 @@ bool draw_frame(const FrameDrawData &frame)
                     : (gequal ? g_punch_through_no_depth_write_gequal_pipeline
                               : g_punch_through_no_depth_write_pipeline);
             } else if (batch.list == PVR_LIST_TR_POLY) {
-                pipeline = batch.depth_cmp == PVR_DEPTHCMP_GEQUAL
-                    ? g_translucent_gequal_pipeline
-                    : g_translucent_pipeline;
+                const bool gequal = batch.depth_cmp == PVR_DEPTHCMP_GEQUAL;
+                pipeline = !g_translucent_autosort && batch.depth_write
+                    ? (gequal ? g_translucent_depth_write_gequal_pipeline
+                              : g_translucent_depth_write_pipeline)
+                    : (gequal ? g_translucent_gequal_pipeline
+                              : g_translucent_pipeline);
             } else if (!batch.depth_write) {
                 pipeline = batch.depth_cmp == PVR_DEPTHCMP_GEQUAL
                     ? g_opaque_no_depth_write_gequal_pipeline
