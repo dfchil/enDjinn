@@ -10,6 +10,15 @@
 
 namespace enj_host_pvr {
 
+/* A vertex's depth on the GPU: the PVR's 1/w times this, clamped to 0..1.
+ * The PVR keeps 1/w as a float with no upper bound, so a face nearer than
+ * 1/scale must not saturate: tied at 1.0, the face sent first won whatever
+ * lay in front of it (a cockpit's dial and lamps over its steering wheel,
+ * nearer than 0.25 with the car's depth lift). 1/16 keeps 1/w up to 16
+ * apart, a point 1/16 in front of the eye. A power of two only moves the
+ * exponent, so a float depth buffer keeps every bit of a far face. */
+inline constexpr float kDepthScale = 1.0f / 16.0f;
+
 struct QueuedPrimitive {
   float x[4];
   float y[4];

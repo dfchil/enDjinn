@@ -21,7 +21,7 @@ PcVertex make_vertex(const vid_mode_t &video_mode, bool fsaa_enabled,
     PcVertex vertex{};
     vertex.position[0] = x / half_width - 1.0f;
     vertex.position[1] = y / half_height - 1.0f;
-    vertex.position[2] = std::clamp(z * 0.25f, 0.0f, 1.0f);
+    vertex.position[2] = std::clamp(z * enj_host_pvr::kDepthScale, 0.0f, 1.0f);
     vertex.color[0] = static_cast<float>((argb >> 16u) & 0xffu) / 255.0f;
     vertex.color[1] = static_cast<float>((argb >> 8u) & 0xffu) / 255.0f;
     vertex.color[2] = static_cast<float>(argb & 0xffu) / 255.0f;

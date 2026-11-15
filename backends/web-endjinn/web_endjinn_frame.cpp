@@ -22,7 +22,7 @@ WebVertex make_vertex(const vid_mode_t &video_mode, bool fsaa_enabled,
   const float half_width = video_mode.width * (fsaa_enabled ? 1.0f : 0.5f);
   const float half_height = video_mode.height * 0.5f;
   return {{x / half_width - 1.0f, 1.0f - y / half_height,
-           std::clamp(z * 0.25f, 0.0f, 1.0f)},
+           std::clamp(z * enj_host_pvr::kDepthScale, 0.0f, 1.0f)},
           {static_cast<uint8_t>((argb >> 16u) & 0xffu),
            static_cast<uint8_t>((argb >> 8u) & 0xffu),
            static_cast<uint8_t>(argb & 0xffu),
