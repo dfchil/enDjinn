@@ -252,15 +252,33 @@ void queue_sprite_second_half(const void *ptr) {
   primitive.z[2] = tail[1];
   primitive.x[3] = tail[2];
   primitive.y[3] = tail[3];
+  /* The PVR gives D the depth (and texture coordinates) of the plane through
+   * A, B and C at D's x and y; 1/w is affine on the screen for a flat face.
+   * A face too thin to have a plane takes the parallelogram's A + C - B. */
+  const float abx = primitive.x[1] - primitive.x[0];
+  const float aby = primitive.y[1] - primitive.y[0];
+  const float acx = primitive.x[2] - primitive.x[0];
+  const float acy = primitive.y[2] - primitive.y[0];
+  const float det = abx * acy - aby * acx;
+  float wb = -1.0f, wc = 1.0f;
+  if (std::fabs(det) > 1e-6f) {
+    const float adx = primitive.x[3] - primitive.x[0];
+    const float ady = primitive.y[3] - primitive.y[0];
+    wb = (adx * acy - ady * acx) / det;
+    wc = (abx * ady - aby * adx) / det;
+  }
+  const auto plane = [wb, wc](float a, float b, float c) {
+    return a + wb * (b - a) + wc * (c - a);
+  };
   primitive.z[3] = !g_header.textured && tail_words[5] == 0x50435a44u
       ? tail[4]
-      : g_sprite_first.bz + tail[1] - g_sprite_first.az;
+      : plane(primitive.z[0], primitive.z[1], primitive.z[2]);
   if (g_header.textured) {
     unpack_uv_pair(tail_words[5], primitive.u[0], primitive.v[0]);
     unpack_uv_pair(tail_words[6], primitive.u[1], primitive.v[1]);
     unpack_uv_pair(tail_words[7], primitive.u[2], primitive.v[2]);
-    primitive.u[3] = primitive.u[0] + primitive.u[2] - primitive.u[1];
-    primitive.v[3] = primitive.v[0] + primitive.v[2] - primitive.v[1];
+    primitive.u[3] = plane(primitive.u[0], primitive.u[1], primitive.u[2]);
+    primitive.v[3] = plane(primitive.v[0], primitive.v[1], primitive.v[2]);
   }
   for (uint32_t i = 0; i < primitive.count; i++) {
     primitive.color[i] = primitive.argb;
