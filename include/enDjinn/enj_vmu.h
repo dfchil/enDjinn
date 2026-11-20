@@ -51,7 +51,11 @@ typedef enum {
   ENJ_VMU_NO_SAVE,
   /** No VMU is plugged in. */
   ENJ_VMU_NO_DEVICE,
-  /** A file by that name that is not this save (wrong size or bad CRC). */
+  /**
+   * A file by that name that is not this save (wrong size or bad CRC); the
+   * next write replaces it. Also returned when the file could not be read at
+   * all after three tries; that file is then never written over.
+   */
   ENJ_VMU_UNREADABLE,
 } enj_vmu_load_e;
 
