@@ -11,8 +11,12 @@
 namespace pc_endjinn {
 
 struct PcVertex {
-    float position[3];
+    /* NDC x and y, depth, and the vertex's 1/w as submitted (the PVR's z): the
+     * vertex shader turns 1/w back into clip-space w, so UVs and colours are
+     * interpolated with perspective, as the PVR does. */
+    float position[4];
     float color[4];
+    float offset[4]; /* PVR offset colour, rgb (added when the batch has texture_offset_bit) */
     float uv[2];
 };
 
@@ -38,6 +42,7 @@ struct DrawBatch {
     uint32_t texture_width;
     uint32_t texture_height;
     pvr_filter_mode_t texture_filter;
+    uint32_t texture_mode;  // enj_host_pvr::QueuedPrimitive::texture_mode
     uint32_t palette_base;
     bool modifier_receiver;
     bool modifier;

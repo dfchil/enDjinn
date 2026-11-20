@@ -39,6 +39,7 @@ struct HeaderState {
   uint32_t width{};
   uint32_t height{};
   pvr_filter_mode_t filter{PVR_FILTER_NEAREST};
+  uint32_t texture_mode{PVR_TXRENV_MODULATEALPHA};
   bool sprite{};
   bool flat{};
   bool modifier{};
@@ -108,6 +109,7 @@ void copy_header_state(enj_host_pvr::QueuedPrimitive &primitive) {
   primitive.texture_width = g_header.width;
   primitive.texture_height = g_header.height;
   primitive.texture_filter = g_header.filter;
+  primitive.texture_mode = g_header.texture_mode;
   primitive.modifier_receiver = g_header.modifier;
   primitive.modifier = g_header.modifier;
   primitive.modifier_volume = false;
@@ -129,10 +131,11 @@ void queue_triangle(const pvr_vertex_t &a, const pvr_vertex_t &b,
     primitive.u[i] = vertices[i].u;
     primitive.v[i] = vertices[i].v;
     /* Flat shading colours the triangle with its last vertex, the one
-     * that completed it, as the PVR does. */
+     * that completed it, as the PVR does: its offset colour too. */
     primitive.color[i] = g_header.flat ? primitive.argb
         : vertices[i].argb != 0u ? vertices[i].argb
                                  : primitive.argb;
+    primitive.offset[i] = g_header.flat ? c.oargb : vertices[i].oargb;
   }
   g_primitives.push_back(primitive);
 }
@@ -150,6 +153,7 @@ void queue_modifier_triangle(const pvr_vertex_t outside[3],
     primitive.u[i] = outside[i].u;
     primitive.v[i] = outside[i].v;
     primitive.color[i] = outside[i].argb;
+    primitive.offset[i] = outside[i].oargb;
   }
   g_primitives.push_back(primitive);
 
@@ -162,6 +166,10 @@ void queue_modifier_triangle(const pvr_vertex_t outside[3],
     primitive.texture_width = g_header.modifier_texture.width;
     primitive.texture_height = g_header.modifier_texture.height;
     primitive.texture_filter = g_header.modifier_texture.filter;
+    primitive.texture_mode =
+        (static_cast<uint32_t>(g_header.modifier_texture.env) & 3u) |
+        ((static_cast<uint32_t>(g_header.modifier_texture.uv_clamp) & 3u) << 2u) |
+        ((static_cast<uint32_t>(g_header.modifier_texture.uv_flip) & 3u) << 4u);
   } else {
     primitive.textured = false;
   }
@@ -172,6 +180,7 @@ void queue_modifier_triangle(const pvr_vertex_t outside[3],
     primitive.u[i] = inside[i].u;
     primitive.v[i] = inside[i].v;
     primitive.color[i] = inside[i].argb;
+    primitive.offset[i] = inside[i].oargb;
   }
   g_primitives.push_back(primitive);
 }
@@ -203,9 +212,11 @@ void queue_modifier_triangle(const pvr_vertex_tpcm_t &a,
     outside[i].u = source[i].u0;
     outside[i].v = source[i].v0;
     outside[i].argb = source[i].argb0;
+    outside[i].oargb = source[i].oargb0;
     inside[i].u = source[i].u1;
     inside[i].v = source[i].v1;
     inside[i].argb = source[i].argb1;
+    inside[i].oargb = source[i].oargb1;
   }
   queue_modifier_triangle(outside, inside);
 }
@@ -626,6 +637,14 @@ void dr_commit(void *ptr) {
   g_header.width = header->mode3 & 0xffffu;
   g_header.height = header->mode3 >> 16u;
   g_header.filter = static_cast<pvr_filter_mode_t>(header->oargb);
+  g_header.texture_mode =
+      ((header->mode1 >> PC_ENDJINN_PVR_HEADER_ENV_SHIFT) & 3u) |
+      (((header->mode1 >> PC_ENDJINN_PVR_HEADER_CLAMP_SHIFT) & 3u) << 2u) |
+      (((header->mode1 >> PC_ENDJINN_PVR_HEADER_FLIP_SHIFT) & 3u) << 4u) |
+      ((header->mode1 & PC_ENDJINN_PVR_HEADER_SPECULAR) != 0u &&
+               (header->mode1 & 0x80000000u) != 0u
+           ? enj_host_pvr::texture_offset_bit
+           : 0u);
   g_header.sprite = (header->mode1 & PC_ENDJINN_PVR_HEADER_SPRITE) != 0u;
   g_header.flat = (header->mode1 & PC_ENDJINN_PVR_HEADER_FLAT) != 0u;
   g_header.alpha_cutout =
@@ -888,7 +907,7 @@ extern "C" uint32_t enj_host_pvr_register_modifier_texture(
         current.width == texture->width && current.height == texture->height &&
         current.base == texture->base && current.filter == texture->filter &&
         current.alpha == texture->alpha && current.env == texture->env &&
-        current.uv_clamp == texture->uv_clamp) {
+        current.uv_clamp == texture->uv_clamp && current.uv_flip == texture->uv_flip) {
       return id;
     }
   }

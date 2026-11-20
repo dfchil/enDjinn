@@ -71,6 +71,13 @@ typedef enum pvr_txr_shading_mode {
 
 #define PVR_TXRALPHA_ENABLE 0
 #define PVR_UVCLAMP_NONE 0
+#define PVR_UVCLAMP_V 1
+#define PVR_UVCLAMP_U 2
+#define PVR_UVCLAMP_UV 3
+#define PVR_UVFLIP_NONE 0
+#define PVR_UVFLIP_V 1
+#define PVR_UVFLIP_U 2
+#define PVR_UVFLIP_UV 3
 #define PVR_BLEND_SRCALPHA 4
 #define PVR_BLEND_INVSRCALPHA 5
 #define PVR_MODIFIER_OTHER_POLY 0
@@ -104,6 +111,7 @@ typedef struct pvr_context_txr {
   int alpha;
   int env;
   int uv_clamp;
+  int uv_flip;
 } pvr_context_txr_t;
 typedef struct pvr_context_blend {
   int src;
@@ -134,9 +142,14 @@ typedef struct pvr_poly_cxt {
  * host's (the PC_ENDJINN_PVR_HEADER_* below), not the PVR's. */
 typedef struct pc_endjinn_pvr_mode1 {
   uint32_t list_type : 3;       /* 2-0 */
-  uint32_t reserved0 : 13;      /* 15-3 */
+  uint32_t reserved0 : 3;       /* 5-3 */
+  uint32_t txr_env : 2;         /* 7-6: pvr_txr_shading_mode_t */
+  uint32_t uv_clamp : 2;        /* 9-8: pvr_uv_clamp_t */
+  uint32_t uv_flip : 2;         /* 11-10: pvr_uv_flip_t */
+  uint32_t reserved1 : 4;       /* 15-12 */
   uint32_t depth_cmp : 3;       /* 18-16: pvr_depthcmp_mode_t */
-  uint32_t reserved1 : 2;       /* 20-19 */
+  uint32_t specular : 1;        /* 19: gen.specular, the offset colour */
+  uint32_t reserved2 : 1;       /* 20 */
   uint32_t flat : 1;            /* 21: PVR_SHADE_FLAT */
   uint32_t volume_last : 1;     /* 22 */
   uint32_t depth_test_dis : 1;  /* 23: legacy, same as depth_cmp ALWAYS */
@@ -236,6 +249,14 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
 #define PC_ENDJINN_PVR_HEADER_DEPTH_CMP_SHIFT 16u
 #define PC_ENDJINN_PVR_HEADER_DEPTH_CMP_MASK \
   (0x7u << PC_ENDJINN_PVR_HEADER_DEPTH_CMP_SHIFT)
+/* The texture environment (txr.env, pvr_txr_shading_mode_t), UV clamp
+ * (txr.uv_clamp) and UV flip (txr.uv_flip), two bits each, and bit 19 set:
+ * add the vertices' offset colour (gen.specular). */
+#define PC_ENDJINN_PVR_HEADER_ENV_SHIFT 6u
+#define PC_ENDJINN_PVR_HEADER_CLAMP_SHIFT 8u
+#define PC_ENDJINN_PVR_HEADER_FLIP_SHIFT 10u
+#define PC_ENDJINN_PVR_HEADER_TXR_MASK (0x3fu << PC_ENDJINN_PVR_HEADER_ENV_SHIFT)
+#define PC_ENDJINN_PVR_HEADER_SPECULAR 0x00080000u
 /* Host-private flags occupy separate unused bits for retained renderer state
  * and volume boundaries. */
 #define PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT 0x01000000u
@@ -273,6 +294,16 @@ static inline uint32_t PVR_PACK_16BIT_UV(float u, float v) {
       PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT) & \
      PC_ENDJINN_PVR_HEADER_VOLUME_LAST) != 0u
 #error "pc-enDjinn private PVR header flags overlap another header field"
+#endif
+#if ((PC_ENDJINN_PVR_HEADER_TXR_MASK | PC_ENDJINN_PVR_HEADER_SPECULAR) & \
+     (PC_ENDJINN_PVR_HEADER_DEPTH_WRITE_DISABLE | \
+      PC_ENDJINN_PVR_HEADER_DEPTH_TEST_DISABLE | \
+      PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT | \
+      PC_ENDJINN_PVR_HEADER_VOLUME_LAST | PC_ENDJINN_PVR_HEADER_FLAT | \
+      PC_ENDJINN_PVR_HEADER_DEPTH_CMP_MASK | PC_ENDJINN_PVR_HEADER_CULL_MASK | \
+      PC_ENDJINN_PVR_HEADER_SPRITE | 0xe0000007u)) != 0u || \
+    (PC_ENDJINN_PVR_HEADER_TXR_MASK & PC_ENDJINN_PVR_HEADER_SPECULAR) != 0u
+#error "pc-enDjinn texture state bits overlap another header field"
 #endif
 _Static_assert(sizeof(pc_endjinn_pvr_mode1_t) == sizeof(uint32_t),
                "pc-enDjinn mode1 fields");
@@ -349,6 +380,7 @@ static inline void pvr_sprite_cxt_txr(pvr_sprite_cxt_t *cxt,
   cxt->txr.height = height;
   cxt->txr.base = texture;
   cxt->txr.filter = filter;
+  cxt->txr.env = PVR_TXRENV_MODULATEALPHA; /* KOS's default */
 }
 
 static inline void pvr_poly_cxt_col(pvr_poly_cxt_t *cxt, pvr_list_t list) {
@@ -394,6 +426,7 @@ static inline void pvr_poly_cxt_txr_mod(
   cxt->txr2.height = height2;
   cxt->txr2.base = texture2;
   cxt->txr2.filter = filter2;
+  cxt->txr2.env = PVR_TXRENV_MODULATEALPHA; /* KOS's default */
 }
 
 static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
@@ -409,6 +442,10 @@ static inline void pvr_sprite_compile(pvr_sprite_hdr_t *hdr,
        << PC_ENDJINN_PVR_HEADER_DEPTH_CMP_SHIFT) |
       (cxt->gen.alpha ? PC_ENDJINN_PVR_HEADER_ALPHA_CUTOUT : 0u) |
       (cxt->gen.shading == PVR_SHADE_FLAT ? PC_ENDJINN_PVR_HEADER_FLAT : 0u) |
+      (cxt->gen.specular ? PC_ENDJINN_PVR_HEADER_SPECULAR : 0u) |
+      (((uint32_t)cxt->txr.env & 0x3u) << PC_ENDJINN_PVR_HEADER_ENV_SHIFT) |
+      (((uint32_t)cxt->txr.uv_clamp & 0x3u) << PC_ENDJINN_PVR_HEADER_CLAMP_SHIFT) |
+      (((uint32_t)cxt->txr.uv_flip & 0x3u) << PC_ENDJINN_PVR_HEADER_FLIP_SHIFT) |
       (((uint32_t)cxt->gen.culling & 0x3u) << PC_ENDJINN_PVR_HEADER_CULL_SHIFT);
   hdr->mode2 = (uint32_t)cxt->txr.format;
   hdr->mode3 = (uint32_t)cxt->txr.width | ((uint32_t)cxt->txr.height << 16u);
