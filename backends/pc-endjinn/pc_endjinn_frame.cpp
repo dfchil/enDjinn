@@ -12,8 +12,8 @@ namespace {
 using enj_host_pvr::QueuedPrimitive;
 
 PcVertex make_vertex(const vid_mode_t &video_mode, bool fsaa_enabled,
-                     float x, float y, float z, uint32_t argb, float u,
-                     float v)
+                     float x, float y, float z, uint32_t argb,
+                     uint32_t oargb, float u, float v)
 {
     const float half_width = static_cast<float>(video_mode.width) *
         (fsaa_enabled ? 1.0f : 0.5f);
@@ -22,10 +22,14 @@ PcVertex make_vertex(const vid_mode_t &video_mode, bool fsaa_enabled,
     vertex.position[0] = x / half_width - 1.0f;
     vertex.position[1] = y / half_height - 1.0f;
     vertex.position[2] = std::clamp(z * 0.25f, 0.0f, 1.0f);
+    vertex.position[3] = z;
     vertex.color[0] = static_cast<float>((argb >> 16u) & 0xffu) / 255.0f;
     vertex.color[1] = static_cast<float>((argb >> 8u) & 0xffu) / 255.0f;
     vertex.color[2] = static_cast<float>(argb & 0xffu) / 255.0f;
     vertex.color[3] = static_cast<float>((argb >> 24u) & 0xffu) / 255.0f;
+    vertex.offset[0] = static_cast<float>((oargb >> 16u) & 0xffu) / 255.0f;
+    vertex.offset[1] = static_cast<float>((oargb >> 8u) & 0xffu) / 255.0f;
+    vertex.offset[2] = static_cast<float>(oargb & 0xffu) / 255.0f;
     vertex.uv[0] = u;
     vertex.uv[1] = v;
     return vertex;
@@ -55,7 +59,8 @@ void emit_primitive(std::vector<PcVertex> &vertices,
     const auto emit = [&](uint32_t index) {
         vertices.push_back(make_vertex(
             video_mode, fsaa_enabled, primitive.x[index], primitive.y[index],
-            primitive.z[index], primitive.color[index], primitive.u[index],
+            primitive.z[index], primitive.color[index],
+            primitive.offset[index], primitive.u[index],
             primitive.v[index]));
     };
     if (primitive.count == 3u) {
@@ -97,13 +102,13 @@ FrameDrawData build_frame_draw_data(const vid_mode_t &video_mode,
         }
         const PcVertex a = make_vertex(
             video_mode, fsaa_enabled, primitive.x[0], primitive.y[0],
-            primitive.z[0], 0u, 0.0f, 0.0f);
+            primitive.z[0], 0u, 0u, 0.0f, 0.0f);
         const PcVertex b = make_vertex(
             video_mode, fsaa_enabled, primitive.x[1], primitive.y[1],
-            primitive.z[1], 0u, 0.0f, 0.0f);
+            primitive.z[1], 0u, 0u, 0.0f, 0.0f);
         const PcVertex c = make_vertex(
             video_mode, fsaa_enabled, primitive.x[2], primitive.y[2],
-            primitive.z[2], 0u, 0.0f, 0.0f);
+            primitive.z[2], 0u, 0u, 0.0f, 0.0f);
         GpuModifierTriangle event{};
         std::memcpy(event.a, a.position, sizeof(a.position));
         std::memcpy(event.b, b.position, sizeof(b.position));
@@ -147,6 +152,7 @@ FrameDrawData build_frame_draw_data(const vid_mode_t &video_mode,
                 frame.batches.back().texture_width == primitive->texture_width &&
                 frame.batches.back().texture_height == primitive->texture_height &&
                 frame.batches.back().texture_filter == primitive->texture_filter &&
+                frame.batches.back().texture_mode == primitive->texture_mode &&
                 frame.batches.back().modifier_receiver ==
                     primitive->modifier_receiver &&
                 frame.batches.back().modifier == primitive->modifier &&
@@ -170,6 +176,7 @@ FrameDrawData build_frame_draw_data(const vid_mode_t &video_mode,
                 batch.texture_width = primitive->texture_width;
                 batch.texture_height = primitive->texture_height;
                 batch.texture_filter = primitive->texture_filter;
+                batch.texture_mode = primitive->texture_mode;
                 batch.modifier_receiver = primitive->modifier_receiver;
                 batch.modifier = primitive->modifier;
                 batch.modifier_volume = primitive->modifier_volume;

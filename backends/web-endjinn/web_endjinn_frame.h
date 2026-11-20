@@ -10,12 +10,16 @@
 namespace web_endjinn {
 
 struct WebVertex {
-  float position[3];
+  /* NDC x and y, depth, and the vertex's 1/w as submitted (the PVR's z): the
+   * vertex shader turns 1/w back into clip-space w, so the GPU interpolates
+   * UVs and colours with perspective, as the PVR does. */
+  float position[4];
   uint8_t color[4];
+  uint8_t offset[4]; /* PVR offset colour, rgb (added when the batch has texture_offset_bit) */
   float uv[2];
 };
 
-static_assert(sizeof(WebVertex) == 24u);
+static_assert(sizeof(WebVertex) == 32u);
 
 struct DrawBatch {
   pvr_list_t list{};
@@ -31,6 +35,7 @@ struct DrawBatch {
   uint32_t texture_width{};
   uint32_t texture_height{};
   pvr_filter_mode_t texture_filter{};
+  uint32_t texture_mode{};  // enj_host_pvr::QueuedPrimitive::texture_mode
   bool modifier_receiver{};
   bool modifier{};
   bool modifier_volume{};
