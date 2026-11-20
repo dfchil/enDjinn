@@ -68,7 +68,9 @@ maple transfers. `enj_vmu_save_start()` starts a background saver instead: a
 low-priority thread that writes a copy once the save has not changed for the
 given number of milliseconds, so the game thread never waits for the VMU. A
 failed write is tried again, and a VMU plugged in after the load that already
-holds a save is left alone. For a reset or quit, `enj_vmu_save_exit_after_flush()`
+holds a save is left alone. A file that was read but is not this save (wrong
+size or CRC) is replaced by the next write; one that could not be read at all
+is left alone. For a reset or quit, `enj_vmu_save_exit_after_flush()`
 has the saver write waiting changes and then exit; it returns 0 when there is
 nothing to save.
 
