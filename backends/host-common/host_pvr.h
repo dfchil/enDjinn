@@ -17,6 +17,7 @@ struct QueuedPrimitive {
   float u[4];
   float v[4];
   uint32_t color[4];
+  uint32_t offset[4]; /* the vertices' offset colour (oargb), added when texture_mode has bit 6 */
   uint32_t count;
   uint32_t argb;
   pvr_list_t list;
@@ -31,12 +32,21 @@ struct QueuedPrimitive {
   uint32_t texture_width;
   uint32_t texture_height;
   pvr_filter_mode_t texture_filter;
+  /* PVR TSP texture fields: environment (pvr_txr_shading_mode_t) in bits 0-1, UV clamp in 2-3,
+   * UV flip in 4-5 (each U = 2, V = 1, as PVR_UVCLAMP_* / PVR_UVFLIP_*), offset colour on
+   * (specular, textured polygons only, as on the PVR) in bit 6. */
+  uint32_t texture_mode;
   bool modifier_receiver;
   bool modifier;
   bool modifier_volume;
   bool modifier_volume_last;
   uint32_t modifier_mode;
 };
+
+constexpr uint32_t texture_env(uint32_t mode) { return mode & 3u; }
+constexpr uint32_t texture_clamp(uint32_t mode) { return (mode >> 2u) & 3u; }
+constexpr uint32_t texture_flip(uint32_t mode) { return (mode >> 4u) & 3u; }
+constexpr uint32_t texture_offset_bit = 64u;
 
 struct DecodedMip {
   uint32_t width;

@@ -38,6 +38,7 @@ struct WebTexture {
   uint64_t texture_revision{};
   uint64_t palette_revision{};
   uint32_t texture_filter{UINT32_MAX};
+  uint32_t wrap{UINT32_MAX};  // the clamp and flip bits of texture_mode it was last set for
   bool has_mips{};
 };
 
@@ -78,9 +79,12 @@ GLuint g_white_texture = 0;
 GLuint g_modifier_texture = 0;
 GLint g_position = -1;
 GLint g_color = -1;
+GLint g_offset_color = -1;
+GLint g_offset = -1;
 GLint g_uv = -1;
 GLint g_sampler = -1;
 GLint g_textured = -1;
+GLint g_texture_env = -1;
 GLint g_punch_through = -1;
 GLint g_modifier_sampler = -1;
 GLint g_modifier_count = -1;
@@ -96,17 +100,27 @@ GenericDrawState g_generic_draw_state;
 bool g_generic_draw_state_valid = false;
 
 constexpr const char *vertex_shader = R"(#version 300 es
-in vec3 a_position;
+in vec4 a_position;
 in vec4 a_color;
+in vec4 a_offset;
 in vec2 a_uv;
 out vec4 v_color;
+out vec4 v_offset;
 out vec2 v_uv;
-out vec3 v_position;
+out vec4 v_position;
 void main() {
-  gl_Position = vec4(a_position, 1.0);
+  /* a_position.w is the vertex's 1/w. A clip-space w of its inverse leaves the
+   * position and depth as they were (the GPU divides it out) but makes UVs and
+   * colours perspective-correct; with w = 1 they were affine and textures
+   * swam. Vertices without a usable 1/w keep w = 1. */
+  float w = a_position.w > 0.0 ? 1.0 / a_position.w : 1.0;
+  gl_Position = vec4(a_position.xyz * w, w);
   v_color = a_color;
+  v_offset = a_offset;
   v_uv = a_uv;
-  v_position = a_position;
+  /* The receiver's position for modifier volumes must stay linear on screen:
+   * interpolated as (p * w, w), the quotient is exactly that. */
+  v_position = vec4(a_position.xyz * w, w);
 }
 )";
 
@@ -114,11 +128,14 @@ constexpr const char *fragment_shader = R"(#version 300 es
 precision highp float;
 precision highp int;
 in vec4 v_color;
+in vec4 v_offset;
 in vec2 v_uv;
-in vec3 v_position;
+in vec4 v_position;
 uniform sampler2D u_texture;
 uniform sampler2D u_modifier_events;
 uniform bool u_textured;
+uniform int u_texture_env;
+uniform bool u_offset;
 uniform bool u_punch_through;
 uniform int u_modifier_count;
 uniform int u_modifier_texture_width;
@@ -150,7 +167,7 @@ bool triangle_crosses_receiver(int index) {
   float az = av.z;
   float bz = bv.z;
   float cz = cv.z;
-  vec2 p = v_position.xy;
+  vec2 p = v_position.xy / v_position.w;
   float denominator = cross2(b - a, c - a);
   if (abs(denominator) < 0.0000001) return false;
   if (denominator < 0.0) {
@@ -181,7 +198,7 @@ bool triangle_crosses_receiver(int index) {
   float wb = cross2(c - p, a - p) / denominator;
   float wc = 1.0 - wa - wb;
   float modifier_depth = wa * az + wb * bz + wc * cz;
-  return modifier_depth > v_position.z;
+  return modifier_depth > v_position.z / v_position.w;
 }
 
 bool area_one_at_receiver() {
@@ -211,7 +228,22 @@ void main() {
     if ((u_modifier_area == 1 && area_one) ||
         (u_modifier_area == 2 && !area_one)) discard;
   }
-  vec4 color = (u_textured ? texture(u_texture, v_uv) : vec4(1.0)) * v_color;
+  vec4 color = v_color;
+  if (u_textured) {
+    // The PVR's texture environments (pvr_txr_shading_mode_t).
+    vec4 texel = texture(u_texture, v_uv);
+    if (u_texture_env == 0) {
+      color = texel;  // REPLACE
+    } else if (u_texture_env == 1) {
+      color = vec4(texel.rgb * v_color.rgb, texel.a);  // MODULATE
+    } else if (u_texture_env == 2) {
+      color = vec4(mix(v_color.rgb, texel.rgb, texel.a), v_color.a);  // DECAL
+    } else {
+      color = texel * v_color;  // MODULATEALPHA
+    }
+    // The offset colour (specular), added after the environment.
+    if (u_offset) color.rgb = min(color.rgb + v_offset.rgb, vec3(1.0));
+  }
   if (u_punch_through && color.a < 0.5) discard;
   fragment_color = color;
 }
@@ -261,9 +293,12 @@ bool create_program() {
   }
   g_position = glGetAttribLocation(g_program, "a_position");
   g_color = glGetAttribLocation(g_program, "a_color");
+  g_offset_color = glGetAttribLocation(g_program, "a_offset");
+  g_offset = glGetUniformLocation(g_program, "u_offset");
   g_uv = glGetAttribLocation(g_program, "a_uv");
   g_sampler = glGetUniformLocation(g_program, "u_texture");
   g_textured = glGetUniformLocation(g_program, "u_textured");
+  g_texture_env = glGetUniformLocation(g_program, "u_texture_env");
   g_punch_through = glGetUniformLocation(g_program, "u_punch_through");
   g_modifier_sampler = glGetUniformLocation(g_program, "u_modifier_events");
   g_modifier_count = glGetUniformLocation(g_program, "u_modifier_count");
@@ -283,6 +318,27 @@ void bind_texture_2d(GLuint texture) {
     glBindTexture(GL_TEXTURE_2D, texture);
     g_bound_texture = texture;
   }
+}
+
+GLint wrap_mode(uint32_t clamp, uint32_t flip) {
+  return clamp != 0u ? GL_CLAMP_TO_EDGE
+                     : (flip != 0u ? GL_MIRRORED_REPEAT : GL_REPEAT);
+}
+
+// Clamp and flip (PVR_UVCLAMP_* / PVR_UVFLIP_*: U = 2, V = 1; clamp wins) for the bound texture.
+void set_wrap(WebTexture &cached, uint32_t texture_mode) {
+  const uint32_t wrap = texture_mode >> 2u;
+  if (cached.wrap == wrap) {
+    return;
+  }
+  bind_texture_2d(cached.id);
+  const uint32_t clamp = enj_host_pvr::texture_clamp(texture_mode);
+  const uint32_t flip = enj_host_pvr::texture_flip(texture_mode);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
+                  wrap_mode(clamp & 2u, flip & 2u));
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
+                  wrap_mode(clamp & 1u, flip & 1u));
+  cached.wrap = wrap;
 }
 
 GLuint texture_for(const DrawBatch &batch) {
@@ -311,6 +367,7 @@ GLuint texture_for(const DrawBatch &batch) {
                           : (nearest ? GL_NEAREST : GL_LINEAR));
       cached.texture_filter = static_cast<uint32_t>(batch.texture_filter);
     }
+    set_wrap(cached, batch.texture_mode);
     return cached.id;
   }
 
@@ -361,8 +418,8 @@ GLuint texture_for(const DrawBatch &batch) {
                   trilinear && decoded.mips.size() > 1
                       ? GL_LINEAR_MIPMAP_LINEAR
                       : (nearest ? GL_NEAREST : GL_LINEAR));
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  cached.wrap = UINT32_MAX;
+  set_wrap(cached, batch.texture_mode);
   cached.texture_revision = texture_revision;
   cached.palette_revision = palette_revision;
   cached.texture_filter = static_cast<uint32_t>(batch.texture_filter);
@@ -723,6 +780,8 @@ void draw_frame(const FrameDrawData &frame) {
 
     g_generic_draw_state_valid = false;
     int last_textured = -1;
+    int last_texture_env = -1;
+    int last_offset = -1;
     uint32_t opaque_volume_first_vertex = UINT32_MAX;
     for (const DrawBatch &batch : frame.batches) {
       if (batch.vertex_count == 0) {
@@ -754,6 +813,18 @@ void draw_frame(const FrameDrawData &frame) {
       if (last_textured != static_cast<int>(batch.textured)) {
         last_textured = static_cast<int>(batch.textured);
         glUniform1i(g_textured, last_textured);
+      }
+      const int texture_env =
+          static_cast<int>(enj_host_pvr::texture_env(batch.texture_mode));
+      if (last_texture_env != texture_env) {
+        last_texture_env = texture_env;
+        glUniform1i(g_texture_env, texture_env);
+      }
+      const int offset =
+          (batch.texture_mode & enj_host_pvr::texture_offset_bit) != 0u;
+      if (last_offset != offset) {
+        last_offset = offset;
+        glUniform1i(g_offset, offset);
       }
       glDrawArrays(GL_TRIANGLES, static_cast<GLint>(batch.first_vertex),
                    static_cast<GLsizei>(batch.vertex_count));
@@ -842,13 +913,17 @@ bool create_context() {
   glBindBuffer(GL_ARRAY_BUFFER, g_vertex_buffer);
   glEnableVertexAttribArray(static_cast<GLuint>(g_position));
   glEnableVertexAttribArray(static_cast<GLuint>(g_color));
+  glEnableVertexAttribArray(static_cast<GLuint>(g_offset_color));
   glEnableVertexAttribArray(static_cast<GLuint>(g_uv));
-  glVertexAttribPointer(static_cast<GLuint>(g_position), 3, GL_FLOAT, GL_FALSE,
+  glVertexAttribPointer(static_cast<GLuint>(g_position), 4, GL_FLOAT, GL_FALSE,
                         sizeof(WebVertex),
                         reinterpret_cast<void *>(offsetof(WebVertex, position)));
   glVertexAttribPointer(static_cast<GLuint>(g_color), 4, GL_UNSIGNED_BYTE,
                         GL_TRUE, sizeof(WebVertex),
                         reinterpret_cast<void *>(offsetof(WebVertex, color)));
+  glVertexAttribPointer(static_cast<GLuint>(g_offset_color), 4, GL_UNSIGNED_BYTE,
+                        GL_TRUE, sizeof(WebVertex),
+                        reinterpret_cast<void *>(offsetof(WebVertex, offset)));
   glVertexAttribPointer(static_cast<GLuint>(g_uv), 2, GL_FLOAT, GL_FALSE,
                         sizeof(WebVertex),
                         reinterpret_cast<void *>(offsetof(WebVertex, uv)));

@@ -59,6 +59,10 @@ VkPipelineLayout g_pipeline_layout = VK_NULL_HANDLE;
 VkPipeline g_opaque_pipeline = VK_NULL_HANDLE;
 VkPipeline g_opaque_no_depth_write_pipeline = VK_NULL_HANDLE;
 VkPipeline g_opaque_no_depth_test_pipeline = VK_NULL_HANDLE;
+/* PVR_DEPTHCMP_ALWAYS in the punch-through and translucent lists: their own
+ * alpha cutout and blending, over whatever is there. */
+VkPipeline g_punch_through_no_depth_test_pipeline = VK_NULL_HANDLE;
+VkPipeline g_translucent_no_depth_test_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_pipeline = VK_NULL_HANDLE;
 VkPipeline g_punch_through_no_depth_write_pipeline = VK_NULL_HANDLE;
 VkPipeline g_translucent_pipeline = VK_NULL_HANDLE;
@@ -85,6 +89,9 @@ VkPipeline g_modifier_legacy_exclude_pipeline = VK_NULL_HANDLE;
 VkPipeline g_modifier_translucent_receiver_pipeline = VK_NULL_HANDLE;
 VkDescriptorSetLayout g_texture_set_layout = VK_NULL_HANDLE;
 VkDescriptorPool g_descriptor_pool = VK_NULL_HANDLE;
+/* The pool had no set left for a texture: the cache starts again before the
+ * next frame records (reset_texture_cache). */
+bool g_texture_descriptors_full = false;
 VkCommandPool g_command_pool = VK_NULL_HANDLE;
 std::vector<VkCommandBuffer> g_command_buffers;
 VkSemaphore g_image_available = VK_NULL_HANDLE;
@@ -111,7 +118,7 @@ struct TexturePush {
     uint32_t indexed;
     uint32_t palette_base;
     uint32_t filter_mode;
-    uint32_t unused;
+    uint32_t texture_mode;  // DrawBatch::texture_mode (MODULATEALPHA when untextured)
     uint32_t modifier_count;
     uint32_t modifier_area;
     uint32_t reserved0;
@@ -141,6 +148,7 @@ struct GpuTexture {
     uint32_t width{};
     uint32_t height{};
     pvr_filter_mode_t filter{PVR_FILTER_NEAREST};
+    uint32_t wrap{};  // the clamp and flip bits of DrawBatch::texture_mode its sampler has
     uint64_t revision{};
     bool indexed{};
     uint32_t palette_base{};
@@ -545,9 +553,17 @@ bool write_screenshot_ppm(const char *path, VkDeviceMemory memory,
     return ok;
 }
 
+VkSamplerAddressMode address_mode(uint32_t clamp, uint32_t flip)
+{
+    return clamp != 0u ? VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+        : flip != 0u   ? VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT
+                       : VK_SAMPLER_ADDRESS_MODE_REPEAT;
+}
+
+// wrap: the clamp (bits 0-1) and flip (bits 2-3) of DrawBatch::texture_mode >> 2; U = 2, V = 1.
 bool upload_gpu_image(GpuImage &texture, VkFormat format,
                       const std::vector<enj_host_pvr::DecodedMip> &mips,
-                      pvr_filter_mode_t filter)
+                      pvr_filter_mode_t filter, uint32_t wrap = 0u)
 {
     if (mips.empty() || mips[0].pixels.empty()) {
         return false;
@@ -699,8 +715,8 @@ bool upload_gpu_image(GpuImage &texture, VkFormat format,
                               filter == PVR_FILTER_TRILINEAR2
             ? VK_SAMPLER_MIPMAP_MODE_LINEAR
             : VK_SAMPLER_MIPMAP_MODE_NEAREST;
-        sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler.addressModeU = address_mode(wrap & 2u, wrap & 8u);
+        sampler.addressModeV = address_mode(wrap & 1u, wrap & 4u);
         sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         sampler.maxLod = static_cast<float>(texture.mip_count);
         if (vkCreateSampler(g_device, &sampler, nullptr, &texture.sampler) != VK_SUCCESS) {
@@ -831,10 +847,12 @@ GpuTexture *gpu_texture_for(const DrawBatch &batch)
                    texture.source_format == storage_format &&
                    texture.width == batch.texture_width &&
                    texture.height == batch.texture_height &&
-                   texture.filter == batch.texture_filter;
+                   texture.filter == batch.texture_filter &&
+                   texture.wrap == batch.texture_mode >> 2u;
         });
     const uint64_t revision = enj_host_pvr::texture_revision(batch.texture);
-    if (found != g_texture_cache.end() && found->revision == revision) {
+    if (found != g_texture_cache.end() && found->revision == revision &&
+        found->descriptor != VK_NULL_HANDLE) {
         return &*found;
     }
 
@@ -857,6 +875,7 @@ GpuTexture *gpu_texture_for(const DrawBatch &batch)
         found->width = batch.texture_width;
         found->height = batch.texture_height;
         found->filter = batch.texture_filter;
+        found->wrap = batch.texture_mode >> 2u;
     } else {
         destroy_gpu_image(found->image);
     }
@@ -867,17 +886,47 @@ GpuTexture *gpu_texture_for(const DrawBatch &batch)
                                             : VK_FORMAT_R8G8B8A8_UNORM;
     const pvr_filter_mode_t upload_filter =
         decoded.indexed ? PVR_FILTER_NEAREST : batch.texture_filter;
-    if (!upload_gpu_image(found->image, format, decoded.mips, upload_filter)) {
+    if (!upload_gpu_image(found->image, format, decoded.mips, upload_filter,
+                          found->wrap)) {
         return nullptr;
     }
     if (found->descriptor == VK_NULL_HANDLE) {
         if (!allocate_texture_descriptor(*found)) {
+            /* No entry without a set: the cache would hand it out next frame
+             * and the draw would bind a null set. This frame draws it white;
+             * the next starts the cache again. */
+            destroy_gpu_image(found->image);
+            g_texture_cache.erase(found);
+            g_texture_descriptors_full = true;
             return nullptr;
         }
     } else {
         write_texture_descriptor(*found);
     }
     return &*found;
+}
+
+/* Every texture cached so far (a long run through many levels fills the
+ * descriptor pool, one set per texture, sampler and wrap): their images and
+ * sets go, the default set comes back. Only between frames, with none in
+ * flight. */
+bool reset_texture_cache()
+{
+    for (GpuTexture &texture : g_texture_cache) {
+        destroy_gpu_image(texture.image);
+    }
+    g_texture_cache.clear();
+    g_default_texture_descriptor = VK_NULL_HANDLE;
+    if (vkResetDescriptorPool(g_device, g_descriptor_pool, 0u) != VK_SUCCESS) {
+        return false;
+    }
+    GpuTexture untextured{};
+    untextured.image = g_white_texture;
+    if (!allocate_texture_descriptor(untextured)) {
+        return false;
+    }
+    g_default_texture_descriptor = untextured.descriptor;
+    return true;
 }
 
 void destroy_frame_resources()
@@ -935,6 +984,14 @@ void destroy_frame_resources()
     if (g_opaque_no_depth_test_pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(g_device, g_opaque_no_depth_test_pipeline, nullptr);
         g_opaque_no_depth_test_pipeline = VK_NULL_HANDLE;
+    }
+    if (g_punch_through_no_depth_test_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_punch_through_no_depth_test_pipeline, nullptr);
+        g_punch_through_no_depth_test_pipeline = VK_NULL_HANDLE;
+    }
+    if (g_translucent_no_depth_test_pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(g_device, g_translucent_no_depth_test_pipeline, nullptr);
+        g_translucent_no_depth_test_pipeline = VK_NULL_HANDLE;
     }
     if (g_punch_through_pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(g_device, g_punch_through_pipeline, nullptr);
@@ -1329,15 +1386,16 @@ bool create_render_pipeline()
     binding.binding = 0u;
     binding.stride = sizeof(PcVertex);
     binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    VkVertexInputAttributeDescription attrs[3]{};
-    attrs[0] = {0u, 0u, VK_FORMAT_R32G32B32_SFLOAT, offsetof(PcVertex, position)};
+    VkVertexInputAttributeDescription attrs[4]{};
+    attrs[0] = {0u, 0u, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(PcVertex, position)};
     attrs[1] = {1u, 0u, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(PcVertex, color)};
     attrs[2] = {2u, 0u, VK_FORMAT_R32G32_SFLOAT, offsetof(PcVertex, uv)};
+    attrs[3] = {3u, 0u, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(PcVertex, offset)};
     VkPipelineVertexInputStateCreateInfo vertex_input{};
     vertex_input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_input.vertexBindingDescriptionCount = 1u;
     vertex_input.pVertexBindingDescriptions = &binding;
-    vertex_input.vertexAttributeDescriptionCount = 3u;
+    vertex_input.vertexAttributeDescriptionCount = 4u;
     vertex_input.pVertexAttributeDescriptions = attrs;
     VkPipelineInputAssemblyStateCreateInfo assembly{};
     assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -1400,12 +1458,14 @@ bool create_render_pipeline()
     }
     VkDescriptorPoolSize pool_sizes[2]{};
     pool_sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    pool_sizes[0].descriptorCount = 3072u;
+    /* One set per cached texture (and sampler, wrap): a game going through
+     * many scenes holds thousands; reset_texture_cache when it is full. */
+    pool_sizes[0].descriptorCount = 3u * 4096u;
     pool_sizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    pool_sizes[1].descriptorCount = 1024u;
+    pool_sizes[1].descriptorCount = 4096u;
     VkDescriptorPoolCreateInfo pool{};
     pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool.maxSets = 1024u;
+    pool.maxSets = 4096u;
     pool.poolSizeCount = 2u;
     pool.pPoolSizes = pool_sizes;
     if (vkCreateDescriptorPool(g_device, &pool, nullptr, &g_descriptor_pool) != VK_SUCCESS) {
@@ -1471,6 +1531,12 @@ bool create_render_pipeline()
     }
     depth_state.depthCompareOp = VK_COMPARE_OP_GREATER;
 
+    depth_state.depthTestEnable = VK_FALSE;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_punch_through_no_depth_test_pipeline) == VK_SUCCESS;
+    depth_state.depthTestEnable = VK_TRUE;
+
     stages[1].module = frag_module;
     /* PVR_DEPTHCMP_ALWAYS bypasses the existing depth buffer. */
     depth_state.depthTestEnable = VK_FALSE;
@@ -1509,6 +1575,12 @@ bool create_render_pipeline()
             &g_translucent_depth_write_gequal_pipeline) == VK_SUCCESS;
         pipe.pDepthStencilState = kept;
     }
+
+    depth_state.depthTestEnable = VK_FALSE;
+    ok = ok && vkCreateGraphicsPipelines(
+        g_device, VK_NULL_HANDLE, 1u, &pipe, nullptr,
+        &g_translucent_no_depth_test_pipeline) == VK_SUCCESS;
+    depth_state.depthTestEnable = VK_TRUE;
 
     /* Transparent modifier receivers evaluate the submitted volume events
      * at each fragment's own PVR depth, then discard the unselected area. */
@@ -1740,6 +1812,8 @@ bool draw_frame(const FrameDrawData &frame)
         g_opaque_pipeline == VK_NULL_HANDLE ||
         g_opaque_no_depth_write_pipeline == VK_NULL_HANDLE ||
         g_opaque_no_depth_test_pipeline == VK_NULL_HANDLE ||
+        g_punch_through_no_depth_test_pipeline == VK_NULL_HANDLE ||
+        g_translucent_no_depth_test_pipeline == VK_NULL_HANDLE ||
         g_punch_through_pipeline == VK_NULL_HANDLE ||
         g_punch_through_no_depth_write_pipeline == VK_NULL_HANDLE ||
         g_translucent_pipeline == VK_NULL_HANDLE ||
@@ -1772,9 +1846,22 @@ bool draw_frame(const FrameDrawData &frame)
         set_window_title("pc-enDjinn - palette upload failed");
         return false;
     }
-    for (const DrawBatch &batch : frame.batches) {
-        if (batch.textured && gpu_texture_for(batch) == nullptr) {
-            std::fprintf(stderr, "pc-enDjinn: texture decode/upload failed\n");
+    for (int pass = 0; pass < 2; pass++) {
+        g_texture_descriptors_full = false;
+        for (const DrawBatch &batch : frame.batches) {
+            if (batch.textured && gpu_texture_for(batch) == nullptr &&
+                !g_texture_descriptors_full) {
+                std::fprintf(stderr, "pc-enDjinn: texture decode/upload failed\n");
+            }
+        }
+        if (!g_texture_descriptors_full) {
+            break;
+        }
+        /* The fence above has the last frame done: nothing uses the cache. */
+        std::fprintf(stderr, "pc-enDjinn: texture cache full, starting it again\n");
+        if (!reset_texture_cache()) {
+            set_window_title("pc-enDjinn - texture cache reset failed");
+            return false;
         }
     }
     g_frame_timing_pending.texture_ns = timing_now_ns() - phase_ns;
@@ -1895,7 +1982,11 @@ bool draw_frame(const FrameDrawData &frame)
             }
             VkPipeline pipeline = g_opaque_pipeline;
             if (!batch.depth_test) {
-                pipeline = g_opaque_no_depth_test_pipeline;
+                pipeline = batch.list == PVR_LIST_TR_POLY
+                    ? g_translucent_no_depth_test_pipeline
+                    : batch.alpha_cutout || batch.list == PVR_LIST_PT_POLY
+                    ? g_punch_through_no_depth_test_pipeline
+                    : g_opaque_no_depth_test_pipeline;
             } else if (batch.modifier_volume) {
                 if (opaque_modifier_volume) {
                     /* A non-final modifier instruction denotes the PVR's
@@ -1945,6 +2036,8 @@ bool draw_frame(const FrameDrawData &frame)
             push.indexed = texture != nullptr && texture->indexed ? 1u : 0u;
             push.palette_base = batch.palette_base;
             push.filter_mode = static_cast<uint32_t>(batch.texture_filter);
+            push.texture_mode = texture != nullptr ? batch.texture_mode
+                                                   : PVR_TXRENV_MODULATEALPHA;
             push.modifier_count = static_cast<uint32_t>(
                 frame.translucent_modifiers.size());
             push.modifier_area = batch.modifier_receiver &&
