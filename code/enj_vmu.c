@@ -47,6 +47,26 @@ static int vmu_find(const enj_vmu_save_t *save, char *out, int mustExist) {
   return 0;
 }
 
+#define ENJ_VMU_READ_TRIES 3
+
+/** Reads the whole file at vmu_path: 1 if read, 0 if opening or reading failed. */
+static int vmu_read_file(uint8_t **file, size_t *bytes) {
+  file_t fd = fs_open(vmu_path, O_RDONLY | O_META);
+  if (fd == FILEHND_INVALID) {
+    return 0;
+  }
+  *bytes = fs_total(fd);
+  *file = malloc(*bytes);
+  ssize_t got = *file != NULL ? fs_read(fd, *file, *bytes) : -1;
+  fs_close(fd);
+  if (got != (ssize_t)*bytes) {
+    free(*file);
+    *file = NULL;
+    return 0;
+  }
+  return 1;
+}
+
 enj_vmu_load_e enj_vmu_save_load(const enj_vmu_save_t *save) {
   if (!vmu_find(save, vmu_path, 1)) {
     if (vmu_find(save, vmu_path, 0)) {
@@ -56,21 +76,23 @@ enj_vmu_load_e enj_vmu_save_load(const enj_vmu_save_t *save) {
     vmu_path[0] = '\0';
     return ENJ_VMU_NO_DEVICE;
   }
-  file_t fd = fs_open(vmu_path, O_RDONLY | O_META);
-  if (fd == FILEHND_INVALID) {
-    return ENJ_VMU_UNREADABLE;
+  uint8_t *file = NULL;
+  size_t bytes = 0;
+  int tries = 0;
+  while (!vmu_read_file(&file, &bytes)) {
+    if (++tries == ENJ_VMU_READ_TRIES) {
+      /* Never seen, so possibly a good save: writes leave it alone. */
+      return ENJ_VMU_UNREADABLE;
+    }
   }
-  size_t bytes = fs_total(fd);
-  uint8_t *file = malloc(bytes);
-  ssize_t got = file != NULL ? fs_read(fd, file, bytes) : -1;
-  fs_close(fd);
-
+  /* Read whole: from here on the VMU was looked at, and the application's
+   * writes replace a file that is not this save. */
+  vmu_checked = 1;
   enj_vmu_load_e result = ENJ_VMU_UNREADABLE;
   vmu_pkg_t pkg;
-  if (got == (ssize_t)bytes && vmu_pkg_parse(file, bytes, &pkg) == 0 &&
+  if (vmu_pkg_parse(file, bytes, &pkg) == 0 &&
       (size_t)pkg.data_len == save->size) {
     memcpy(save->data, pkg.data, save->size);
-    vmu_checked = 1;
     result = ENJ_VMU_LOADED;
   }
   free(file);
